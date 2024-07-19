@@ -18,9 +18,11 @@ l = logging.getLogger(__name__)
 
 # Handlers --------------------------------------------------------------------
 
-def test(origin):
-	d = _doc(text.doc_prefix + 'Test', origin)
+def test(person = None):
+	d = _doc(text.doc_prefix + 'Test')
 	with d:
+		if person:
+			t.div(f'Hello {person["first_name"]}!')
 		t.div('This is a test')
 	return d.render()
 
@@ -28,12 +30,12 @@ def test(origin):
 # Utils -----------------------------------------------------------------------
 
 k_cache_buster = '?v=1'
-def _doc(title, origin, css = None):
+def _doc(title, css = None):
 	d = document(title = title)
 	with d.head:
 		t.meta(name = 'viewport', content = 'width=device-width, initial-scale=1')
-		t.link(href = origin + '/static/css/common.css' + k_cache_buster, rel = 'stylesheet')
+		t.link(href = '/static/css/common.css' + k_cache_buster, rel = 'stylesheet')
 		if css:
 			for c in css:
-				t.link(href = origin + f'/static/css/{c}' + k_cache_buster, rel = 'stylesheet')
+				t.link(href = f'/static/css/{c}' + k_cache_buster, rel = 'stylesheet')
 	return d
