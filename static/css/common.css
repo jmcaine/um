@@ -1,1 +1,5 @@
 /* Common style */
+
+.small_fieldset {
+	border-radius: 7px;
+}

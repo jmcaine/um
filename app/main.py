@@ -29,7 +29,7 @@ l = logging.getLogger(__name__)
 
 rt = web.RouteTableDef()
 hr = lambda text: web.Response(text = text, content_type = 'text/html')  #ALT: def hr(text): return web.Response(text = text, content_type = 'text/html')
-
+gurl = lambda rq, name: str(rq.app.router[name].url_for())
 
 # Init / Shutdown -------------------------------------------------------------
 
@@ -95,4 +95,29 @@ async def test(rq):
 async def test(rq):
 	person = await db.test_fetch(rq.app['db'], rq.match_info['name'])
 	return hr(html.test(person))
+
+
+@rt.view('/add_person')
+class Add_Person(web.View):
+	fields = 'first_name', 'last_name'
+
+	async def get(self):
+		return hr(html.add_person(html.Form(self.request.rel_url, {field: None for field in Add_Person.fields})))
+
+	async def post(self):
+		# Validate:
+		#TODO!
+
+		rq = self.request
+		data = await rq.post()
+
+		# Execute:
+		if await db.add_person(rq.app['db'], data):
+			raise web.HTTPFound(gurl(rq, 'list_people'))
+		#else, re-present:
+		return hr(html.add_person(html.Form(self.request.rel_url, {field: data[field] for field in Add_Person.fields})))
+
+@rt.get('/list_people', name = 'list_people')
+async def list_people(rq):
+	return hr(html.test()) #TODO!
 
