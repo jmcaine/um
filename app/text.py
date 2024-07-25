@@ -2,7 +2,8 @@
 doc_prefix = 'um... '
 
 # Page titles:
-add_person = 'Add Person'
+person = 'Person'
+list_people = 'List People'
 
 # Button titles:
 create = 'Create'

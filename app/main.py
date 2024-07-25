@@ -17,9 +17,9 @@ from . import settings
 
 # Logging ---------------------------------------------------------------------
 
-logging.getLogger('aiosqlite').setLevel(logging.CRITICAL) # or ERROR might be fine
-logging.getLogger('asyncio').setLevel(logging.CRITICAL) # or ERROR might be fine
-logging.getLogger('aiohttp').setLevel(logging.ERROR if settings.debug else logging.CRITICAL) # ERROR and INFO will dump tracebacks on console upon "500 Internal Server Error" failures - essential to development; INFO will add informational lines re: GETs and such; DEBUG would be fine here, but aiohttp internal debug info not necessarily useful; probably just noisy
+logging.getLogger('aiosqlite').setLevel(logging.ERROR)
+logging.getLogger('asyncio').setLevel(logging.ERROR)
+logging.getLogger('aiohttp').setLevel(logging.INFO if settings.debug else logging.ERROR) # ERROR and INFO will dump tracebacks on console upon "500 Internal Server Error" failures - essential to development; INFO will add informational lines re: GETs and such; DEBUG would be fine here, but aiohttp internal debug info not necessarily useful; probably just noisy
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s : %(name)s:%(lineno)d -- %(message)s', level = logging.DEBUG if settings.debug else logging.CRITICAL)
 l = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ l = logging.getLogger(__name__)
 rt = web.RouteTableDef()
 hr = lambda text: web.Response(text = text, content_type = 'text/html')  #ALT: def hr(text): return web.Response(text = text, content_type = 'text/html')
 gurl = lambda rq, name: str(rq.app.router[name].url_for())
+dbc = lambda rq: rq.app['db']
 
 # Init / Shutdown -------------------------------------------------------------
 
@@ -93,16 +94,26 @@ async def test(rq):
 
 @rt.get('/test_person/{name}')
 async def test(rq):
-	person = await db.test_fetch(rq.app['db'], rq.match_info['name'])
+	person = await db.test_fetch(dbc(rq), rq.match_info['name'])
 	return hr(html.test(person))
 
 
-@rt.view('/add_person')
-class Add_Person(web.View):
-	fields = 'first_name', 'last_name'
+@rt.view('/person/{id}') # note: /person/0 means "create new person..."
+class Person(web.View):
+	fields = 'id', 'first_name', 'last_name'
+
+	def get_id(self):
+		try: id = int(self.request.match_info['id'])
+		except ValueError: id = None
+		return id
 
 	async def get(self):
-		return hr(html.add_person(html.Form(self.request.rel_url, {field: None for field in Add_Person.fields})))
+		fields = {field: None for field in Person.fields}
+		id = self.get_id()
+		if id:
+			person = await db.get_person(dbc(self.request), id)
+			fields = {field: person[field] for field in Person.fields}
+		return hr(html.person(html.Form(self.request.rel_url, fields)))
 
 	async def post(self):
 		# Validate:
@@ -112,12 +123,23 @@ class Add_Person(web.View):
 		data = await rq.post()
 
 		# Execute:
-		if await db.add_person(rq.app['db'], data):
-			raise web.HTTPFound(gurl(rq, 'list_people'))
+		id = self.get_id()
+		match id:
+			case 0 | None: # indicator for "new person"
+				if await db.add_person(dbc(rq), data):
+					raise web.HTTPFound(gurl(rq, 'list_people'))
+			case id if type(id) == int: # or, != None -- same thing in our case
+				if await db.modify_person(dbc(rq), data):
+					raise web.HTTPFound(gurl(rq, 'list_people')) # TODO: something better than this
+			case _:
+				l.error('Attempted /person/X in which X is not a valid person id')
+			# TODO: properly relay error info to the user....
+
 		#else, re-present:
-		return hr(html.add_person(html.Form(self.request.rel_url, {field: data[field] for field in Add_Person.fields})))
+		return hr(html.person(html.Form(self.request.rel_url, {field: data[field] for field in Person.fields})))
+
 
 @rt.get('/list_people', name = 'list_people')
 async def list_people(rq):
-	return hr(html.test()) #TODO!
+	return hr(html.list_people(await db.get_persons(dbc(rq))))
 
