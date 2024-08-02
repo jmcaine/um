@@ -1,5 +1,36 @@
 /* Common style */
 
-.small_fieldset {
+div {
+	margin: 4px;
+	padding: 2px;
+}
+
+fieldset, .info, .warning, .error {
+	border: 2px solid #888;
 	border-radius: 7px;
+}
+
+.info, .warning, .error {
+	padding: 4px;
+}
+
+.info {
+	background-color: #eee;
+}
+.warning {
+	background-color: #0ee;
+}
+.error {
+	background-color: #e00;
+}
+
+div.container {
+	padding: 0; /* zero-impact container (elements within space as if this container didn't contain them) */
+	margin: 0;
+}
+
+span.invalid {
+	color: red;
+	padding: 0; /* zero-impact container (elements within space as if this container didn't contain them) */
+	margin: 0;
 }
