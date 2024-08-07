@@ -1,8 +1,8 @@
 
-function handle_message(payload) {
+function handle_task(payload) {
 	switch(payload.task) {
 		case "success":
-			set_content(payload.content);
+			set_content(payload.success);
 			break;
 	}
 }

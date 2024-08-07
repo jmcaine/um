@@ -23,7 +23,10 @@ l = logging.getLogger(__name__)
 
 async def connect(filename):
 	result = await aiosqlite.connect(filename, isolation_level = None, detect_types = PARSE_DECLTYPES) # "isolation_level = None disables the Python wrapper's automatic handling of issuing BEGIN etc. for you. What's left is the underlying C library, which does do "autocommit" by default. That autocommit, however, is disabled when you do a BEGIN (b/c you're signaling a transaction with that statement" - from https://stackoverflow.com/questions/15856976/transactions-with-python-sqlite3 - thanks Thanatos
-	result.row_factory = aiosqlite.Row
+	def dict_factory(cursor, row):
+		fields = [column[0] for column in cursor.description]
+		return {key: value for key, value in zip(fields, row)}
+	result.row_factory = dict_factory # aiosqlite.Row is more feature-full, but we often really want dict semantics, so, dict is better
 	await result.execute('pragma journal_mode = wal') # see https://charlesleifer.com/blog/going-fast-with-sqlite-and-python/ - since we're using async/await from a wsgi stack, this is appropriate
 	await result.execute('pragma foreign_keys = ON')
 	#await result.execute('pragma case_sensitive_like = true')
@@ -54,21 +57,42 @@ async def add_person(dbc, first_name, last_name):
 	r = await dbc.execute('insert into person (first_name, last_name) values (?, ?)', (first_name, last_name))
 	return r.lastrowid
 
-async def get_person(dbc, id):
-	return await _fetchone(dbc, 'select * from person where id = ? limit 1', (id,))
-
-async def modify_person(dbc, id, first_name, last_name):
-	return await _update1(dbc, 'update person set first_name = ?, last_name = ? where id = ?', (first_name, last_name, id))
+async def get_person(dbc, id, fields: str | None = None):
+	if not fields:
+		fields = '*'
+	return await _fetchone(dbc, f'select {fields} from person where id = ?', (id,))
 
 async def get_persons(dbc, like = None):
 	where = ' where ' + like if like else ''
 	return await _fetchall(dbc, 'select * from person ' + where + ' order by last_name')
 
-async def add_email(dbc, person_id, email):
-	return await _insert1(dbc, 'insert into email (address, person) values (?, ?)', (email, person_id))
+async def set_person(dbc, id, first_name, last_name):
+	return await _update1(dbc, 'update person set first_name = ?, last_name = ? where id = ?', (first_name, last_name, id))
 
-async def add_phone(dbc, person_id, number):
-	return await _insert1(dbc, 'insert into phone (number, person) values (?, ?)', (number, person_id))
+async def add_email(dbc, person_id, email):
+	return await _insert1(dbc, 'insert into email (email, person) values (?, ?)', (email, person_id))
+
+async def get_email(dbc, email_id):
+	return await _fetchone(dbc, 'select email from email where id = ?', (email_id,))
+
+async def set_email(dbc, email_id, email):
+	return await _update1(dbc, 'update email set email = ? where id = ?', (email, email_id))
+
+async def get_person_emails(dbc, person_id):
+	return await _fetchall(dbc, 'select email.id, email from email join person on email.person = person.id where person.id = ?', (person_id,))
+
+async def add_phone(dbc, person_id, phone):
+	return await _insert1(dbc, 'insert into phone (phone, person) values (?, ?)', (phone, person_id))
+
+async def get_phone(dbc, phone_id):
+	return await _fetchone(dbc, 'select phone from phone where id = ?', (phone_id,))
+
+async def set_phone(dbc, phone_id, phone):
+	return await _update1(dbc, 'update phone set numbner = ? where id = ?', (phone, phone_id))
+
+async def get_person_phones(dbc, person_id):
+	return await _fetchall(dbc, 'select phone.id, phone from phone join person on phone.person = person.id where person.id = ?', (person_id,))
+
 
 async def username_exists(dbc, username):
 	return await _fetchone(dbc, 'select 1 from user where username = ?', (username,)) != None
@@ -93,6 +117,31 @@ async def add_user(dbc, person_id, username):
 	except IntegrityError:
 		raise ex.AlreadyExists() # should be rare if username_exists() is used properly, but there's still a chance
 
+async def update_user(dbc, id, fields, data):
+	return await _update1(dbc, f"update user set {', '.join([f'{name} = ?' for name in fields])} where id = ?",
+							  [data[name] for name in fields] + [id,])
+
+async def get_users(dbc, active = True, persons = True, like = None, limit = 15):
+	where = []
+	args = ()
+	join = ''
+	join_fields = ''
+	if active:
+		where.append('active = 1')
+	if like:
+		like = f'%{like}%'
+		likes = 'username like ?'
+		args = (like,)
+		if persons:
+			likes = f'({likes} or person.first_name like ? or person.last_name like ?)'
+			args = (like, like, like)
+		where.append(likes)
+	if persons:
+		join = 'join person on person.id = user.person' 
+		join_fields = ', person.id as person_id, first_name, last_name'
+	where = 'where ' + " and ".join(where) if where else ''
+	return await _fetchall(dbc, f'select user.id as user_id, username, created, verified, active {join_fields} from user {join} {where} order by username limit {limit}', args)
+
 async def verify_new_user(dbc, username):
 	return await _update1(dbc, 'update user set verified = date("now") where username = ? and active = 1', (username,))
 
@@ -114,6 +163,10 @@ async def force_login(dbc, user_id):
 async def authenticated(dbc, uuid):
 	return await _fetchone(dbc, 'select id from user_login where active = 1 and uuid = ?', (uuid,)) != None
 
+async def authorized(dbc, uuid, roles):
+	users_roles = await _fetchall(dbc, 'select role.name from role join user_role on role.id = user_role.role join user on user.id = user_role.user join user_login on user.id = user_login.user where user_login.uuid = ?', (uuid,))
+	return bool(set([role['name'] for role in users_roles]).intersection(roles))
+
 async def logout(dbc, uuid):
 	await dbc.execute('update user_login set active = 0 where uuid = ?', (uuid,))
 
@@ -121,16 +174,21 @@ async def get_username(dbc, uuid):
 	r = await _fetchone(dbc, 'select username from user join user_login on user_login.user = user.id where user_login.uuid = ?', (uuid,))
 	return r['username'] if r else None
 
+async def get_user(dbc, id, fields: str | None = None):
+	if not fields:
+		fields = '*'
+	return await _fetchone(dbc, f'select {fields} from user where id = ?', (id,))
+
 async def get_user_id(dbc, username):
 	r = await _fetchone(dbc, 'select id from user where username = ?', (username,))
 	return r['id'] if r else None
 
 async def get_user_id_by_email(dbc, email):
-	r = await _fetchone(dbc, 'select id from user join person on user.person = person.id join email on person.id = email.person where email.address = ?', (email,))
+	r = await _fetchone(dbc, 'select id from user join person on user.person = person.id join email on person.id = email.person where email.email = ?', (email,))
 	return r['id'] if r else None
 
 async def get_user_emails(dbc, user_id):
-	return await _fetchall(dbc, 'select address from email join person on email.person = person.id join user on person.id = user.person where user.id = ?', (user_id,))
+	return await _fetchall(dbc, 'select email from email join person on email.person = person.id join user on person.id = user.person where user.id = ?', (user_id,))
 
 async def generate_password_reset_code(dbc, user_id):
 	code = ''.join(random_choices(ascii_uppercase, k=6))
@@ -151,6 +209,31 @@ async def reset_user_password(dbc, uid, new_password):
 async def deactivate_user(dbc, username):
 	# note: use reset_user_password() to re-activate
 	await dbc.execute('update user set active = 0 where username = ?', [username,])
+
+
+async def add_role(dbc, user_id, role):
+	await add_roles(dbc, user_id, (role,))
+
+async def add_roles(dbc, user_id, roles):
+	all_roles = await _fetchall(dbc, ('select id, name from role', ()))
+	roles = [(user_id, role['id']) for role in all_roles if role['name'] in roles]
+	await add_role_ids(dbc, roles, None)
+
+async def add_role_id(dbc, role_id, user_id = None):
+	return add_role_ids(dbc, (role_id,), user_id)
+
+async def add_role_ids(dbc, role_ids, user_id = None):
+	'''
+	`role_ids` can either be a list of 2-tuples, each as (user_id, role_id)
+	(Note that user_id might be the same in many tuples, if you're adding many
+	roles for the same user), or else role_ids can be a plain list (or tuple)
+	of role_ids, and the list-of-tuples will be built for you using the provided
+	`user_id`.
+	'''
+	if user_id:
+		role_ids = [(user_id, role_id) for role_id in role_ids]
+	#else role_ids is already a list of (user_id, role_id) tuples
+	await dbc.executemany('insert into user_role (user, role) values (?, ?)', role_ids)
 
 
 # Utils -----------------------------------------------------------------------
@@ -180,4 +263,5 @@ async def _login(dbc, user_id):
 	uuid = str(uuid4())
 	await dbc.execute('insert into user_login (user, uuid, timestamp) values (?, ?, ?)', (user_id, uuid, datetime.now().isoformat()))
 	return uuid
+
 

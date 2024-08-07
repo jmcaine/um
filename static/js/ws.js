@@ -9,17 +9,29 @@ ws.onmessage = function(event) {
 		case "pong": // currently, this is never called; we receive pings (from pingpong() in ws.js), but our server doesn't send pongs (since it's not really helpful to do so.  If it did, here we'd catch them.
 			break;
 		case "internal_error":
-			show_message(payload.reference);
+			show_message(payload.internal_error);
 			break;
-		case "show_message":
+		case "test1":
+			show_message(payload.test1);
+			break;
+		case "message":
 			show_message(payload.message);
 			break;
+		case "detail_message":
+			show_detail_message(payload.detail_message);
+			break;
 		case "show_fieldset":
-			set_content(payload.fieldset);
+			set_content(payload.fieldset, true);
 			focus_top_input();
 			break;
+		case "content":
+			set_content(payload.content, false);
+			break;
+		case "dialog":
+			set_dialog(payload.dialog);
+			break;
 		default:
-			handle_message(payload);
+			handle_task(payload);
 	}
 };
 

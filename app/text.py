@@ -4,6 +4,7 @@ doc_prefix = 'um... '
 # Page titles:
 person = 'Person'
 list_people = 'List People'
+users = 'Users'
 join = 'Join'
 invite = 'Invite'
 
@@ -18,9 +19,14 @@ password = 'Password'
 create = 'Create'
 next = 'Next ►'
 save = 'Save'
+cancel = 'Cancel'
+edit = 'Edit...'
+add = 'Add...'
 submit = 'Submit'
 send = 'Send!'
 finish = 'Finish!'
+more_detail = 'More detail...'
+close = 'Close'
 
 # Label prefixes:
 your = 'Your'
@@ -30,6 +36,16 @@ friends = "Friend's"
 username_hint = '"{suggestion}" or similar'
 new_username = 'Now create a NEW username'
 new_password = 'Set your NEW password'
+filtersearch = 'Filter / Search...'
+show_inactives = 'Show inactive users, too'
+
+# Fieldset legends:
+emails = 'Emails...'
+phones = 'Phones...'
+
+# Result messages:
+change_detail_success = 'Successfully changed {change}'
+detail_for = 'detail for'
 
 # Hover / validation "title" hints:
 class Title:

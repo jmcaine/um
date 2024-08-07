@@ -45,6 +45,7 @@ hr = lambda text: web.Response(text = text, content_type = 'text/html')
 gurl = lambda rq, name, **kwargs: str(rq.app.router[name].url_for(**kwargs))
 dbc = lambda rq: db.cursor(rq.app['db_connection'])
 ws_url = lambda rq: URL.build(scheme = 'ws', host = rq.host, path = '/_ws')
+wsr_send_task = lambda hd, task, html: hd.wsr.send_json({'task': task, task: html.render()})
 
 
 # Init / Shutdown -------------------------------------------------------------
@@ -116,6 +117,11 @@ async def test(rq):
 	person = await db.test_fetch(await dbc(rq), rq.match_info['name'])
 	return hr(html.test(person))
 
+@rt.get('/test_protected')
+async def test_protected(rq):
+	pass # TODO!!!
+	
+
 @rt.get('/join')
 async def join(rq):
 	return hr(html.join(ws_url(rq), _html_fields(fields.PERSON, None, text.your), fields.PERSON.keys()))
@@ -123,6 +129,11 @@ async def join(rq):
 @rt.get('/invite')
 async def invite(rq):
 	return hr(html.invite(ws_url(rq), _html_fields(fields.PERSON, None, text.friends), fields.PERSON.keys()))
+
+
+@rt.get('/users')
+async def users(rq):
+	return hr(html.users(ws_url(rq), await db.get_users(await dbc(rq))))
 
 
 @rt.get('/list_people', name = 'list_people')
@@ -146,7 +157,7 @@ class Ws: # Namespace for websocket handler methods
 		action = hd.payload['action']
 		match action:
 			case 'test1':
-				await hd.wsr.send_json({'task': 'test1', 'content': 'placeholder content'}) # just echo, basically
+				await wsr_send_task(hd, 'test1', html.test1('test content...'))
 			case _:
 				l.error(f'Action "{action}" not recognized!')
 
@@ -160,13 +171,126 @@ class Ws: # Namespace for websocket handler methods
 			reference = ''.join(random_choices(ascii_uppercase, k=6))
 			l.error(f'ERROR reference ID: {reference} ... details/traceback:')
 			l.error(traceback.format_exc())
-			await hd.wsr.send_json({'task': 'internal_error', 'reference': html.error(f'Internal error; please refer to with this error ID: {reference}').render()})
+			await wsr_send_task(hd, 'internal_error', html.error(f'Internal error; please refer to with this error ID: {reference}'))
 
 	async def join(hd):
 		await Ws._join_or_invite(hd, True, text.your)
 
 	async def invite(hd):
 		await Ws._join_or_invite(hd, False, text.friends)
+		
+	async def filtersearch(hd):
+		text = hd.payload['text']
+		if text == '**repeat':
+			text = hd.state.get('latest_filtersearch_text', '')
+		else:
+			hd.state['latest_filtersearch_text'] = text
+		query = hd.payload['query']
+		match query:
+			case 'users':
+				users = await db.get_users(await dbc(hd.rq), like = text, active = not hd.payload['include_inactives'])
+				await wsr_send_task(hd, 'content', html.user_table(users))
+			case _:
+				raise ex.UmException('filtersearch query "{query}" not recognized!')
+
+	async def get_detail(hd):
+		table = hd.state['detail_table'] = hd.payload['table']
+		id = int(hd.payload.get('id'))
+		if not id:
+			id = hd.state['detail_got_data']['id'] # if this fails (unknown-key exception), then it's a true exception - this should exist if id was not in payload!
+		match table:
+			case 'user':
+				data = await db.get_user(hd.dbc, id, ', '.join(fields.USERNAME.keys()))
+				await wsr_send_task(hd, 'dialog', html.detail(fields.USERNAME, data, None))
+			case 'person':
+				data = await db.get_person(hd.dbc, id, ', '.join(fields.PERSON.keys()))
+				await wsr_send_task(hd, 'dialog', html.detail(fields.PERSON, data, 'get_more_person_detail'))
+			case _:
+				raise ex.UmException('detail query for table "{table}" not recognized!')
+		data['id'] = id
+		hd.state['detail_got_data'] = data
+
+	async def set_detail(hd):
+		data = hd.payload
+		got_data = hd.state['detail_got_data']
+		send_success = lambda arg: hd.wsr.send_json({
+			'task': 'change_detail_success',
+			'message': html.info(text.change_detail_success.format(change = f'"{arg}"')).render(),
+		})
+		table = hd.state['detail_table']
+		match table:
+			case 'user':
+				if await _invalids(hd, data, fields.USERNAME): 
+					return # if there WERE invalids, wsr.send_json() was already done within
+				un = data['username']
+				if un != got_data['username'] and await db.username_exists(hd.dbc, un):
+					await wsr_send_task(hd, 'detail_message', html.error(text.Valid.username_exists))
+					return # finished
+				#else all good, move on!
+				await db.update_user(hd.dbc, got_data['id'], fields.USERNAME.keys(), data)
+				await send_success(un)
+			case 'person':
+				if await _invalids(hd, data, fields.PERSON): 
+					return # if there WERE invalids, wsr.send_json() was already done within
+				#else all good, move on!
+				first, last = data['first_name'], data['last_name']
+				await db.set_person(hd.dbc, got_data['id'], first, last)
+				await send_success(f'{first} {last}')
+			case _:
+				raise ex.UmException('set_detail() for table "{table}" not recognized!')
+		#TODO: clear out hd.state!
+
+	async def get_more_person_detail(hd, message = None):
+		id = hd.state['detail_got_data']['id']
+		emails = await db.get_person_emails(hd.dbc, id)
+		phones = await db.get_person_phones(hd.dbc, id)
+		await wsr_send_task(hd, 'dialog', html.more_person_detail(emails, phones))
+		if message:
+			await wsr_send_task(hd, 'detail_message', html.info(message))
+
+	async def get_mpd_detail(hd):
+		table = hd.state['mpd_detail_table'] = hd.payload['table']
+		id = hd.payload.get('id', 0)
+		match table:
+			case 'email':
+				data = await db.get_email(hd.dbc, id) if id else {'email': ''}
+				await wsr_send_task(hd, 'dialog', html.mpd_detail(fields.EMAIL, data))
+			case 'phone':
+				data = await db.get_phone(hd.dbc, id) if id else {'phone': ''}
+				await wsr_send_task(hd, 'dialog', html.mpd_detail(fields.PHONE, data))
+		data['id'] = id
+		hd.state['mpd_got_data'] = data
+
+	async def set_mpd_detail(hd):
+		data = hd.payload
+		table = hd.state['mpd_detail_table']
+		person_id = hd.state['detail_got_data']['id']
+		detail_id = hd.state['mpd_got_data']['id']
+		match table:
+			case 'email':
+				if await _invalids(hd, data, fields.EMAIL):
+					return # if there WERE invalids, wsr.send_json() was already done within
+				#else all good, move on!
+				if detail_id == 0:
+					await db.add_email(hd.dbc, person_id, data['email'])
+				else:
+					await db.set_email(hd.dbc, detail_id, data['email'])
+			case 'phone':
+				if await _invalids(hd, data, fields.PHONE): 
+					return # if there WERE invalids, wsr.send_json() was already done within
+				#else all good, move on!
+				if detail_id == 0:
+					await db.add_phone(hd.dbc, person_id, data['phone'])
+				else:
+					await db.set_phone(hd.dbc, detail_id, data['phone'])
+		# Return to the original more-person-detail page, showing all phones and emails for the person:
+		fn, ln = hd.state['detail_got_data']['first_name'], hd.state['detail_got_data']['last_name']
+		await Ws.get_more_person_detail(hd, text.change_detail_success.format(change = f'{text.detail_for} "{fn} {ln}"'))
+
+
+		
+
+
 
 	async def _join_or_invite(hd, send_username_fieldset, label_prefix):
 		send_person_fs = lambda: _send_fieldset(hd, text.name,
@@ -228,11 +352,11 @@ class Ws: # Namespace for websocket handler methods
 					# send a password-reset code via email, to the user's email:
 					code = await db.generate_password_reset_code(hd.dbc, user_id)
 					emails = await db.get_user_emails(hd.dbc, user_id)
-					l.debug(f'inviting new user ({hd.state["name"]}) via email: {emails[0]["address"]}')
+					l.debug(f'inviting new user ({hd.state["name"]}) via email: {emails[0]["email"]}')
 					# TODO!
 					# notify inviter of success:
 					_bump_action(hd, 'finished') # is add_phone really "right" here; hardly matters when 'finished' is our new state
-					await hd.wsr.send_json({'task': 'success', 'content': html.invite_succeeded(hd.state['name']).render()})
+					await wsr_send_task(hd, 'success', html.invite_succeeded(hd.state['name']))
 
 			case 'add_username':
 				if await _invalids(hd, data, fields.NEW_USERNAME): 
@@ -242,7 +366,7 @@ class Ws: # Namespace for websocket handler methods
 					return # finished
 				# else, add one more validation step: confirm that the username isn't already taken:
 				if await db.username_exists(hd.dbc, data['username']):
-					await hd.wsr.send_json({'task': 'show_message', 'message': html.error(text.Valid.username_exists).render()})
+					await wsr_send_task(hd, 'message', html.error(text.Valid.username_exists))
 					return # finished
 				#else all good, move on!
 				hd.state['user_id'] = await db.add_user(hd.dbc, hd.state['pid'], data['username'])
@@ -257,13 +381,13 @@ class Ws: # Namespace for websocket handler methods
 					return # finished
 				#else, add one more validation step: confirm passwords are identical:
 				if data['password'] != data['password_confirmation']:
-					await hd.wsr.send_json({'task': 'show_message', 'message': html.error(text.Valid.password_match).render()})
+					await wsr_send_task(hd, 'message', html.error(text.Valid.password_match))
 					return # finished
 				#else all good, move on!
 				await db.reset_user_password(hd.dbc, hd.state['user_id'], data['password'])
 				await db.commit(hd.dbc) # finally, commit it all
 				_bump_action(hd, 'finished')
-				await hd.wsr.send_json({'task': 'success', 'content': html.join_succeeded().render()})
+				await wsr_send_task(hd, 'success', html.join_succeeded())
 
 
 
@@ -274,6 +398,12 @@ WS_HANDLERS = {
 	'test': Ws.test,
 	'join': Ws.join,
 	'invite': Ws.invite,
+	'filtersearch': Ws.filtersearch,
+	'get_detail': Ws.get_detail,
+	'set_detail': Ws.set_detail,
+	'get_more_person_detail': Ws.get_more_person_detail,
+	'get_mpd_detail': Ws.get_mpd_detail,
+	'set_mpd_detail': Ws.set_mpd_detail,
 }
 
 
@@ -333,7 +463,7 @@ async def _ws(rq):
 async def _invalids(hd, data, fields):
 	if invalids:= valid.validate(data, fields):
 		# prompt user with message - first invalid in invalids (one at a time works for such a small fieldset):
-		await hd.wsr.send_json({'task': 'show_message', 'message': html.error(list(invalids.values())[0]).render()})
+		await wsr_send_task(hd, 'message', html.error(list(invalids.values())[0]))
 	return invalids
 
 def _bump_action(hd, next_action, current_action = None):

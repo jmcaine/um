@@ -29,7 +29,7 @@ PERSON = {
 		Validator(True, valid.STRING32, 1, 32, text.Valid.name),
 		html.Input(attrs = {'title': text.Title.name, 'autocomplete': 'off'})),
 }
-
+	
 EMAIL = {
 	'email': Field(
 		Validator(True, valid.EMAIL, 5, 128, text.Valid.email),
@@ -42,14 +42,20 @@ PHONE = {
 		html.Input(type_ = 'tel', attrs = {'title': text.Title.phone})),
 }
 
+USERNAME_VALIDATOR = Validator(True, valid.USERNAME, 3, 20, text.Valid.username)
 NEW_USERNAME = {
 	'username': Field(
-		Validator(True, valid.USERNAME, 3, 20, text.Valid.username),
+		USERNAME_VALIDATOR,
 		html.Input(
 			label = text.new_username,
 			placeholder = False, # depart from the 'label-as-placeholder' motif for this one, to make the label stand out on top of the input-box, and perhaps auto-populate the box with a real suggestion like firstname.lastname....
 			attrs = {'title': text.Title.username},
 		)),
+}
+USERNAME = {
+	'username': Field(USERNAME_VALIDATOR, html.Input(text.username, placeholder = False)),
+	'verified': Field(Validator(False), html.Input(type_ = 'date')),
+	'active': Field(None, html.Input(type_ = 'checkbox')),
 }
 
 NEW_PASSWORD = {

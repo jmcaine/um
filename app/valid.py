@@ -34,8 +34,8 @@ class Validator:
 def validate(data, fields):
 	result = {}
 	checks = lambda field: \
-		field.validator.regex.compiled.match(value) != None and \
-		field.validator.min_length < len(value) < field.validator.max_length
+		((not field.validator.regex) or field.validator.regex.compiled.match(value) != None) \
+		and (not field.validator.min_length or field.validator.min_length < len(value) < field.validator.max_length)
 
 	for field_name, field in fields.items():
 		value = str(data[field_name])
