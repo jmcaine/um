@@ -1,0 +1,18 @@
+
+
+Tasks, Supertasks, Priortasks ... and Actions
+=============================================
+
+From the front-end html/javascript point of view, every task is simply a "task".  For example,
+"login", "logout", "join", or "invite", but also something more generic like "submit_fields".
+From the point of view of main.py, some of these are recorded as a part of the session 'state'
+as a "supertask" (by the handler of the task, upon first entry).  Thus, if a supertask like
+"join" is started, then, during the process of collecting data for a new user to "join", if
+javascript submits a "submit_fields" task, main.py knows that the fields submitted belong to
+the "join" operation.  The javascript doesn't bother with this kind of state detail, explicitly.
+
+main.py also sometimes saves the "priortask" state - a task that was being processed when attention
+turned to a subtask or other task, to which control might want to return afterward.
+
+An "action" is sort-of a 'subtask' - a task might involve many steps, or actions; main.py keeps
+track of that state as the current "action" for a given task (supertask) being performed.

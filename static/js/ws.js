@@ -1,31 +1,30 @@
 
+
 ws.onmessage = function(event) {
 	var payload = JSON.parse(event.data);
 	//console.log("payload.task = " + payload.task);
 	switch(payload.task) {
-		case "init":
-			ws_send({task: "init"});
+		case "new_key":
+			identify(true);
 			break;
-		case "pong": // currently, this is never called; we receive pings (from pingpong() in ws.js), but our server doesn't send pongs (since it's not really helpful to do so.  If it did, here we'd catch them.
+		case "banner":
+			show_banner(payload.banner);
 			break;
-		case "internal_error":
-			show_message(payload.internal_error);
+		case "detail_banner":
+			show_detail_banner(payload.detail_banner);
 			break;
-		case "test1":
-			show_message(payload.test1);
-			break;
-		case "message":
-			show_message(payload.message);
-			break;
-		case "detail_message":
-			show_detail_message(payload.detail_message);
-			break;
-		case "show_fieldset":
+		case "fieldset":
 			set_content(payload.fieldset, true);
+			if (Object.hasOwn(payload, "banner")) {
+				show_banner(payload.banner);
+			}
 			focus_top_input();
 			break;
 		case "content":
-			set_content(payload.content, false);
+			set_content(payload.content, true);
+			break;
+		case "sub_content":
+			set_sub_content(payload.container, payload.content);
 			break;
 		case "dialog":
 			set_dialog(payload.dialog);

@@ -16,17 +16,21 @@ username = 'Username'
 password = 'Password'
 
 # Button titles:
+login = 'Log In'
 create = 'Create'
 next = 'Next ►'
 save = 'Save'
 cancel = 'Cancel'
 edit = 'Edit...'
 add = 'Add...'
+delete = 'Delete'
 submit = 'Submit'
 send = 'Send!'
 finish = 'Finish!'
 more_detail = 'More detail...'
 close = 'Close'
+forgot_password = 'Forgot Password...'
+invite_new = 'Invite new...'
 
 # Label prefixes:
 your = 'Your'
@@ -38,14 +42,26 @@ new_username = 'Now create a NEW username'
 new_password = 'Set your NEW password'
 filtersearch = 'Filter / Search...'
 show_inactives = 'Show inactive users, too'
+change_settings = 'Change settings'
+admin = 'Administrative tools'
+messages = 'Messages'
+logout = 'Log out of this session'
+deep_search = 'Search "deep"'
 
 # Fieldset legends:
-emails = 'Emails...'
-phones = 'Phones...'
+emails = 'Emails'
+phones = 'Phones'
+password_reset = 'Reset Password'
 
-# Result messages:
+# Messages:
+welcome = 'Welcome!  "Log in" or "Join" to get started... '
 change_detail_success = 'Successfully changed {change}'
 detail_for = 'detail for'
+invalid_login = 'Invalid username/login; please try again or click "forgot password" below.'
+forgot_password_prelude = "What's your email address?  We'll send a password reset link!"
+admin_required = "Administrative access is required for that function.  If you have an administrative login, log out from your current session and log back in as an administrator to access this function."
+deletion_succeeded = 'Deletion succeeded'
+invite_succeeded = 'Successfully invited {name}'
 
 # Hover / validation "title" hints:
 class Title:

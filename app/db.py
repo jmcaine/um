@@ -5,15 +5,14 @@ __license__ = 'MIT'
 
 import logging
 
-import bcrypt # cf https://security.stackexchange.com/questions/133239/what-is-the-specific-reason-to-prefer-bcrypt-or-pbkdf2-over-sha256-crypt-in-pass
-
 from datetime import datetime
 from uuid import uuid4
 from random import choices as random_choices
 from string import ascii_uppercase
+from hashlib import sha256
 
+import bcrypt # cf https://security.stackexchange.com/questions/133239/what-is-the-specific-reason-to-prefer-bcrypt-or-pbkdf2-over-sha256-crypt-in-pass
 import aiosqlite
-
 from sqlite3 import PARSE_DECLTYPES, IntegrityError
 
 from . import exception as ex
@@ -53,6 +52,17 @@ async def rollback(dbc):
 	await dbc.execute('rollback')
 
 
+async def add_idid_key(dbc, idid, key):
+	r = await dbc.execute('insert into id_key (idid, key, timestamp) values (?, ?, ?)', (idid, key, datetime.now().isoformat()))
+	return r.lastrowid
+
+async def get_user_by_id_key(dbc, idid, pub, hsh):
+	r = await _fetchone(dbc, f'select key, user from id_key where idid = ?', (idid,))
+	if not r:
+		return None # not found; new idid-key pair is going to be needed (see add_idid_key())
+	hsh2 = sha256(r['key'].encode("utf-8") + pub.encode("utf-8")).hexdigest()
+	return r['user'] if hsh2 == hsh else None
+
 async def add_person(dbc, first_name, last_name):
 	r = await dbc.execute('insert into person (first_name, last_name) values (?, ?)', (first_name, last_name))
 	return r.lastrowid
@@ -88,11 +98,17 @@ async def get_phone(dbc, phone_id):
 	return await _fetchone(dbc, 'select phone from phone where id = ?', (phone_id,))
 
 async def set_phone(dbc, phone_id, phone):
-	return await _update1(dbc, 'update phone set numbner = ? where id = ?', (phone, phone_id))
+	return await _update1(dbc, 'update phone set phone = ? where id = ?', (phone, phone_id))
 
 async def get_person_phones(dbc, person_id):
 	return await _fetchall(dbc, 'select phone.id, phone from phone join person on phone.person = person.id where person.id = ?', (person_id,))
 
+
+async def delete_person_detail(dbc, table, id):
+	if table not in ('phone', 'email'):
+		raise Exception(f'Unexpected table: {table} - not expecting to delete from this table with this function')
+	#else:
+	await dbc.execute(f'delete from {table} where id = ?', (id,))
 
 async def username_exists(dbc, username):
 	return await _fetchone(dbc, 'select 1 from user where username = ?', (username,)) != None
@@ -145,33 +161,39 @@ async def get_users(dbc, active = True, persons = True, like = None, limit = 15)
 async def verify_new_user(dbc, username):
 	return await _update1(dbc, 'update user set verified = date("now") where username = ? and active = 1', (username,))
 
-async def login(dbc, username, password):
-	if not password: # password is required!
-		return None
-	#else...
-	r = await _fetchone(dbc, 'select id, password from user where username = ? and active = 1', (username,))
-	if r and bcrypt.checkpw(password.encode(), r['password']):
-		return await _login(dbc, r['id'])
+async def login(dbc, idid, username, password):
+	if password: # password is required!
+		r = await _fetchone(dbc, 'select id, password from user where username = ? and active = 1', (username,))
+		if r and bcrypt.checkpw(password.encode(), r['password']):
+			if await _login(dbc, idid, r['id']):
+				return r['id']
 	#else...
 	return None
 
-async def force_login(dbc, user_id):
+async def force_login(dbc, idid, user_id):
 	# use, e.g., to auto-login user when user first creates self (don't ask for password again right after creation)
 	r = await _fetchone(dbc, 'select id from user where id = ? and active = 1', (user_id,))
-	return await _login(dbc, r['id'])
+	if await _login(dbc, idid, r['id']):
+		return r['id']
+	#else...
+	return None
 
-async def authenticated(dbc, uuid):
-	return await _fetchone(dbc, 'select id from user_login where active = 1 and uuid = ?', (uuid,)) != None
+async def authorized(dbc, uid, role):
+	if uid == None:
+		raise Exception()
+	result = await _fetchone(dbc, 'select 1 from role join user_role on role.id = user_role.role join user on user.id = user_role.user where user.id = ?', (uid,))
+	return bool(result)
 
-async def authorized(dbc, uuid, roles):
-	users_roles = await _fetchall(dbc, 'select role.name from role join user_role on role.id = user_role.role join user on user.id = user_role.user join user_login on user.id = user_login.user where user_login.uuid = ?', (uuid,))
+async def authorized_roles(dbc, uid, roles):
+	users_roles = await _fetchall(dbc, 'select role.name from role join user_role on role.id = user_role.role join user on user.id = user_role.user where user.id = ?', (uid,))
 	return bool(set([role['name'] for role in users_roles]).intersection(roles))
 
-async def logout(dbc, uuid):
-	await dbc.execute('update user_login set active = 0 where uuid = ?', (uuid,))
+async def logout(dbc, uid):
+	if type(uid) == int:
+		await dbc.execute('delete from id_key where user = ?', (uid,))
 
-async def get_username(dbc, uuid):
-	r = await _fetchone(dbc, 'select username from user join user_login on user_login.user = user.id where user_login.uuid = ?', (uuid,))
+async def get_username(dbc, idid):
+	r = await _fetchone(dbc, 'select username from user join id_key on user.id = id_key.user where id_key.idid = ?', (idid,))
 	return r['username'] if r else None
 
 async def get_user(dbc, id, fields: str | None = None):
@@ -259,9 +281,7 @@ async def _insert1(dbc, sql, args):
 def _hashpw(password):
 	return bcrypt.hashpw(password.encode(), bcrypt.gensalt())
 
-async def _login(dbc, user_id):
-	uuid = str(uuid4())
-	await dbc.execute('insert into user_login (user, uuid, timestamp) values (?, ?, ?)', (user_id, uuid, datetime.now().isoformat()))
-	return uuid
+async def _login(dbc, idid, user_id):
+	return await _update1(dbc, 'update id_key set user = ? where idid = ?', (user_id, idid))
 
 

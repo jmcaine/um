@@ -43,6 +43,7 @@ PHONE = {
 }
 
 USERNAME_VALIDATOR = Validator(True, valid.USERNAME, 3, 20, text.Valid.username)
+
 NEW_USERNAME = {
 	'username': Field(
 		USERNAME_VALIDATOR,
@@ -52,7 +53,15 @@ NEW_USERNAME = {
 			attrs = {'title': text.Title.username},
 		)),
 }
-USERNAME = {
+		
+PASSWORD_VALIDATOR = Validator(True, valid.STRING32, 5, 32, text.Valid.password)
+
+LOGIN = {
+	'username': Field(USERNAME_VALIDATOR, html.Input(text.username)),
+	'password': Field(PASSWORD_VALIDATOR, html.Input(type_ = 'password')),
+}
+
+USER = {
 	'username': Field(USERNAME_VALIDATOR, html.Input(text.username, placeholder = False)),
 	'verified': Field(Validator(False), html.Input(type_ = 'date')),
 	'active': Field(None, html.Input(type_ = 'checkbox')),
@@ -60,11 +69,11 @@ USERNAME = {
 
 NEW_PASSWORD = {
 	'password': Field(
-		Validator(True, valid.STRING32, 5, 32, text.Valid.password),
+		PASSWORD_VALIDATOR,
 		html.Input(
-			type_ = 'password', 
 			label = text.new_password,
 			placeholder = False, # depart from the 'label-as-placeholder' motif for this one, to make the label stand out on top of the input-box
+			type_ = 'password', 
 			attrs = {'title': text.Title.password}
 		)),
 	'password_confirmation': Field(

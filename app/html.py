@@ -22,15 +22,32 @@ from . import text
 l = logging.getLogger(__name__)
 
 
-# Shortcuts -----------------------------------------------------------------------
+# Shortcuts -------------------------------------------------------------------
 
-_js_ws = lambda ws_url: raw(f'var ws = new WebSocket("{ws_url}");')
-_ws_scripts = lambda ws_url, scripts: [t.script(_js_ws(ws_url))] + [_wrap_script(script) for script in scripts]
+_scripts = lambda scripts: [t.script(src = f'/static/js/{script}') for script in scripts]
 _yes_or_no = lambda value: 'yes' if value else 'no'
 _format_phone = lambda num: '(' + num[-10:-7] + ') ' + num[-7:-4] + '-' + num[-4:] # TODO: international extention prefixes [0:-11]
 
+CANCEL_BUTTON = t.button(text.cancel, onclick = 'cancel()')
 
-# Whole documents -------------------------------------------------------------
+# Pages -----------------------------------------------------------------------
+
+# Note that there's really only one "page", main()...
+
+def main(ws_url: str):
+	d = _doc('')
+	with d:
+		t.div(id = 'gray_screen', cls = 'gray_screen hide') # invisible at first; for "dialog box" divs, later
+		t.div(id = 'dialog_container', cls = 'dialog_container small hide') # invisible at first....
+		with t.div(id = 'page'):
+			t.div(t.div(id = 'banner_container', cls = 'container')) # for later ws-delivered banner messages
+			with t.div(id = 'content_container', cls = 'container'):
+				t.div("Loading...")
+		with t.div(id = 'scripts', cls = 'container'):
+			t.script(raw(f'var ws = new WebSocket("{ws_url}");'))
+			[script for script in _scripts(('basic.js', 'ws.js', 'persistence.js', 'main.js', 'submit.js', 'users.js', 'messages.js'))]
+	return d.render()
+
 
 def test(person = None):
 	d = _doc('Test')
@@ -41,42 +58,51 @@ def test(person = None):
 	return d.render()
 
 
-def join(ws_url: str, html_fields: list, field_names: list):
-	fieldset = ws_fieldset(text.name, html_fields, field_names, text.next)
-	return _fieldset_doc(text.join, fieldset, _ws_scripts(ws_url, ('basic.js', 'ws.js', 'join.js', 'submit.js')))
+# Main-content "Pages" --------------------------------------------------------
 
-def invite(ws_url: str, html_fields: list, field_names: list):
-	fieldset = ws_fieldset(text.name, html_fields, field_names, text.next)
-	return _fieldset_doc(text.invite, fieldset, _ws_scripts(ws_url, ('basic.js', 'ws.js', 'invite.js', 'submit.js')))
+def login_or_join():
+	return t.div(
+		t.div(text.welcome),
+		t.div(t.button(text.login, onclick = 'login()'), cls = 'center'),
+		t.div(t.button(text.join, onclick = 'join()'), cls = 'center'),
+	)
 
+def messages(admin):
+	result = t.div()
+	with result:
 
-def list_people(persons):
-	d = _doc(text.list_people)
-	with d:
-		with t.table():
-			for person in persons:
-				with t.tr(cls = 'selectable_row', onclick = f"location.assign('/person/{person['id']}');"):
-					t.td(person['first_name'], align = 'right')
-					t.td(person['last_name'], align = 'left')
-	return d.render()
+		with t.div(cls = 'button_band'):
+			#    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω
+			t.button('+', title = 'new message', onclick = f'new_message()')
+			filterbox()
+			filterbox_checkbox(text.deep_search, 'deep_search')
+			with t.div(cls = 'right'):
+				t.button('...', title = text.change_settings, onclick = 'settings()')
+				if admin:
+					t.button('Ѫ', title = text.admin, onclick = 'admin_screen()')
+				t.button('Θ', title = text.logout, onclick = 'logout()')
 
-def filterbox():
-	return Input(text.filtersearch, type_ = 'search', autofocus = True,
-					attrs = {'autocomplete': 'off', 'oninput': 'filtersearch(this.value, $("show_inactives").checked)'}).build('filtersearch')
+		t.hr()
+		t.div('Main messages...')
 
-def users(ws_url, users):
-	d = _doc(text.users)
-	with d:
-		t.div(id = 'gray_screen', cls = 'gray_screen hide') # invisible at first; for "dialog box" divs, later
-		t.div(id = 'dialog_container', cls = 'dialog_container small hide')
-		with t.div(id = 'page'):
-			t.div(t.div(id = 'message_container', cls = 'container')) # for later ws-delivered messages
-			show_inactives = Input(text.show_inactives, type_ = 'checkbox',
-										 attrs = {'onclick': 'filtersearch($("filtersearch").value, this.checked);'})
-			t.span(filterbox(), show_inactives.build('show_inactives'))
-			t.div(user_table(users), id = 'content_container', cls = 'container')
-		[script for script in _ws_scripts(ws_url, ('basic.js', 'ws.js', 'users.js', 'submit.js'))]
-	return d.render()
+	return result
+
+def user_page(users):
+	result = t.div()
+	with result:
+
+		with t.div(cls = 'button_band'):
+			filterbox()
+			filterbox_checkbox(text.show_inactives, 'show_inactives')
+			with t.div(cls = 'right'):
+				t.button('...', title = text.change_settings, onclick = 'settings()')
+				t.button('Ξ', title = text.messages, onclick = 'messages()')
+				t.button('Θ', title = text.logout, onclick = 'logout()')
+
+		t.hr()
+		t.div(t.button(text.invite_new, onclick = "invite()"))
+		t.div(user_table(users), id = 'user_table')
+	return result
 
 
 # Divs/fieldsets/partials -----------------------------------------------------
@@ -94,29 +120,47 @@ def warning(msg: str):
 def test1(msg: str):
 	return t.div(msg)
 
-def join_succeeded():
-	return t.div('Join succeeded!') # TODO: improve!
 
-def invite_succeeded(person):
-	return t.div(f"{person['first_name']} {person['last_name']} has been invited!") # TODO: improve!
-	
+def build_fields(fields, data = None, label_prefix = None, invalids = None):
+	return [field.html_field.build(name, data, label_prefix, invalids) \
+		for name, field in fields.items()]
 
-def ws_fieldset(fieldset_title: str, html_fields: list, field_names: list, button_title: str = text.save):
-	button = _ws_submit_button(button_title, field_names)
-	return fieldset(fieldset_title, html_fields, button)
+def login(fields):
+	button = _ws_submit_button(text.login, fields.keys())
+	forgot = t.button(text.forgot_password, onclick = 'forgot_password()')
+	result = fieldset(text.login, build_fields(fields), button, forgot)
+	return result
 
-def fieldset(title: str, html_fields: list, button: t.button) -> t.fieldset:
+def forgot_password(fields):
+	button = _ws_submit_button(text.send, fields.keys())
+	result = fieldset(text.password_reset, build_fields(fields), button)
+	return result
+
+
+def filterbox():
+	return Input(text.filtersearch, type_ = 'search', autofocus = True,
+					attrs = {'autocomplete': 'off', 'oninput': 'filtersearch(this.value, $("show_inactives").checked)'}).build('filtersearch')
+
+def filterbox_checkbox(label, name):
+	return Input(label, type_ = 'checkbox', attrs = {'onclick': 'filtersearch($("filtersearch").value, this.checked);'}).build(name)
+
+
+
+def fieldset(title: str, html_fields: list, button: t.button, alt_button: t.button = CANCEL_BUTTON) -> t.fieldset:
 	result = t.fieldset()
 	with result:
 		t.legend(title + '...')
 		for field in html_fields:
 			t.div(field)
-		t.div(button)
+		if alt_button:
+			t.div(t.span(button, alt_button))
+		else:
+			t.div(button)
 	return result
 
 def user_table(users):
-	table = t.table(cls = 'full_width')
-	with table:
+	result = t.table(cls = 'full_width')
+	with result:
 		with t.tr():
 			t.th('Username')
 			t.th('Name')
@@ -125,15 +169,23 @@ def user_table(users):
 			t.th('Active')
 		for user in users:
 			with t.tr():
-				t.td(user['username'], cls = 'pointered', onclick = f"get_user_detail({user['user_id']});")
-				t.td(f"{user['first_name']} {user['last_name']}", cls = 'pointered', onclick = f"get_person_detail({user['person_id']});")
+				t.td(user['username'], cls = 'pointered', onclick = f"detail('user', {user['user_id']});")
+				t.td(f"{user['first_name']} {user['last_name']}", cls = 'pointered', onclick = f"detail('person', {user['person_id']});")
 				t.td(datetime.fromisoformat(user['created']).strftime('%m/%d/%Y %H:%M'))
-				t.td(user['verified'] or '', cls = 'pointered', onclick = f"get_user_detail({user['user_id']});")
-				t.td(_yes_or_no(int(user['active'])), align = 'center', cls = 'pointered', onclick = f"get_user_detail({user['user_id']});")
-	return table
+				t.td(user['verified'] or '', cls = 'pointered', onclick = f"detail('user', {user['user_id']});")
+				t.td(_yes_or_no(int(user['active'])), align = 'center', cls = 'pointered', onclick = f"detail('user', {user['user_id']});")
+	return result
+
+def dialog(title, html_fields, field_names, button_title = text.save):
+	return t.div(
+		t.div(id = 'detail_banner_container', cls = 'container'), # for later ws-delivered banner messages
+		fieldset(title, html_fields, _ws_submit_button(button_title, field_names)),
+	)
+
 
 def detail(fields, data, more_func):
-	result = t.div(t.div(id = 'detail_message_container', cls = 'container')) # for later ws-delivered messages
+	# TODO: is this similar enough to dialog() and/or mpd_detail() that they should be combined?!
+	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	for name, field in fields.items():
 		result.add(t.div(field.html_field.build(name, data)))
 	with result:
@@ -146,32 +198,42 @@ def detail(fields, data, more_func):
 	return result
 
 def more_person_detail(emails, phones):
-	result = t.div(t.div(id = 'detail_message_container', cls = 'container')) # for later ws-delivered messages
+	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
 		with t.fieldset():
 			t.legend(text.emails)
 			for email in emails:
-				t.div(t.span(email['email'], t.button(text.edit, onclick = f"get_email_detail({email['id']});")))
-			t.div(t.button(text.add, onclick = 'get_email_detail(0)'))
+				t.div(t.span(
+					email['email'],
+					t.button(text.edit, onclick = f"email_detail({email['id']});"),
+					t.button(text.delete, onclick = f"delete_email({email['id']})"),
+				))
+			t.div(t.button(text.add, onclick = 'email_detail(0)'))
 		with t.fieldset():
 			t.legend(text.phones)
 			for phone in phones:
-				t.div(t.span(_format_phone(phone['phone']), t.button(text.edit, onclick = f"get_phone_detail({phone['id']});")))
-			t.div(t.button(text.add, onclick = 'get_phone_detail(0)'))
-		t.div(t.button(text.close, onclick = 'get_detail("person", 0)'))
+				t.div(t.span(
+					_format_phone(phone['phone']),
+					t.button(text.edit, onclick = f"phone_detail({phone['id']});"),
+					t.button(text.delete, onclick = f"delete_phone({phone['id']})"),
+				))
+			t.div(t.button(text.add, onclick = 'phone_detail(0)'))
+		t.div(t.button(text.close, onclick = 'cancel()')) # cancel just reverts to priortask; added/changed emails/phones are saved - those deeds are done, we're just "closing" this mpd portal
 	return result
 
 def mpd_detail(fields, data):
-	result = t.div(t.div(id = 'detail_message_container', cls = 'container')) # for later ws-delivered messages
+	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	for name, field in fields.items():
 		result.add(t.div(field.html_field.build(name, data)))
 	with result:
 		with t.div():
 			with t.span():
-				_ws_submit_button(text.save, data.keys(), 'submit_mpd_fields')
-				t.button(text.cancel, onclick = 'get_more_person_detail()')
+				_ws_submit_button(text.save, data.keys())
+				t.button(text.cancel, onclick = 'more_person_detail()')
 	return result
-	
+
+
+
 # Utils -----------------------------------------------------------------------
 
 
@@ -186,28 +248,10 @@ def _doc(title, css = None):
 				t.link(href = f'/static/css/{c}' + k_cache_buster, rel = 'stylesheet')
 	return d
 
-def _fieldset_doc(title: str, fieldset: t.fieldset, additions: list | None = None):
-	doc = _doc(title)
-	doc.add(t.div(id = 'message_container', cls = 'container')) # add message container for later ws-delivered messages
-	doc.add(t.div(fieldset, id = 'content_container', cls = 'container'))
-	if additions:
-		for addition in additions:
-			doc.add(addition)
-	return doc.render()
 
-def _wrap_script(script):
-	return t.script(src = f'/static/js/{script}')
-
-def _wrap_scripts(scripts):
-	result = []
-	if scripts:
-		for script in scripts:
-			result.append(_wrap_script(script))
-	return result
-
-def _ws_submit_button(title: str, field_names: list, function_name: str = 'submit_fields'):
+def _ws_submit_button(title: str, field_names: list):
 	args = ', '.join([f"'{name}': $('{name}').value" for name in field_names])
-	return t.button(title, id = 'submit', type = 'submit', onclick = f'{function_name}({{ {args} }})')
+	return t.button(title, id = 'submit', type = 'submit', onclick = f'submit_fields({{ {args} }})')
 
 
 @dataclass(slots = True, frozen = True)
