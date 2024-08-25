@@ -72,8 +72,8 @@ def messages(admin):
 	with result:
 
 		with t.div(cls = 'button_band'):
-			#    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω
-			t.button('+', title = 'new message', onclick = f'new_message()')
+			#    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦
+			t.button('+', title = 'new message', onclick = 'new_message()')
 			filterbox()
 			filterbox_checkbox(text.deep_search, 'deep_search')
 			with t.div(cls = 'right'):
@@ -87,21 +87,22 @@ def messages(admin):
 
 	return result
 
-def user_page(users):
-	result = t.div()
+
+
+def users_page(users):
+	result = t.div(admin_button_band())
 	with result:
-
-		with t.div(cls = 'button_band'):
-			filterbox()
-			filterbox_checkbox(text.show_inactives, 'show_inactives')
-			with t.div(cls = 'right'):
-				t.button('...', title = text.change_settings, onclick = 'settings()')
-				t.button('Ξ', title = text.messages, onclick = 'messages()')
-				t.button('Θ', title = text.logout, onclick = 'logout()')
-
 		t.hr()
-		t.div(t.button(text.invite_new, onclick = "invite()"))
+		admin_menu_button_band((t.button('+', title = text.invite_new_user, onclick = "invite()"),))
 		t.div(user_table(users), id = 'user_table')
+	return result
+
+def tags_page(tags):
+	result = t.div(admin_button_band())
+	with result:
+		t.hr()
+		admin_menu_button_band((t.button('+', title = text.create_new_tag, onclick = "admin_new_tag()"),))
+		t.div(tag_table(tags), id = 'tag_table')
 	return result
 
 
@@ -137,6 +138,26 @@ def forgot_password(fields):
 	return result
 
 
+def admin_button_band():
+	result = t.div(cls = 'button_band')
+	with result:
+		filterbox()
+		filterbox_checkbox(text.show_inactives, 'show_inactives')
+		with t.div(cls = 'right'):
+			t.button('...', title = text.change_settings, onclick = 'settings()')
+			t.button('Ξ', title = text.messages, onclick = 'messages()')
+			t.button('Θ', title = text.logout, onclick = 'logout()')
+	return result
+
+def admin_menu_button_band(left_buttons):
+	result = t.div(*left_buttons, cls = 'button_band')
+	with result:
+		with t.div(cls = 'right'):
+			t.button('☺', title = text.users, onclick = 'admin_users()')
+			t.button('#', title = text.tags, onclick = 'admin_tags()')
+	return result
+
+
 def filterbox():
 	return Input(text.filtersearch, type_ = 'search', autofocus = True,
 					attrs = {'autocomplete': 'off', 'oninput': 'filtersearch(this.value, $("show_inactives").checked)'}).build('filtersearch')
@@ -144,14 +165,20 @@ def filterbox():
 def filterbox_checkbox(label, name):
 	return Input(label, type_ = 'checkbox', attrs = {'onclick': 'filtersearch($("filtersearch").value, this.checked);'}).build(name)
 
+def filterbox_plain():
+	return Input(text.filtersearch, type_ = 'search', autofocus = True,
+					attrs = {'autocomplete': 'off', 'oninput': 'filtersearch(this.value, false)'}).build('filtersearch')
 
 
-def fieldset(title: str, html_fields: list, button: t.button, alt_button: t.button = CANCEL_BUTTON) -> t.fieldset:
+
+def fieldset(title: str, html_fields: list, button: t.button, alt_button: t.button = CANCEL_BUTTON, more_func: str | None = None) -> t.fieldset:
 	result = t.fieldset()
 	with result:
 		t.legend(title + '...')
 		for field in html_fields:
 			t.div(field)
+		if more_func:
+			t.div(t.button(text.more_detail, onclick = f'{more_func}()'))
 		if alt_button:
 			t.div(t.span(button, alt_button))
 		else:
@@ -160,6 +187,7 @@ def fieldset(title: str, html_fields: list, button: t.button, alt_button: t.butt
 
 def user_table(users):
 	result = t.table(cls = 'full_width')
+	user_detail = lambda user: f"detail('user', {user['user_id']})"
 	with result:
 		with t.tr():
 			t.th('Username')
@@ -169,33 +197,41 @@ def user_table(users):
 			t.th('Active')
 		for user in users:
 			with t.tr():
-				t.td(user['username'], cls = 'pointered', onclick = f"detail('user', {user['user_id']});")
-				t.td(f"{user['first_name']} {user['last_name']}", cls = 'pointered', onclick = f"detail('person', {user['person_id']});")
+				t.td(user['username'], cls = 'pointered', onclick = user_detail(user))
+				t.td(f"{user['first_name']} {user['last_name']}", cls = 'pointered', onclick = f"detail('person', {user['person_id']})")
 				t.td(datetime.fromisoformat(user['created']).strftime('%m/%d/%Y %H:%M'))
-				t.td(user['verified'] or '', cls = 'pointered', onclick = f"detail('user', {user['user_id']});")
-				t.td(_yes_or_no(int(user['active'])), align = 'center', cls = 'pointered', onclick = f"detail('user', {user['user_id']});")
+				t.td(user['verified'] or '', cls = 'pointered', onclick = user_detail(user))
+				t.td(_yes_or_no(int(user['active'])), align = 'center', cls = 'pointered', onclick = user_detail(user))
 	return result
 
-def dialog(title, html_fields, field_names, button_title = text.save):
+def tag_table(tags):
+	result = t.table(cls = 'full_width')
+	with result:
+		with t.tr():
+			t.th('Name')
+			t.th('Active')
+		for tag in tags:
+			with t.tr(cls = 'pointered', onclick = f"detail('tag', {tag['id']})"):
+				t.td(tag['name'])
+				t.td(_yes_or_no(int(tag['active'])), align = 'center')
+	return result
+
+
+def dialog(title, html_fields, field_names, button_title = text.save, alt_button: t.button = CANCEL_BUTTON, more_func = None):
 	return t.div(
 		t.div(id = 'detail_banner_container', cls = 'container'), # for later ws-delivered banner messages
-		fieldset(title, html_fields, _ws_submit_button(button_title, field_names)),
+		fieldset(title, html_fields, _ws_submit_button(button_title, field_names), alt_button, more_func),
 	)
 
 
-def detail(fields, data, more_func):
-	# TODO: is this similar enough to dialog() and/or mpd_detail() that they should be combined?!
-	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
-	for name, field in fields.items():
-		result.add(t.div(field.html_field.build(name, data)))
-	with result:
-		if more_func:
-			t.div(t.button(text.more_detail, onclick = f'{more_func}();'))
-		with t.div():
-			with t.span():
-				_ws_submit_button(text.save, data.keys())
-				t.button(text.cancel, onclick = 'cancel()')
-	return result
+def dialog2(title, fields, data = None, button_title = text.save, alt_button: t.button = CANCEL_BUTTON, more_func = None):
+	return dialog(title, build_fields(fields, data), fields.keys(), button_title, alt_button, more_func)
+
+
+def cancel_to_mpd_button():
+	return t.button(text.cancel, onclick = 'more_person_detail()')
+
+
 
 def more_person_detail(emails, phones):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
@@ -221,18 +257,33 @@ def more_person_detail(emails, phones):
 		t.div(t.button(text.close, onclick = 'cancel()')) # cancel just reverts to priortask; added/changed emails/phones are saved - those deeds are done, we're just "closing" this mpd portal
 	return result
 
-def mpd_detail(fields, data):
+def tag_users_and_nonusers(tag_name, users, nonusers):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
-	for name, field in fields.items():
-		result.add(t.div(field.html_field.build(name, data)))
 	with result:
-		with t.div():
-			with t.span():
-				_ws_submit_button(text.save, data.keys())
-				t.button(text.cancel, onclick = 'more_person_detail()')
+		t.div(filterbox_plain())
+		t.div(tag_users_and_nonusers_table(tag_name, users, nonusers), id = 'users_and_nonusers_table_container')
 	return result
 
-
+def tag_users_and_nonusers_table(tag_name, users, nonusers):
+	un_name = lambda user: f"{user['username']} ({user['first_name']} {user['last_name']})" if user else ''
+	result = t.table(cls = 'full_width')
+	with result:
+		with t.tr(cls = 'midlin'):
+			t.th(f'Subscribed to {tag_name}')
+			t.th(t.button(text.done, onclick = 'cancel()'), colspan = 2)
+			t.th('NOT Subscribed')
+		done = False
+		while not done:
+			user = users.pop(0) if len(users) > 0 else {}
+			nonuser = nonusers.pop(0) if len(nonusers) > 0 else {}
+			if not user and not nonuser:
+				break # done
+			with t.tr(cls = 'midlin'):
+				t.td(un_name(user), align = 'right')
+				t.td(t.button('-', cls = 'singleton_button red_bg', onclick = f"remove_user_from_tag({user['id']})") if user else '')
+				t.td(t.button('+', cls = 'singleton_button green_bg', onclick = f"add_user_to_tag({nonuser['id']})") if nonuser else '')
+				t.td(un_name(nonuser), align = 'left')
+	return result
 
 # Utils -----------------------------------------------------------------------
 
@@ -275,15 +326,18 @@ class Input: # HTML input element, `frozen` with the intention of avoiding side-
 			if label_prefix:
 				label = label_prefix + ' ' + label
 			label = label.capitalize()
-		i = t.input_(name = name, id = name, type = self.type_ if self.type_ else 'text', **(self.attrs))
 		value = data[name] if data else None
+		if data and self.type_ == 'checkbox':
+			if value:
+				self.attrs['checked'] = 'checked'  # would prefer to make these mods to 'i' (t.input_), later, but it seems impossible
+			elif 'checked' in self.attrs: # default value vestige
+				del self.attrs['checked'] # would prefer to make these mods to 'i' (t.input_), later, but it seems impossible
+
+		i = t.input_(name = name, id = name, type = self.type_ if self.type_ else 'text', **(self.attrs))
+		if self.type_ == 'checkbox' and 'onclick' not in self.attrs: # don't do the following if there's already a script assigned, to do some other thing
+			i['onclick'] = "this.value = this.checked ? '1' : '0';"
 		if value:
 			i['value'] = value
-		if self.type_ == 'checkbox':
-			if value:
-				i['checked'] = 'checked'
-			if 'onclick' not in self.attrs: # don't do the following if there's already a script assigned, to do some other thing
-				i['onclick'] = "this.value = this.checked ? '1' : '0';"
 		if self.placeholder and self.type_ in ('text', 'search', 'url', 'tel', 'email', 'password', 'number'):
 			if type(self.placeholder) == str:
 				i['placeholder'] = self.placeholder

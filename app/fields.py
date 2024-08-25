@@ -80,3 +80,8 @@ NEW_PASSWORD = {
 		Validator(True, valid.STRING32, 5, 32, text.Valid.password_match),
 		html.Input(type_ = 'password', attrs = {'title': text.Title.password_confirmation})),
 }
+
+TAG = {
+	'name': Field(Validator(True, valid.STRING32, 1, 32, text.Valid.tag_name), html.Input()),
+	'active': Field(None, html.Input(type_ = 'checkbox', bool_attrs = ['checked',])),
+}

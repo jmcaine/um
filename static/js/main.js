@@ -35,6 +35,7 @@ function clear_banner() {
 }
 
 function set_content(content, clear_msg = true) {
+	hide_dialog();
 	_set_content($('content_container'), content, clear_msg);
 }
 
@@ -43,7 +44,6 @@ function set_sub_content(container_id, content, clear_msg = true) {
 }
 
 function _set_content(container, content, clear_msg) {
-	hide_dialog();
 	container.innerHTML = content;
 	if (clear_msg) {
 		clear_banner();
@@ -97,3 +97,26 @@ function detail(table, id) {
 }
 
 
+function admin_new_tag() {
+	ws_send({task: "admin_new_tag"});
+}
+
+function admin_users() {
+	ws_send({task: "admin_users"});
+}
+
+function admin_tags() {
+	ws_send({task: "admin_tags"});
+}
+
+function admin_tag_users() {
+	ws_send({task: "admin_tag_users"});
+}
+
+function remove_user_from_tag(user_id) {
+	ws_send({task: "remove_user_from_tag", user_id: user_id});
+}
+
+function add_user_to_tag(user_id) {
+	ws_send({task: "add_user_to_tag", user_id: user_id});
+}

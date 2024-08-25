@@ -29,6 +29,9 @@ ws.onmessage = function(event) {
 		case "dialog":
 			set_dialog(payload.dialog);
 			break;
+		case "hide_dialog":
+			hide_dialog();
+			break;
 		default:
 			handle_task(payload);
 	}

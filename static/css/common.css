@@ -97,11 +97,39 @@ span.invalid {
 	margin: auto;
 }
 
+.singleton_button { /* NOTE: ALMOST SAME as .button_band button -- consolidate! */
+	width: 2.3em;
+	margin: 1px 2px;
+	padding: 1px 5px;
+	font-size: 1em;
+	border: 2px;
+	border-radius: 5px;
+	border-style: solid;
+	color: white;
+	cursor: pointer;
+	box-shadow: none;
+}
+
+.red_bg {
+	background-color: #a22;
+}
+
+.green_bg {
+	background-color: #2a2;
+}
+
+.midlin {
+}
+.midlin th td {
+	padding-left: 1em;
+	padding-right: 1em;
+}
+
 /* ------------------------------------------------------------------------- */
 
 .button_band {
 	width: 100%;
-	margin-bottom: 40px;
+	margin-bottom: 35px;
 }
 
 .button_band > * {

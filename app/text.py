@@ -2,8 +2,6 @@
 doc_prefix = 'um... '
 
 # Page titles:
-person = 'Person'
-list_people = 'List People'
 users = 'Users'
 join = 'Join'
 invite = 'Invite'
@@ -14,6 +12,8 @@ email = 'Email'
 phone = 'Phone'
 username = 'Username'
 password = 'Password'
+user = 'User'
+person = 'Person'
 
 # Button titles:
 login = 'Log In'
@@ -30,7 +30,8 @@ finish = 'Finish!'
 more_detail = 'More detail...'
 close = 'Close'
 forgot_password = 'Forgot Password...'
-invite_new = 'Invite new...'
+tag = 'Tag'
+done = 'Done'
 
 # Label prefixes:
 your = 'Your'
@@ -41,12 +42,15 @@ username_hint = '"{suggestion}" or similar'
 new_username = 'Now create a NEW username'
 new_password = 'Set your NEW password'
 filtersearch = 'Filter / Search...'
-show_inactives = 'Show inactive users, too'
-change_settings = 'Change settings'
+show_inactives = 'Show inactives, too'
+change_settings = 'Settings'
 admin = 'Administrative tools'
 messages = 'Messages'
 logout = 'Log out of this session'
 deep_search = 'Search "deep"'
+tags = 'Tags'
+invite_new_user = 'Invite new user...'
+create_new_tag = 'Create new tag...'
 
 # Fieldset legends:
 emails = 'Emails'
@@ -60,8 +64,12 @@ detail_for = 'detail for'
 invalid_login = 'Invalid username/login; please try again or click "forgot password" below.'
 forgot_password_prelude = "What's your email address?  We'll send a password reset link!"
 admin_required = "Administrative access is required for that function.  If you have an administrative login, log out from your current session and log back in as an administrator to access this function."
-deletion_succeeded = 'Deletion succeeded'
-invite_succeeded = 'Successfully invited {name}'
+deletion_succeeded = 'Deletion succeeded.'
+invite_succeeded = 'Successfully invited {name}.'
+added_tag_success = 'Successfully added tag {name}.'
+removed_user_from_tag = 'Successfully UNsubscribed {username} from tag {tag_name}.'
+added_user_to_tag = 'Successfully subscribed {username} to tag {tag_name}.'
+
 
 # Hover / validation "title" hints:
 class Title:
@@ -81,3 +89,4 @@ class Valid:
 	username_exists = 'Sorry, that username is already in use.  Please try another.'
 	password = 'Password must be six characters or longer'
 	password_match = 'Password and confirmation must match'
+	tag_name = 'Tag name must be provided, and must be 2-32 characters in length'

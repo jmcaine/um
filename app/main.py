@@ -54,6 +54,7 @@ send_detail_banner = lambda hd, html: send_task(hd, 'detail_banner', html)
 send_fieldset = lambda hd, fieldset_title, html_fields, field_names, button_title: send_task(hd, 'fieldset', html.ws_fieldset(fieldset_title, html_fields, field_names, button_title))
 send_content = lambda hd, html: send_task(hd, 'content', html)
 send_sub_content = lambda hd, container, html: hd.wsr.send_json({'task': 'sub_content', 'container': container, 'content': html.render()})
+checkbox_value = lambda data, field: 1 if data.get(field) in (1, '1', 'on') else 0
 
 
 # Init / Shutdown -------------------------------------------------------------
@@ -181,7 +182,7 @@ async def ping(hd):
 @handler
 async def submit_fields(hd):
 	'''
-	This task/handler is called a lot - whenever "fields" are submitted; the initial task, or
+	This task-handler is called a lot - whenever "fields" are submitted; the initial task, or
 	"supertask" is stored in hd, and used to call the proper handler for the given (expected)
 	fieldset.
 	'''
@@ -201,10 +202,8 @@ async def filtersearch(hd):
 	'''
 	Similar to submit_fields - see note there.
 	'''
-	searchtext = hd.payload.get('searchtext')
-	if searchtext:
-		hd.state['filtersearch_text'] = searchtext
-		hd.state['filtersearch_include_extra'] = hd.payload.get('include_extra')
+	hd.state['filtersearch_text'] = hd.payload.get('searchtext', '')
+	hd.state['filtersearch_include_extra'] = hd.payload.get('include_extra')
 	await hd.supertask(hd)
 
 
@@ -245,7 +244,7 @@ async def login(hd):
 		uid = await db.login(hd.dbc, hd.idid, data['username'], data['password'])
 		if uid:
 			hd.uid = uid
-			await send_content(hd, html.messages(await admin_access(hd, uid)))
+			await messages(hd)
 		else:
 			await send_banner(hd, html.error(text.invalid_login))
 	else:
@@ -404,7 +403,7 @@ async def admin_users(hd):
 	if not supertask_started(hd, admin_users):
 		hd.state['filtersearch_text'] = '' # clear old searchtext if we're starting anew here
 		users = await db.get_users(hd.dbc)
-		await send_content(hd, html.user_page(users))
+		await send_content(hd, html.users_page(users))
 	else:
 		users = await db.get_users(hd.dbc, like = hd.state.get('filtersearch_text', ''), active = not hd.state.get('filtersearch_include_extra', False))
 		await send_sub_content(hd, 'user_table', html.user_table(users))
@@ -414,6 +413,7 @@ async def admin_messages(hd):
 	if not supertask_started(hd, admin_messages):
 		hd.state['filtersearch_text'] = '' # clear old searchtext if we're starting anew here
 	#TODO!
+
 
 @handler(admin = True)
 async def detail(hd):
@@ -425,12 +425,17 @@ async def detail(hd):
 		match table:
 			case 'user':
 				data = await db.get_user(hd.dbc, id, ', '.join(fields.USER.keys()))
-				await send_task(hd, 'dialog', html.detail(fields.USER, data, None))
+				await send_task(hd, 'dialog', html.dialog2(text.user, fields.USER, data))
 			case 'person':
 				data = await db.get_person(hd.dbc, id, ', '.join(fields.PERSON.keys()))
-				await send_task(hd, 'dialog', html.detail(fields.PERSON, data, 'more_person_detail'))
+				await send_task(hd, 'dialog', html.dialog2(text.person, fields.PERSON, data, more_func = 'more_person_detail'))
+			case 'tag':
+				data = await db.get_tag(hd.dbc, id, ', '.join(fields.TAG.keys()))
+				await send_task(hd, 'dialog', html.dialog2(text.tag, fields.TAG, data, more_func = 'admin_tag_users'))
+				data['id'] = id
+				hd.ststate['tag'] = data
 			case _:
-				raise ex.UmException('detail query for table "{table}" not recognized!')
+				raise ex.UmException(f'detail query for table "{table}" not recognized!')
 		data['id'] = id
 		hd.ststate['detail_got_data'] = data
 	else:
@@ -447,7 +452,7 @@ async def detail(hd):
 					await send_detail_banner(hd, html.error(text.Valid.username_exists))
 					return # finished
 				#else all good, move on!
-				data['active'] = 1 if data.get('active') in (1, '1', 'on') else 0
+				data['active'] = checkbox_value(data, 'active')
 				await db.update_user(hd.dbc, got_data['id'], fields.USER.keys(), data)
 				change = un
 			case 'person':
@@ -457,6 +462,12 @@ async def detail(hd):
 				first, last = data['first_name'], data['last_name']
 				await db.set_person(hd.dbc, got_data['id'], first, last)
 				change = f'{first} {last}'
+			case 'tag':
+				if await _invalids(hd, data, fields.TAG):
+					return # if there WERE invalids, wsr.send_json() was already done within
+				#else all good, move on!
+				await db.set_tag(hd.dbc, got_data['id'], data['name'], checkbox_value(data, 'active'))
+				change = data['name']
 			case _:
 				raise ex.UmException('set_detail() for table "{table}" not recognized!')
 		await revert_to_priortask(hd)
@@ -477,13 +488,14 @@ async def mpd_detail(hd):
 	if not supertask_started(hd, mpd_detail):
 		table = hd.ststate['mpd_detail_table'] = hd.payload['table']
 		id = hd.payload.get('id', 0)
+		cancel_button = html.cancel_to_mpd_button()
 		match table:
 			case 'email':
 				data = await db.get_email(hd.dbc, id) if id else {'email': ''}
-				await send_task(hd, 'dialog', html.mpd_detail(fields.EMAIL, data))
+				await send_task(hd, 'dialog', html.dialog2(text.email, fields.EMAIL, data, alt_button = cancel_button))
 			case 'phone':
 				data = await db.get_phone(hd.dbc, id) if id else {'phone': ''}
-				await send_task(hd, 'dialog', html.mpd_detail(fields.PHONE, data))
+				await send_task(hd, 'dialog', html.dialog2(text.phone, fields.PHONE, data, alt_button = cancel_button))
 		data['id'] = id
 		hd.ststate['mpd_got_data'] = data
 	else:
@@ -517,6 +529,65 @@ async def delete_mpd(hd):
 	data = hd.payload
 	await db.delete_person_detail(hd.dbc, data['table'], data['id'])
 	await more_person_detail(hd, text.deletion_succeeded)
+
+
+@handler(admin = True)
+async def admin_tags(hd):
+	hd.priortask = admin_tags # return to this task after drilling down on some subtask
+	if not supertask_started(hd, admin_tags):
+		hd.state['filtersearch_text'] = '' # clear old searchtext if we're starting anew here
+		tags = await db.get_tags(hd.dbc)
+		await send_content(hd, html.tags_page(tags))
+	else:
+		tags = await db.get_tags(hd.dbc, like = hd.state.get('filtersearch_text', ''), active = not hd.state.get('filtersearch_include_extra', False))
+		await hd.wsr.send_json({'task': 'hide_dialog'})
+		await send_sub_content(hd, 'tag_table', html.tag_table(tags))
+
+@handler(admin = True)
+async def admin_new_tag(hd):
+	if not supertask_started(hd, admin_new_tag):
+		await send_task(hd, 'dialog', html.dialog2(text.tag, fields.TAG))
+	else:
+		data = hd.payload
+		if await _invalids(hd, data, fields.TAG):
+			return # if there WERE invalids, wsr.send_json() was already done within
+		name = data['name']
+		await db.new_tag(hd.dbc, name, checkbox_value(data, 'active'))
+		await revert_to_priortask(hd)
+		await send_banner(hd, html.info(text.added_tag_success.format(name = f'"{name}"')))
+
+async def _get_users_and_nonusers(hd):
+	return await db.get_tag_users_and_nonusers(hd.dbc, hd.ststate['tag']['id'], hd.state['filtersearch_text'])
+
+@handler(admin = True)
+async def admin_tag_users(hd):
+	if not supertask_started(hd, admin_tag_users):
+		hd.state['filtersearch_text'] = '' # clear old searchtext if we're starting anew here
+		users, nonusers = await _get_users_and_nonusers(hd)
+		await send_task(hd, 'dialog', html.tag_users_and_nonusers(hd.ststate['tag']['name'], users, nonusers))
+	else:
+		await admin_tag_users_table(hd)
+
+async def admin_tag_users_table(hd, banner = None):
+	users, nonusers = await _get_users_and_nonusers(hd)
+	await send_sub_content(hd, 'users_and_nonusers_table_container', html.tag_users_and_nonusers_table(hd.ststate['tag']['name'], users, nonusers))
+	if banner:
+		await send_detail_banner(hd, html.info(banner))
+
+async def remove_or_add_user_to_tag(hd, func, message):
+	uid = int(hd.payload['user_id'])
+	await func(hd.dbc, uid, hd.ststate['tag']['id'])
+	username = await db.get_user(hd.dbc, uid, 'username')
+	await admin_tag_users_table(hd, html.info(message.format(username = username['username'], tag_name = hd.ststate['tag']['name'])))
+
+@handler(admin = True)
+async def remove_user_from_tag(hd):
+	await remove_or_add_user_to_tag(hd, db.remove_user_from_tag, text.removed_user_from_tag)
+
+@handler(admin = True)
+async def add_user_to_tag(hd):
+	await remove_or_add_user_to_tag(hd, db.add_user_to_tag, text.added_user_to_tag)
+
 
 
 

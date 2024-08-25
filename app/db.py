@@ -38,8 +38,8 @@ async def cursor(connection):
 async def test_fetch(dbc, pattern):
 	r = await dbc.execute('select * from person where first_name like ?', (f'%{pattern}%',))
 	return await r.fetchone()
-	# alternately, one-liner, using _fetchone() util:
-	#return await _fetchone(dbc, 'select * from person where first_name like ?', (f'%{pattern}%',))
+	# alternately, one-liner, using _fetch1() util:
+	#return await _fetch1(dbc, 'select * from person where first_name like ?', (f'%{pattern}%',))
 
 
 async def begin(dbc):
@@ -57,7 +57,7 @@ async def add_idid_key(dbc, idid, key):
 	return r.lastrowid
 
 async def get_user_by_id_key(dbc, idid, pub, hsh):
-	r = await _fetchone(dbc, f'select key, user from id_key where idid = ?', (idid,))
+	r = await _fetch1(dbc, f'select key, user from id_key where idid = ?', (idid,))
 	if not r:
 		return None # not found; new idid-key pair is going to be needed (see add_idid_key())
 	hsh2 = sha256(r['key'].encode("utf-8") + pub.encode("utf-8")).hexdigest()
@@ -70,7 +70,7 @@ async def add_person(dbc, first_name, last_name):
 async def get_person(dbc, id, fields: str | None = None):
 	if not fields:
 		fields = '*'
-	return await _fetchone(dbc, f'select {fields} from person where id = ?', (id,))
+	return await _fetch1(dbc, f'select {fields} from person where id = ?', (id,))
 
 async def get_persons(dbc, like = None):
 	where = ' where ' + like if like else ''
@@ -83,7 +83,7 @@ async def add_email(dbc, person_id, email):
 	return await _insert1(dbc, 'insert into email (email, person) values (?, ?)', (email, person_id))
 
 async def get_email(dbc, email_id):
-	return await _fetchone(dbc, 'select email from email where id = ?', (email_id,))
+	return await _fetch1(dbc, 'select email from email where id = ?', (email_id,))
 
 async def set_email(dbc, email_id, email):
 	return await _update1(dbc, 'update email set email = ? where id = ?', (email, email_id))
@@ -95,7 +95,7 @@ async def add_phone(dbc, person_id, phone):
 	return await _insert1(dbc, 'insert into phone (phone, person) values (?, ?)', (phone, person_id))
 
 async def get_phone(dbc, phone_id):
-	return await _fetchone(dbc, 'select phone from phone where id = ?', (phone_id,))
+	return await _fetch1(dbc, 'select phone from phone where id = ?', (phone_id,))
 
 async def set_phone(dbc, phone_id, phone):
 	return await _update1(dbc, 'update phone set phone = ? where id = ?', (phone, phone_id))
@@ -111,7 +111,7 @@ async def delete_person_detail(dbc, table, id):
 	await dbc.execute(f'delete from {table} where id = ?', (id,))
 
 async def username_exists(dbc, username):
-	return await _fetchone(dbc, 'select 1 from user where username = ?', (username,)) != None
+	return await _fetch1(dbc, 'select 1 from user where username = ?', (username,)) != None
 
 async def suggest_username(dbc, person):
 	username = username_base = '%s.%s' % (person['first_name'].lower(), person['last_name'].lower())
@@ -163,7 +163,7 @@ async def verify_new_user(dbc, username):
 
 async def login(dbc, idid, username, password):
 	if password: # password is required!
-		r = await _fetchone(dbc, 'select id, password from user where username = ? and active = 1', (username,))
+		r = await _fetch1(dbc, 'select id, password from user where username = ? and active = 1', (username,))
 		if r and bcrypt.checkpw(password.encode(), r['password']):
 			if await _login(dbc, idid, r['id']):
 				return r['id']
@@ -172,7 +172,7 @@ async def login(dbc, idid, username, password):
 
 async def force_login(dbc, idid, user_id):
 	# use, e.g., to auto-login user when user first creates self (don't ask for password again right after creation)
-	r = await _fetchone(dbc, 'select id from user where id = ? and active = 1', (user_id,))
+	r = await _fetch1(dbc, 'select id from user where id = ? and active = 1', (user_id,))
 	if await _login(dbc, idid, r['id']):
 		return r['id']
 	#else...
@@ -181,7 +181,7 @@ async def force_login(dbc, idid, user_id):
 async def authorized(dbc, uid, role):
 	if uid == None:
 		raise Exception()
-	result = await _fetchone(dbc, 'select 1 from role join user_role on role.id = user_role.role join user on user.id = user_role.user where user.id = ?', (uid,))
+	result = await _fetch1(dbc, 'select 1 from role join user_role on role.id = user_role.role join user on user.id = user_role.user where user.id = ?', (uid,))
 	return bool(result)
 
 async def authorized_roles(dbc, uid, roles):
@@ -193,20 +193,20 @@ async def logout(dbc, uid):
 		await dbc.execute('delete from id_key where user = ?', (uid,))
 
 async def get_username(dbc, idid):
-	r = await _fetchone(dbc, 'select username from user join id_key on user.id = id_key.user where id_key.idid = ?', (idid,))
+	r = await _fetch1(dbc, 'select username from user join id_key on user.id = id_key.user where id_key.idid = ?', (idid,))
 	return r['username'] if r else None
 
 async def get_user(dbc, id, fields: str | None = None):
 	if not fields:
 		fields = '*'
-	return await _fetchone(dbc, f'select {fields} from user where id = ?', (id,))
+	return await _fetch1(dbc, f'select {fields} from user where id = ?', (id,))
 
 async def get_user_id(dbc, username):
-	r = await _fetchone(dbc, 'select id from user where username = ?', (username,))
+	r = await _fetch1(dbc, 'select id from user where username = ?', (username,))
 	return r['id'] if r else None
 
 async def get_user_id_by_email(dbc, email):
-	r = await _fetchone(dbc, 'select id from user join person on user.person = person.id join email on person.id = email.person where email.email = ?', (email,))
+	r = await _fetch1(dbc, 'select id from user join person on user.person = person.id join email on person.id = email.person where email.email = ?', (email,))
 	return r['id'] if r else None
 
 async def get_user_emails(dbc, user_id):
@@ -218,7 +218,7 @@ async def generate_password_reset_code(dbc, user_id):
 	return code
 
 async def validate_reset_password_code(dbc, code, user_id):
-	r = await _fetchone(dbc, 'select id from reset_code where code = ? and user = ?', (code, user_id))
+	r = await _fetch1(dbc, 'select id from reset_code where code = ? and user = ?', (code, user_id))
 	if r:
 		await dbc.execute('delete from reset_code where id = ?', (r['id'],)) # done with it!
 		return True
@@ -258,9 +258,57 @@ async def add_role_ids(dbc, role_ids, user_id = None):
 	await dbc.executemany('insert into user_role (user, role) values (?, ?)', role_ids)
 
 
+
+async def get_tags(dbc, active = True, like = None, limit = 15):
+	args, where = [], []
+	if active:
+		where.append('active = 1')
+	_add_like(like, ('name',), args, where)
+	where = 'where ' + " and ".join(where) if where else ''
+	return await _fetchall(dbc, f'select * from tag {where} order by name limit {limit}', args)
+
+async def new_tag(dbc, name, active):
+	return await _insert1(dbc, 'insert into tag (name, active) values (?, ?)', (name, active))
+
+async def get_tag(dbc, id, fields: str | None = None):
+	if not fields:
+		fields = '*'
+	return await _fetch1(dbc, f'select {fields} from tag where id = ?', (id,))
+
+async def set_tag(dbc, id, name, active):
+	return await _update1(dbc, 'update tag set name = ?, active = ? where id = ?', (name, active, id))
+
+async def get_tag_users(dbc, tag_id, like = None):
+	args, where = [tag_id], ['user_tag.tag = ?']
+	_add_like(like, ('username', 'first_name', 'last_name'), args, where)
+	where = 'where ' + " and ".join(where)
+	return await _fetchall(dbc, f'select user.id, username, first_name, last_name from user join user_tag on user.id = user_tag.user join person on user.person = person.id {where} order by username', args)
+
+def _add_like(like, fields, args, where):
+	if like:
+		likes = ' or '.join([f'{field} like ?' for field in fields])
+		where.append(f'({likes})')
+		args.extend([f'%{like}%'] * len(fields))
+
+
+async def get_tag_users_and_nonusers(dbc, tag_id, like = None):
+	args, where = [], []
+	_add_like(like, ('username', 'first_name', 'last_name'), args, where)
+	where = 'where ' + " and ".join(where) if where else ''
+	tag_users = await get_tag_users(dbc, tag_id, like)
+	all_users = await _fetchall(dbc, f'select user.id, username, first_name, last_name from user join person on user.person = person.id {where} order by username', args)
+	return tag_users, [r for r in all_users if r not in tag_users]
+
+async def remove_user_from_tag(dbc, user_id, tag_id):
+	return await dbc.execute(f'delete from user_tag where user = ? and tag = ?', (user_id, tag_id))
+
+async def add_user_to_tag(dbc, user_id, tag_id):
+	return await _insert1(dbc, 'insert into user_tag (user, tag) values (?, ?)', (user_id, tag_id))
+
+
 # Utils -----------------------------------------------------------------------
 
-async def _fetchone(dbc, sql, args = None):
+async def _fetch1(dbc, sql, args = None):
 	#DO?: sql += ' limit 1' -- should be unnecessary (no efficiency gain) based on how execute() and fetchone() work
 	r = await dbc.execute(sql, args)
 	return await r.fetchone()
