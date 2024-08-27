@@ -69,6 +69,7 @@ invite_succeeded = 'Successfully invited {name}.'
 added_tag_success = 'Successfully added tag {name}.'
 removed_user_from_tag = 'Successfully UNsubscribed {username} from tag {tag_name}.'
 added_user_to_tag = 'Successfully subscribed {username} to tag {tag_name}.'
+internal_error = 'Internal error; please refer to with this error ID: {reference}'
 
 
 # Hover / validation "title" hints:

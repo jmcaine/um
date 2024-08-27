@@ -7,21 +7,6 @@ function handle_task(payload) {
 		}
 }
 
-function invite() {
-	ws_send({task: "invite"})
-}
-
-function more_person_detail() {
-	ws_send({task: "more_person_detail"});
-}
-
-function email_detail(email_id = 0) {
-	ws_send({task: "mpd_detail", table: "email", id: email_id});
-}
-
-function phone_detail(phone_id = 0) {
-	ws_send({task: "mpd_detail", table: "phone", id: phone_id});
-}
 
 function _delete_mpd(table, id) {
 	if (window.confirm("Are you sure you want to delete that record?")) {

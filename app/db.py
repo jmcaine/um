@@ -259,13 +259,17 @@ async def add_role_ids(dbc, role_ids, user_id = None):
 
 
 
-async def get_tags(dbc, active = True, like = None, limit = 15):
+async def get_tags(dbc, active = True, like = None, get_subscribers = False, limit = 15):
 	args, where = [], []
 	if active:
 		where.append('active = 1')
 	_add_like(like, ('name',), args, where)
 	where = 'where ' + " and ".join(where) if where else ''
-	return await _fetchall(dbc, f'select * from tag {where} order by name limit {limit}', args)
+	count, join = '', ''
+	if get_subscribers:
+		count = ', count(user_tag.tag) as num_subscribers'
+		join = 'left outer join user_tag on tag.id = user_tag.tag'
+	return await _fetchall(dbc, f'select tag.* {count} from tag {join} {where} order by name limit {limit}', args)
 
 async def new_tag(dbc, name, active):
 	return await _insert1(dbc, 'insert into tag (name, active) values (?, ?)', (name, active))

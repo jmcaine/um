@@ -1,25 +1,11 @@
-function login() {
-	ws_send({task: "login"});
+function send_task(task, fields) {
+	ws_send({task: task, ...fields});
 }
 
-function logout() {
-	ws_send({task: "logout"});
-}
 
-function join() {
-	ws_send({task: "join"});
-}
-
-function invite() {
-	ws_send({task: "invite"});
-}
 
 function join_or_invite(fields) {
 	ws_send({task: "join_or_invite", ...fields});
-}
-
-function forgot_password() {
-	ws_send({task: "forgot_password"});
 }
 
 function show_banner(banner) {
@@ -83,35 +69,10 @@ function focus_top_input(container) {
 	}
 }
 
-
-function admin_screen() {
-	ws_send({task: "admin_screen"});
-}
-
 function filtersearch(text, include_extra = false) {
 	ws_send({task: "filtersearch", searchtext: text, include_extra: include_extra});
 }
 
-function detail(table, id) {
-	ws_send({task: "detail", table: table, id: id});
-}
-
-
-function admin_new_tag() {
-	ws_send({task: "admin_new_tag"});
-}
-
-function admin_users() {
-	ws_send({task: "admin_users"});
-}
-
-function admin_tags() {
-	ws_send({task: "admin_tags"});
-}
-
-function admin_tag_users() {
-	ws_send({task: "admin_tag_users"});
-}
 
 function remove_user_from_tag(user_id) {
 	ws_send({task: "remove_user_from_tag", user_id: user_id});

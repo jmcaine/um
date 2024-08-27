@@ -9,27 +9,27 @@ import json
 import weakref
 import copy
 
-from functools import wraps
 from collections.abc import Callable
 from dataclasses import dataclass, field as dataclass_field
 from yarl import URL
-from string import ascii_uppercase
-from random import choices as random_choices
 
 import aiosqlite
 import asyncio
 
 from aiohttp import web, WSMsgType, WSCloseCode
 
-from . import html
 from . import db
+from . import fields
+from . import html
 from . import settings
 from . import text
-from . import fields
 from . import valid
-from .shared import doublewrap
+from . import ws
+
+from . import admin
 
 from . import exception as ex
+
 
 # Logging ---------------------------------------------------------------------
 
@@ -138,32 +138,15 @@ class Hd: # handler data class; for grouping stuff more convenient to pass aroun
 	idid: str | None = None
 	uid: int | None = None
 	payload: dict | None = None
+	task: Callable[[], None] | None = None
 	supertask: Callable[[], None] | None = None
 	priortask: Callable[[], None] | None = None
 	ststate: dict = dataclass_field(default_factory = dict) # supertask state; should be cleared at end of supertask
 	state: dict = dataclass_field(default_factory = dict)
 
 # define handlers for "tasks" sent over the websocket - functions decorated with @handler are handlers; their (function) names are the task names
-_handlers = {}
-@doublewrap
-def handler(func, admin = False):
-	@wraps(func)
-	async def inner(hd, *args, **kwargs):
-		try:
-			if admin and not await admin_access(hd, hd.uid):
-				await send_banner(hd, html.error(text.admin_required))
-				return # done
-			#else:
-			await func(hd, *args, **kwargs)
-		except Exception as e:
-			try: await db.rollback(hd.dbc)
-			except: pass # move on, even if rollback failed (e.g., there might not even be an outstanding transaction)
-			reference = ''.join(random_choices(ascii_uppercase, k=6))
-			l.error(f'ERROR reference ID: {reference} ... details/traceback:')
-			l.error(traceback.format_exc())
-			await send_banner(hd, html.error(f'Internal error; please refer to with this error ID: {reference}'))
-	_handlers[func.__name__] = inner
-	return inner
+handler = ws.handler
+
 
 def supertask_started(hd, task_func):
 	if hd.supertask != task_func:
@@ -224,9 +207,6 @@ async def identify(hd):
 			await messages(hd) # show main messages page
 		else:
 			await hd.wsr.send_json({'task': 'new_key'})
-
-async def admin_access(hd, user_id):
-	return await db.authorized(hd.dbc, user_id, 'admin')
 
 
 @handler
@@ -388,7 +368,7 @@ async def continue_join_or_invite(hd, send_username_fieldset, label_prefix = Non
 @handler
 async def messages(hd):
 	supertask_started(hd, messages)
-	await send_content(hd, html.messages(await admin_access(hd, hd.uid)))
+	await send_content(hd, html.messages(await ws.admin_access(hd, hd.uid)))
 
 
 @handler(admin = True)
@@ -536,10 +516,10 @@ async def admin_tags(hd):
 	hd.priortask = admin_tags # return to this task after drilling down on some subtask
 	if not supertask_started(hd, admin_tags):
 		hd.state['filtersearch_text'] = '' # clear old searchtext if we're starting anew here
-		tags = await db.get_tags(hd.dbc)
+		tags = await db.get_tags(hd.dbc, get_subscribers = True)
 		await send_content(hd, html.tags_page(tags))
 	else:
-		tags = await db.get_tags(hd.dbc, like = hd.state.get('filtersearch_text', ''), active = not hd.state.get('filtersearch_include_extra', False))
+		tags = await db.get_tags(hd.dbc, like = hd.state.get('filtersearch_text', ''), active = not hd.state.get('filtersearch_include_extra', False), get_subscribers = True)
 		await hd.wsr.send_json({'task': 'hide_dialog'})
 		await send_sub_content(hd, 'tag_table', html.tag_table(tags))
 
@@ -556,15 +536,16 @@ async def admin_new_tag(hd):
 		await revert_to_priortask(hd)
 		await send_banner(hd, html.info(text.added_tag_success.format(name = f'"{name}"')))
 
-async def _get_users_and_nonusers(hd):
-	return await db.get_tag_users_and_nonusers(hd.dbc, hd.ststate['tag']['id'], hd.state['filtersearch_text'])
+async def _get_users_and_nonusers(hd, tag_id):
+	return await db.get_tag_users_and_nonusers(hd.dbc, tag_id, hd.state['filtersearch_text'])
 
 @handler(admin = True)
 async def admin_tag_users(hd):
 	if not supertask_started(hd, admin_tag_users):
+		tag_id = int(hd.payload.get('tag_id'))
 		hd.state['filtersearch_text'] = '' # clear old searchtext if we're starting anew here
-		users, nonusers = await _get_users_and_nonusers(hd)
-		await send_task(hd, 'dialog', html.tag_users_and_nonusers(hd.ststate['tag']['name'], users, nonusers))
+		users, nonusers = await _get_users_and_nonusers(hd, tag_id)
+		await send_task(hd, 'dialog', html.tag_users_and_nonusers(hd.payload.get('tag_name'), users, nonusers))
 	else:
 		await admin_tag_users_table(hd)
 
@@ -606,7 +587,8 @@ async def _ws(rq):
 					raise wsr.exception()
 				case WSMsgType.TEXT:
 					hd.payload = json.loads(msg.data)
-					await _handlers[hd.payload['task']](hd) # call the handler for the given task - functions decorated with @handler are handlers; their (function) names are the task names
+					module = hd.payload.get('module', 'app.main')
+					await ws._handlers[module][hd.payload['task']](hd) # call the handler for the given task - functions decorated with @handler are handlers; their (function) names are the task names
 				case WSMsgType.BINARY:
 					pass #TODO: await _ws_binary(hd, msg.data)
 				case _:

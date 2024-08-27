@@ -27,6 +27,8 @@ l = logging.getLogger(__name__)
 _scripts = lambda scripts: [t.script(src = f'/static/js/{script}') for script in scripts]
 _yes_or_no = lambda value: 'yes' if value else 'no'
 _format_phone = lambda num: '(' + num[-10:-7] + ') ' + num[-7:-4] + '-' + num[-4:] # TODO: international extention prefixes [0:-11]
+_send_task = lambda task, **args: f'send_task("{task}"' + (f', {{ {", ".join([f"{key}: {value}" for key, value in args.items()])} }})' if args else ')')
+
 
 CANCEL_BUTTON = t.button(text.cancel, onclick = 'cancel()')
 
@@ -45,7 +47,7 @@ def main(ws_url: str):
 				t.div("Loading...")
 		with t.div(id = 'scripts', cls = 'container'):
 			t.script(raw(f'var ws = new WebSocket("{ws_url}");'))
-			[script for script in _scripts(('basic.js', 'ws.js', 'persistence.js', 'main.js', 'submit.js', 'users.js', 'messages.js'))]
+			[script for script in _scripts(('basic.js', 'ws.js', 'persistence.js', 'main.js', 'admin.js', 'submit.js', 'users.js', 'messages.js'))]
 	return d.render()
 
 
@@ -63,8 +65,8 @@ def test(person = None):
 def login_or_join():
 	return t.div(
 		t.div(text.welcome),
-		t.div(t.button(text.login, onclick = 'login()'), cls = 'center'),
-		t.div(t.button(text.join, onclick = 'join()'), cls = 'center'),
+		t.div(t.button(text.login, onclick = 'send_task("login")'), cls = 'center'),
+		t.div(t.button(text.join, onclick = 'send_task("join")'), cls = 'center'),
 	)
 
 def messages(admin):
@@ -73,14 +75,14 @@ def messages(admin):
 
 		with t.div(cls = 'button_band'):
 			#    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦
-			t.button('+', title = 'new message', onclick = 'new_message()')
+			t.button('+', title = 'new message', onclick = 'send_task("new_message")')
 			filterbox()
 			filterbox_checkbox(text.deep_search, 'deep_search')
 			with t.div(cls = 'right'):
-				t.button('...', title = text.change_settings, onclick = 'settings()')
+				t.button('...', title = text.change_settings, onclick = 'send_task("settings")')
 				if admin:
-					t.button('Ѫ', title = text.admin, onclick = 'admin_screen()')
-				t.button('Θ', title = text.logout, onclick = 'logout()')
+					t.button('Ѫ', title = text.admin, onclick = 'send_task("admin_screen")')
+				t.button('Θ', title = text.logout, onclick = 'send_task("logout")')
 
 		t.hr()
 		t.div('Main messages...')
@@ -93,7 +95,7 @@ def users_page(users):
 	result = t.div(admin_button_band())
 	with result:
 		t.hr()
-		admin_menu_button_band((t.button('+', title = text.invite_new_user, onclick = "invite()"),))
+		admin_menu_button_band((t.button('+', title = text.invite_new_user, onclick = 'send_task("invite")'),))
 		t.div(user_table(users), id = 'user_table')
 	return result
 
@@ -101,7 +103,7 @@ def tags_page(tags):
 	result = t.div(admin_button_band())
 	with result:
 		t.hr()
-		admin_menu_button_band((t.button('+', title = text.create_new_tag, onclick = "admin_new_tag()"),))
+		admin_menu_button_band((t.button('+', title = text.create_new_tag, onclick = 'send_task("admin_new_tag")'),))
 		t.div(tag_table(tags), id = 'tag_table')
 	return result
 
@@ -128,7 +130,7 @@ def build_fields(fields, data = None, label_prefix = None, invalids = None):
 
 def login(fields):
 	button = _ws_submit_button(text.login, fields.keys())
-	forgot = t.button(text.forgot_password, onclick = 'forgot_password()')
+	forgot = t.button(text.forgot_password, onclick = 'send_task("forgot_password")')
 	result = fieldset(text.login, build_fields(fields), button, forgot)
 	return result
 
@@ -144,26 +146,28 @@ def admin_button_band():
 		filterbox()
 		filterbox_checkbox(text.show_inactives, 'show_inactives')
 		with t.div(cls = 'right'):
-			t.button('...', title = text.change_settings, onclick = 'settings()')
-			t.button('Ξ', title = text.messages, onclick = 'messages()')
-			t.button('Θ', title = text.logout, onclick = 'logout()')
+			t.button('...', title = text.change_settings, onclick = 'send_task("settings")')
+			t.button('Ξ', title = text.messages, onclick = 'send_task("messages")')
+			t.button('Θ', title = text.logout, onclick = 'send_task("logout")')
 	return result
 
 def admin_menu_button_band(left_buttons):
 	result = t.div(*left_buttons, cls = 'button_band')
 	with result:
 		with t.div(cls = 'right'):
-			t.button('☺', title = text.users, onclick = 'admin_users()')
-			t.button('#', title = text.tags, onclick = 'admin_tags()')
+			t.button('☺', title = text.users, onclick = 'send_task("admin_users")')
+			t.button('#', title = text.tags, onclick = 'admin.send("tags")')
 	return result
 
 
 def filterbox():
-	return Input(text.filtersearch, type_ = 'search', autofocus = True,
-					attrs = {'autocomplete': 'off', 'oninput': 'filtersearch(this.value, $("show_inactives").checked)'}).build('filtersearch')
+	return Input(text.filtersearch, type_ = 'search', autofocus = True, attrs = {
+		'autocomplete': 'off',
+		'oninput': _send_task('filtersearch', searchtext = 'this.value', include_extra = '$("show_inactives").checked'),
+	}).build('filtersearch')
 
 def filterbox_checkbox(label, name):
-	return Input(label, type_ = 'checkbox', attrs = {'onclick': 'filtersearch($("filtersearch").value, this.checked);'}).build(name)
+	return Input(label, type_ = 'checkbox', attrs = {'onclick': _send_task('filtersearch', searchtext = '$("filtersearch").value', include_extra = 'this.checked')}).build(name)
 
 def filterbox_plain():
 	return Input(text.filtersearch, type_ = 'search', autofocus = True,
@@ -178,7 +182,7 @@ def fieldset(title: str, html_fields: list, button: t.button, alt_button: t.butt
 		for field in html_fields:
 			t.div(field)
 		if more_func:
-			t.div(t.button(text.more_detail, onclick = f'{more_func}()'))
+			t.div(t.button(text.more_detail, onclick = f'send_task("{more_func}")'))
 		if alt_button:
 			t.div(t.span(button, alt_button))
 		else:
@@ -187,7 +191,7 @@ def fieldset(title: str, html_fields: list, button: t.button, alt_button: t.butt
 
 def user_table(users):
 	result = t.table(cls = 'full_width')
-	user_detail = lambda user: f"detail('user', {user['user_id']})"
+	user_detail = lambda user: _send_task('detail', table = '"user"', id = user['user_id'])
 	with result:
 		with t.tr():
 			t.th('Username')
@@ -198,22 +202,26 @@ def user_table(users):
 		for user in users:
 			with t.tr():
 				t.td(user['username'], cls = 'pointered', onclick = user_detail(user))
-				t.td(f"{user['first_name']} {user['last_name']}", cls = 'pointered', onclick = f"detail('person', {user['person_id']})")
+				t.td(f"{user['first_name']} {user['last_name']}", cls = 'pointered', onclick = _send_task('detail', table = '"person"', id = user['person_id']))
 				t.td(datetime.fromisoformat(user['created']).strftime('%m/%d/%Y %H:%M'))
 				t.td(user['verified'] or '', cls = 'pointered', onclick = user_detail(user))
 				t.td(_yes_or_no(int(user['active'])), align = 'center', cls = 'pointered', onclick = user_detail(user))
 	return result
 
+
 def tag_table(tags):
 	result = t.table(cls = 'full_width')
 	with result:
 		with t.tr():
-			t.th('Name')
+			t.th('Name', align = 'right')
 			t.th('Active')
+			t.th('Subscriptions')
 		for tag in tags:
-			with t.tr(cls = 'pointered', onclick = f"detail('tag', {tag['id']})"):
-				t.td(tag['name'])
-				t.td(_yes_or_no(int(tag['active'])), align = 'center')
+			st = _send_task('detail', table = '"tag"', id = tag['id'])
+			with t.tr():
+				t.td(tag['name'], cls = 'pointered', align = 'right', onclick = st)
+				t.td(_yes_or_no(int(tag['active'])), align = 'center', cls = 'pointered', onclick = st)
+				t.td(tag['num_subscribers'], cls = 'pointered', align = 'center', onclick = _send_task('admin_tag_users', tag_id = tag['id'], tag_name = f'"{tag["name"]}"'))
 	return result
 
 
@@ -229,7 +237,7 @@ def dialog2(title, fields, data = None, button_title = text.save, alt_button: t.
 
 
 def cancel_to_mpd_button():
-	return t.button(text.cancel, onclick = 'more_person_detail()')
+	return t.button(text.cancel, onclick = 'send_task("more_person_detail")')
 
 
 
@@ -241,19 +249,19 @@ def more_person_detail(emails, phones):
 			for email in emails:
 				t.div(t.span(
 					email['email'],
-					t.button(text.edit, onclick = f"email_detail({email['id']});"),
-					t.button(text.delete, onclick = f"delete_email({email['id']})"),
+					t.button(text.edit, onclick = _send_task('mpd_detail', table = '"email"', id = email['id'])),
+					t.button(text.delete, onclick = f'delete_email({email["id"]})'),
 				))
-			t.div(t.button(text.add, onclick = 'email_detail(0)'))
+			t.div(t.button(text.add, onclick = _send_task('mpd_detail', table = '"email"', id = 0)))
 		with t.fieldset():
 			t.legend(text.phones)
 			for phone in phones:
 				t.div(t.span(
 					_format_phone(phone['phone']),
-					t.button(text.edit, onclick = f"phone_detail({phone['id']});"),
-					t.button(text.delete, onclick = f"delete_phone({phone['id']})"),
+					t.button(text.edit, onclick = _send_task('mpd_detail', table = '"phone"', id = phone['id'])),
+					t.button(text.delete, onclick = f'delete_phone({phone["id"]})'),
 				))
-			t.div(t.button(text.add, onclick = 'phone_detail(0)'))
+			t.div(t.button(text.add, onclick = _send_task('mpd_detail', table = '"phone"', id = 0)))
 		t.div(t.button(text.close, onclick = 'cancel()')) # cancel just reverts to priortask; added/changed emails/phones are saved - those deeds are done, we're just "closing" this mpd portal
 	return result
 

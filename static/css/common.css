@@ -86,7 +86,9 @@ span.invalid {
 }
 
 .small {
-	max-width: 400px;
+	/* width: 400px; */
+	min-width: 400px;
+	max-width: 600px;
 }
 
 .pointered {
@@ -97,7 +99,7 @@ span.invalid {
 	margin: auto;
 }
 
-.singleton_button { /* NOTE: ALMOST SAME as .button_band button -- consolidate! */
+.singleton_button { /* TODO: CONSOLIDATE! ALMOST SAME as .button_band button -- consolidate! */
 	width: 2.3em;
 	margin: 1px 2px;
 	padding: 1px 5px;
