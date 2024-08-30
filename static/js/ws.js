@@ -8,15 +8,15 @@ ws.onmessage = function(event) {
 			identify(true);
 			break;
 		case "banner":
-			show_banner(payload.banner);
+			set_sub_content('banner_container', payload.content, false);
 			break;
 		case "detail_banner":
-			show_detail_banner(payload.detail_banner);
+			set_sub_content('detail_banner_container', payload.content, false);
 			break;
 		case "fieldset":
 			set_content(payload.fieldset, true);
 			if (Object.hasOwn(payload, "banner")) {
-				show_banner(payload.banner);
+				set_sub_content('banner_container', payload.banner, false);
 			}
 			focus_top_input();
 			break;
@@ -27,7 +27,7 @@ ws.onmessage = function(event) {
 			set_sub_content(payload.container, payload.content);
 			break;
 		case "dialog":
-			set_dialog(payload.dialog);
+			set_dialog(payload.content);
 			break;
 		case "hide_dialog":
 			hide_dialog();
@@ -46,6 +46,10 @@ function ws_send(message) {
 		//console.log("SENDING ws message: " + JSON.stringify(message));
 		ws.send(JSON.stringify(message));
 	}
+}
+
+function ws_send_task(module, task, fields) {
+	ws_send({module: module, task: task, ...fields});
 }
 
 

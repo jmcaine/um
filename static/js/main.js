@@ -1,45 +1,38 @@
-function send_task(task, fields) {
-	ws_send({task: task, ...fields});
-}
 
+
+let main = {
+	send: function(task, fields) {
+		ws_send_task('app.main', task, fields);
+	}
+}
 
 
 function join_or_invite(fields) {
 	ws_send({task: "join_or_invite", ...fields});
 }
 
-function show_banner(banner) {
-	$('banner_container').innerHTML = banner;
+
+function set_content(content, clear_banner = true, focus_top_inp = true) {
+	_set_content($('content_container'), content, clear_banner);
 }
 
-function show_detail_banner(banner) {
-	$('detail_banner_container').innerHTML = banner;
+function set_sub_content(container_id, content, clear_banner = true, focus_top_inp = false) {
+	_set_content($(container_id), content, clear_banner);
 }
 
-function clear_banner() {
-	$('banner_container').innerHTML = "";
-}
-
-function set_content(content, clear_msg = true) {
-	hide_dialog();
-	_set_content($('content_container'), content, clear_msg);
-}
-
-function set_sub_content(container_id, content, clear_msg = true) {
-	_set_content($(container_id), content, clear_msg);
-}
-
-function _set_content(container, content, clear_msg) {
+function _set_content(container, content, clear_banner, focus_top_inp = true) {
 	container.innerHTML = content;
-	if (clear_msg) {
-		clear_banner();
+	if (clear_banner) {
+		$('banner_container').innerHTML = "";
 	}
-	focus_top_input(container);
+	if (focus_top_inp) {
+		focus_top_input(container);
+	}
 }
 
-function set_dialog(dialog) {
+function set_dialog(content) {
 	let dialog_container = $('dialog_container');
-	dialog_container.innerHTML = dialog;
+	dialog_container.innerHTML = content;
 	show_dialog();
 	focus_top_input(dialog_container);
 }
@@ -58,26 +51,9 @@ function hide_dialog() {
 	$('gray_screen').classList.add("hide");
 }
 
-function cancel() {
-	ws_send({task: "revert_to_priortask"});
-}
-
 function focus_top_input(container) {
 	inp = container.querySelector('input');
 	if (inp) {
 		inp.focus();
 	}
-}
-
-function filtersearch(text, include_extra = false) {
-	ws_send({task: "filtersearch", searchtext: text, include_extra: include_extra});
-}
-
-
-function remove_user_from_tag(user_id) {
-	ws_send({task: "remove_user_from_tag", user_id: user_id});
-}
-
-function add_user_to_tag(user_id) {
-	ws_send({task: "add_user_to_tag", user_id: user_id});
 }

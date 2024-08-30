@@ -9,7 +9,6 @@ import json
 import weakref
 import copy
 
-from collections.abc import Callable
 from dataclasses import dataclass, field as dataclass_field
 from yarl import URL
 
@@ -21,7 +20,9 @@ from aiohttp import web, WSMsgType, WSCloseCode
 from . import db
 from . import fields
 from . import html
+from . import messages
 from . import settings
+from .task import Task
 from . import text
 from . import valid
 from . import ws
@@ -47,14 +48,6 @@ hr = lambda text: web.Response(text = text, content_type = 'text/html')
 gurl = lambda rq, name, **kwargs: str(rq.app.router[name].url_for(**kwargs))
 dbc = lambda rq: db.cursor(rq.app['db_connection'])
 ws_url = lambda rq: URL.build(scheme = 'ws', host = rq.host, path = '/_ws')
-send_task = lambda hd, task, html: hd.wsr.send_json({'task': task, task: html.render()})
-send_banner = lambda hd, html: send_task(hd, 'banner', html)
-send_banner_task = lambda hd, task, banner_html, task_html: hd.wsr.send_json({'task': task, 'banner': banner_html.render(), task: task_html.render()})
-send_detail_banner = lambda hd, html: send_task(hd, 'detail_banner', html)
-send_fieldset = lambda hd, fieldset_title, html_fields, field_names, button_title: send_task(hd, 'fieldset', html.ws_fieldset(fieldset_title, html_fields, field_names, button_title))
-send_content = lambda hd, html: send_task(hd, 'content', html)
-send_sub_content = lambda hd, container, html: hd.wsr.send_json({'task': 'sub_content', 'container': container, 'content': html.render()})
-checkbox_value = lambda data, field: 1 if data.get(field) in (1, '1', 'on') else 0
 
 
 # Init / Shutdown -------------------------------------------------------------
@@ -129,69 +122,85 @@ async def main(rq):
 	return hr(html.main(ws_url(rq)))
 
 
+@rt.get('/_ws')
+async def _ws(rq):
+	wsr = web.WebSocketResponse()
+	await wsr.prepare(rq)
+	rq.app[_websockets].add(wsr)
+
+	try:
+		hd = Hd(rq, wsr, await dbc(rq))
+		async for msg in wsr:
+			match msg.type:
+				case WSMsgType.ERROR:
+					raise wsr.exception()
+				case WSMsgType.TEXT:
+					hd.payload = json.loads(msg.data)
+					module = hd.payload.get('module', 'app.main')
+					await ws._handlers[module][hd.payload['task']](hd) # call the handler for the given task - functions decorated with @ws.handler are handlers; their (function) names are the task names
+				case WSMsgType.BINARY:
+					pass #TODO: await _ws_binary(hd, msg.data)
+				case _:
+					l.error('Unexpected/invalid WebSocketResponse message type; ignoring... anxiously')
+	except Exception as e:
+		l.error(traceback.format_exc())
+		l.error('Exception processing WS messages; shutting down WS...')
+
+	rq.app[_websockets].discard(wsr)
+	l.info('Websocket connection closed')
+	return wsr
+
+
+# -----------------------------------------------------------------------------
+# define handlers for "tasks" sent over the websocket - functions decorated with @ws.handler are handlers; their (function) names are the task names
+
 
 @dataclass(slots = True)
-class Hd: # handler data class; for grouping stuff more convenient to pass around in one object in websocket handlers
+class Hd: # handler data class; for grouping stuff more convenient to pass around in one object in websocket-handler functions
 	rq: web.Request
 	wsr: web.WebSocketResponse
 	dbc: aiosqlite.Connection
 	idid: str | None = None
 	uid: int | None = None
-	payload: dict | None = None
-	task: Callable[[], None] | None = None
-	supertask: Callable[[], None] | None = None
-	priortask: Callable[[], None] | None = None
-	ststate: dict = dataclass_field(default_factory = dict) # supertask state; should be cleared at end of supertask
 	state: dict = dataclass_field(default_factory = dict)
-
-# define handlers for "tasks" sent over the websocket - functions decorated with @handler are handlers; their (function) names are the task names
-handler = ws.handler
-
-
-def supertask_started(hd, task_func):
-	if hd.supertask != task_func:
-		hd.supertask = task_func
-		return False # wasn't already started (though it is now, so next call will return True
-	#else:
-	return True
+	payload: dict | None = None
+	task: Task | None = None
+	prior_tasks: list = dataclass_field(default_factory = list)
 
 
-
-@handler
+@ws.handler
 async def ping(hd):
 	#l.info('PING received from client!') # uncomment to confirm heartbeat
 	pass # nothing to do
 
-@handler
+
+@ws.handler
 async def submit_fields(hd):
 	'''
-	This task-handler is called a lot - whenever "fields" are submitted; the initial task, or
-	"supertask" is stored in hd, and used to call the proper handler for the given (expected)
-	fieldset.
+	This task-handler is called a lot - whenever "fields" are submitted; it's a second-class
+	citizen task - the main task is stored in hd.task, and used to call the proper handler
+	for the given (expected) fieldset.
 	'''
-	await hd.supertask(hd)
+	await hd.task.handler(hd)
 
-@handler
-async def revert_to_priortask(hd):
-	try: await db.rollback(hd.dbc)
-	except: pass # move on, even if rollback failed (e.g., there might not even be an outstanding transaction)
-	hd.supertask = hd.priortask
-	hd.priortask = None
-	hd.ststate = {}
-	await hd.supertask(hd)
 
-@handler
+@ws.handler
+async def finish(hd):
+	hd.payload['finished'] = True
+	await hd.task.handler(hd)
+
+
+@ws.handler
 async def filtersearch(hd):
 	'''
 	Similar to submit_fields - see note there.
 	'''
-	hd.state['filtersearch_text'] = hd.payload.get('searchtext', '')
-	hd.state['filtersearch_include_extra'] = hd.payload.get('include_extra')
-	await hd.supertask(hd)
+	hd.task.state['filtersearch_text'] = hd.payload.get('searchtext', '')
+	hd.task.state['filtersearch_include_extra'] = hd.payload.get('include_extra', False)
+	await hd.task.handler(hd)
 
 
-
-@handler
+@ws.handler
 async def identify(hd):
 	idid = hd.idid = hd.payload.get('idid')
 	if key := hd.payload.get('key'):
@@ -204,51 +213,54 @@ async def identify(hd):
 		user_id = await db.get_user_by_id_key(hd.dbc, idid, hd.payload['pub'], hd.payload['hsh'])
 		if user_id: # "persistent session" all in order, "auto log-in"... go straight to it:
 			hd.uid = user_id
-			await messages(hd) # show main messages page
+			await messages.messages(hd) # show main messages page
 		else:
-			await hd.wsr.send_json({'task': 'new_key'})
+			await ws.send(hd, 'new_key')
 
 
-@handler
+@ws.handler
 async def login_or_join(hd):
-	hd.priortask = login_or_join # necessary for "cancel" fallback, from the middle of a new "join"
-	await send_content(hd, html.login_or_join())
+	task.started(hd, login_or_join) # necessary for "cancel" fallback, from the middle of a new "join"
+	await ws.send_content(hd, 'content', html.login_or_join())
 
 
-@handler
+@ws.handler
 async def login(hd):
-	if supertask_started(hd, login):
+	if not task.started(hd, login):
+		await send_task(hd, 'fieldset', html.login(fields.LOGIN))
+	else:
 		data = hd.payload
-		if await _invalids(hd, data, fields.LOGIN): 
-			return # if there WERE invalids, wsr.send_json() was already done within
+		if await _invalids(hd, data, fields.LOGIN):
+			return # if there WERE invalids, bannar was already sent within
 		uid = await db.login(hd.dbc, hd.idid, data['username'], data['password'])
 		if uid:
 			hd.uid = uid
-			await messages(hd)
+			await messages.messages(hd)
 		else:
-			await send_banner(hd, html.error(text.invalid_login))
-	else:
-		await send_task(hd, 'fieldset', html.login(fields.LOGIN))
+			await ws.send_content(hd, 'banner', html.error(text.invalid_login))
 
 
-@handler
+@ws.handler
 async def logout(hd):
 	await db.logout(hd.dbc, hd.uid)
+	task.clear_all(hd)
+	hd.state = {}
 	await login_or_join(hd)
 
 
-@handler
+@ws.handler
 async def forgot_password(hd):
-	await send_banner_task(hd, 'fieldset', html.info(text.forgot_password_prelude), html.forgot_password(fields.EMAIL))
+	#!!!	await send_banner_task(hd, 'fieldset', html.info(text.forgot_password_prelude), html.forgot_password(fields.EMAIL))
+	await ws.send_content(hd, 'banner', html.info(text.forgot_password_prelude))
 
-@handler
+@ws.handler
 async def join(hd):
 	if supertask_started(hd, join):
 		await continue_join_or_invite(hd, True, text.your)
 	else:
 		await start_join_or_invite(hd, text.your)
 
-@handler
+@ws.handler
 async def invite(hd):
 	if supertask_started(hd, invite):
 		await continue_join_or_invite(hd, False, text.friends)
@@ -279,7 +291,7 @@ async def continue_join_or_invite(hd, send_username_fieldset, label_prefix = Non
 	data = hd.payload
 	match hd.ststate.get('action', 'add_person'): # assume 'add_person' (first action) if no action yet set
 		case 'add_person':
-			if await _invalids(hd, data, fields.PERSON, send_detail_banner):
+			if await _invalids(hd, data, fields.PERSON, 'detail_banner'):
 				return # _invalids() handles invalid case, and there's nothing more to do here
 			#else:
 			await db.begin(hd.dbc) # work through ALL actions before committing (transaction) to DB
@@ -290,8 +302,8 @@ async def continue_join_or_invite(hd, send_username_fieldset, label_prefix = Non
 			await send_email_fs()
 
 		case 'add_email':
-			if await _invalids(hd, data, fields.EMAIL, send_detail_banner):
-				return # if there WERE invalids, wsr.send_json() was already done within
+			if await _invalids(hd, data, fields.EMAIL, 'detail_banner'):
+				return # if there WERE invalids, bannar was already sent within
 			if _not_yet(hd, 'add_person'):
 				await send_person_fs()
 				return # finished
@@ -301,8 +313,8 @@ async def continue_join_or_invite(hd, send_username_fieldset, label_prefix = Non
 			await send_phone_fs()
 
 		case 'add_phone':
-			if await _invalids(hd, data, fields.PHONE, send_detail_banner):
-				return # if there WERE invalids, wsr.send_json() was already done within
+			if await _invalids(hd, data, fields.PHONE, 'detail_banner'):
+				return # if there WERE invalids, bannar was already sent within
 			if _not_yet(hd, 'add_email'):
 				await send_email_fs()
 				return # finished
@@ -332,8 +344,8 @@ async def continue_join_or_invite(hd, send_username_fieldset, label_prefix = Non
 				await send_banner(hd, html.info(text.invite_succeeded.format(name = f"{person['first_name']} {person['last_name']}")))
 
 		case 'add_username':
-			if await _invalids(hd, data, fields.NEW_USERNAME, send_detail_banner):
-				return # if there WERE invalids, wsr.send_json() was already done within
+			if await _invalids(hd, data, fields.NEW_USERNAME, 'detail_banner'):
+				return # if there WERE invalids, bannar was already sent within
 			if _not_yet(hd, 'add_phone'):
 				await send_phone_fs()
 				return # finished
@@ -347,8 +359,8 @@ async def continue_join_or_invite(hd, send_username_fieldset, label_prefix = Non
 			await send_password_fs()
 
 		case 'add_password':
-			if await _invalids(hd, data, fields.NEW_PASSWORD, send_detail_banner):
-				return # if there WERE invalids, wsr.send_json() was already done within
+			if await _invalids(hd, data, fields.NEW_PASSWORD, 'detail_banner'):
+				return # if there WERE invalids, bannar was already sent within
 			if _not_yet(hd, 'add_username'):
 				await send_username_fs(hd.ststate['username_suggestion'])
 				return # finished
@@ -365,252 +377,8 @@ async def continue_join_or_invite(hd, send_username_fieldset, label_prefix = Non
 			await send_content(hd, html.messages(False)) # just joined, so couldn't possibly be an admin!
 
 
-@handler
-async def messages(hd):
-	supertask_started(hd, messages)
-	await send_content(hd, html.messages(await ws.admin_access(hd, hd.uid)))
-
-
-@handler(admin = True)
-async def admin_screen(hd):
-	#TODO! Implement!  For now, just go to admin_users page...
-	await admin_users(hd) # TODO!! ^^
-
-
-@handler(admin = True)
-async def admin_users(hd):
-	hd.priortask = admin_users # return to this task after drilling down on some subtask
-	if not supertask_started(hd, admin_users):
-		hd.state['filtersearch_text'] = '' # clear old searchtext if we're starting anew here
-		users = await db.get_users(hd.dbc)
-		await send_content(hd, html.users_page(users))
-	else:
-		users = await db.get_users(hd.dbc, like = hd.state.get('filtersearch_text', ''), active = not hd.state.get('filtersearch_include_extra', False))
-		await send_sub_content(hd, 'user_table', html.user_table(users))
-
-@handler(admin = True)
-async def admin_messages(hd):
-	if not supertask_started(hd, admin_messages):
-		hd.state['filtersearch_text'] = '' # clear old searchtext if we're starting anew here
-	#TODO!
-
-
-@handler(admin = True)
-async def detail(hd):
-	if not supertask_started(hd, detail):
-		table = hd.ststate['detail_table'] = hd.payload['table']
-		id = int(hd.payload.get('id'))
-		if not id:
-			id = hd.ststate['detail_got_data']['id'] # if this fails (unknown-key exception), then it's a true exception - this should exist if id was not in payload!
-		match table:
-			case 'user':
-				data = await db.get_user(hd.dbc, id, ', '.join(fields.USER.keys()))
-				await send_task(hd, 'dialog', html.dialog2(text.user, fields.USER, data))
-			case 'person':
-				data = await db.get_person(hd.dbc, id, ', '.join(fields.PERSON.keys()))
-				await send_task(hd, 'dialog', html.dialog2(text.person, fields.PERSON, data, more_func = 'more_person_detail'))
-			case 'tag':
-				data = await db.get_tag(hd.dbc, id, ', '.join(fields.TAG.keys()))
-				await send_task(hd, 'dialog', html.dialog2(text.tag, fields.TAG, data, more_func = 'admin_tag_users'))
-				data['id'] = id
-				hd.ststate['tag'] = data
-			case _:
-				raise ex.UmException(f'detail query for table "{table}" not recognized!')
-		data['id'] = id
-		hd.ststate['detail_got_data'] = data
-	else:
-		data = hd.payload
-		got_data = hd.ststate['detail_got_data']
-		table = hd.ststate['detail_table']
-		change = None
-		match table:
-			case 'user':
-				if await _invalids(hd, data, fields.USER): 
-					return # if there WERE invalids, wsr.send_json() was already done within
-				un = data['username']
-				if un != got_data['username'] and await db.username_exists(hd.dbc, un):
-					await send_detail_banner(hd, html.error(text.Valid.username_exists))
-					return # finished
-				#else all good, move on!
-				data['active'] = checkbox_value(data, 'active')
-				await db.update_user(hd.dbc, got_data['id'], fields.USER.keys(), data)
-				change = un
-			case 'person':
-				if await _invalids(hd, data, fields.PERSON): 
-					return # if there WERE invalids, wsr.send_json() was already done within
-				#else all good, move on!
-				first, last = data['first_name'], data['last_name']
-				await db.set_person(hd.dbc, got_data['id'], first, last)
-				change = f'{first} {last}'
-			case 'tag':
-				if await _invalids(hd, data, fields.TAG):
-					return # if there WERE invalids, wsr.send_json() was already done within
-				#else all good, move on!
-				await db.set_tag(hd.dbc, got_data['id'], data['name'], checkbox_value(data, 'active'))
-				change = data['name']
-			case _:
-				raise ex.UmException('set_detail() for table "{table}" not recognized!')
-		await revert_to_priortask(hd)
-		await send_banner(hd, html.info(text.change_detail_success.format(change = f'"{change}"')))
-
-@handler(admin = True)
-async def more_person_detail(hd, banner = None):
-	supertask_started(hd, more_person_detail) # not essential, as this task currently involves NO subtasks, but setting super is probably better than leaving it wherever it was
-	id = hd.ststate['detail_got_data']['id']
-	emails = await db.get_person_emails(hd.dbc, id)
-	phones = await db.get_person_phones(hd.dbc, id)
-	await send_task(hd, 'dialog', html.more_person_detail(emails, phones))
-	if banner:
-		await send_detail_banner(hd, html.info(banner))
-
-@handler(admin = True)
-async def mpd_detail(hd):
-	if not supertask_started(hd, mpd_detail):
-		table = hd.ststate['mpd_detail_table'] = hd.payload['table']
-		id = hd.payload.get('id', 0)
-		cancel_button = html.cancel_to_mpd_button()
-		match table:
-			case 'email':
-				data = await db.get_email(hd.dbc, id) if id else {'email': ''}
-				await send_task(hd, 'dialog', html.dialog2(text.email, fields.EMAIL, data, alt_button = cancel_button))
-			case 'phone':
-				data = await db.get_phone(hd.dbc, id) if id else {'phone': ''}
-				await send_task(hd, 'dialog', html.dialog2(text.phone, fields.PHONE, data, alt_button = cancel_button))
-		data['id'] = id
-		hd.ststate['mpd_got_data'] = data
-	else:
-		data = hd.payload
-		table = hd.ststate['mpd_detail_table']
-		person_id = hd.ststate['detail_got_data']['id']
-		detail_id = hd.ststate['mpd_got_data']['id']
-		match table:
-			case 'email':
-				if await _invalids(hd, data, fields.EMAIL):
-					return # if there WERE invalids, wsr.send_json() was already done within
-				#else all good, move on!
-				if detail_id == 0:
-					await db.add_email(hd.dbc, person_id, data['email'])
-				else:
-					await db.set_email(hd.dbc, detail_id, data['email'])
-			case 'phone':
-				if await _invalids(hd, data, fields.PHONE):
-					return # if there WERE invalids, wsr.send_json() was already done within
-				#else all good, move on!
-				if detail_id == 0:
-					await db.add_phone(hd.dbc, person_id, data['phone'])
-				else:
-					await db.set_phone(hd.dbc, detail_id, data['phone'])
-		# Return to the original more-person-detail page, showing all phones and emails for the person:
-		fn, ln = hd.ststate['detail_got_data']['first_name'], hd.ststate['detail_got_data']['last_name']
-		await more_person_detail(hd, text.change_detail_success.format(change = f'{text.detail_for} "{fn} {ln}"'))
-
-@handler(admin = True)
-async def delete_mpd(hd):
-	data = hd.payload
-	await db.delete_person_detail(hd.dbc, data['table'], data['id'])
-	await more_person_detail(hd, text.deletion_succeeded)
-
-
-@handler(admin = True)
-async def admin_tags(hd):
-	hd.priortask = admin_tags # return to this task after drilling down on some subtask
-	if not supertask_started(hd, admin_tags):
-		hd.state['filtersearch_text'] = '' # clear old searchtext if we're starting anew here
-		tags = await db.get_tags(hd.dbc, get_subscribers = True)
-		await send_content(hd, html.tags_page(tags))
-	else:
-		tags = await db.get_tags(hd.dbc, like = hd.state.get('filtersearch_text', ''), active = not hd.state.get('filtersearch_include_extra', False), get_subscribers = True)
-		await hd.wsr.send_json({'task': 'hide_dialog'})
-		await send_sub_content(hd, 'tag_table', html.tag_table(tags))
-
-@handler(admin = True)
-async def admin_new_tag(hd):
-	if not supertask_started(hd, admin_new_tag):
-		await send_task(hd, 'dialog', html.dialog2(text.tag, fields.TAG))
-	else:
-		data = hd.payload
-		if await _invalids(hd, data, fields.TAG):
-			return # if there WERE invalids, wsr.send_json() was already done within
-		name = data['name']
-		await db.new_tag(hd.dbc, name, checkbox_value(data, 'active'))
-		await revert_to_priortask(hd)
-		await send_banner(hd, html.info(text.added_tag_success.format(name = f'"{name}"')))
-
-async def _get_users_and_nonusers(hd, tag_id):
-	return await db.get_tag_users_and_nonusers(hd.dbc, tag_id, hd.state['filtersearch_text'])
-
-@handler(admin = True)
-async def admin_tag_users(hd):
-	if not supertask_started(hd, admin_tag_users):
-		tag_id = int(hd.payload.get('tag_id'))
-		hd.state['filtersearch_text'] = '' # clear old searchtext if we're starting anew here
-		users, nonusers = await _get_users_and_nonusers(hd, tag_id)
-		await send_task(hd, 'dialog', html.tag_users_and_nonusers(hd.payload.get('tag_name'), users, nonusers))
-	else:
-		await admin_tag_users_table(hd)
-
-async def admin_tag_users_table(hd, banner = None):
-	users, nonusers = await _get_users_and_nonusers(hd)
-	await send_sub_content(hd, 'users_and_nonusers_table_container', html.tag_users_and_nonusers_table(hd.ststate['tag']['name'], users, nonusers))
-	if banner:
-		await send_detail_banner(hd, html.info(banner))
-
-async def remove_or_add_user_to_tag(hd, func, message):
-	uid = int(hd.payload['user_id'])
-	await func(hd.dbc, uid, hd.ststate['tag']['id'])
-	username = await db.get_user(hd.dbc, uid, 'username')
-	await admin_tag_users_table(hd, html.info(message.format(username = username['username'], tag_name = hd.ststate['tag']['name'])))
-
-@handler(admin = True)
-async def remove_user_from_tag(hd):
-	await remove_or_add_user_to_tag(hd, db.remove_user_from_tag, text.removed_user_from_tag)
-
-@handler(admin = True)
-async def add_user_to_tag(hd):
-	await remove_or_add_user_to_tag(hd, db.add_user_to_tag, text.added_user_to_tag)
-
-
-
-
-
-@rt.get('/_ws')
-async def _ws(rq):
-	wsr = web.WebSocketResponse()
-	await wsr.prepare(rq)
-	rq.app[_websockets].add(wsr)
-
-	try:
-		hd = Hd(rq, wsr, await dbc(rq))
-		async for msg in wsr:
-			match msg.type:
-				case WSMsgType.ERROR:
-					raise wsr.exception()
-				case WSMsgType.TEXT:
-					hd.payload = json.loads(msg.data)
-					module = hd.payload.get('module', 'app.main')
-					await ws._handlers[module][hd.payload['task']](hd) # call the handler for the given task - functions decorated with @handler are handlers; their (function) names are the task names
-				case WSMsgType.BINARY:
-					pass #TODO: await _ws_binary(hd, msg.data)
-				case _:
-					l.error('Unexpected/invalid WebSocketResponse message type; ignoring... anxiously')
-	except Exception as e:
-		l.error(traceback.format_exc())
-		l.error('Exception processing WS messages; shutting down WS...')
-
-	rq.app[_websockets].discard(wsr)
-	l.info('Websocket connection closed')
-	return wsr
-
-
-
 # Utils -----------------------------------------------------------------------
 
-
-async def _invalids(hd, data, fields, sender = send_banner):
-	if invalids:= valid.validate(data, fields):
-		# prompt user with banner - first invalid in invalids (one at a time works for such a small fieldset):
-		await sender(hd, html.error(list(invalids.values())[0]))
-	return invalids
 
 def _bump_action(hd, next_action, current_action = None):
 	if 'completed' not in hd.ststate:

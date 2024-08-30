@@ -63,12 +63,12 @@ change_detail_success = 'Successfully changed {change}'
 detail_for = 'detail for'
 invalid_login = 'Invalid username/login; please try again or click "forgot password" below.'
 forgot_password_prelude = "What's your email address?  We'll send a password reset link!"
-admin_required = "Administrative access is required for that function.  If you have an administrative login, log out from your current session and log back in as an administrator to access this function."
+auth_required = "You aren't authorized to access this function.  If you have a different login with authorization for this function, log out from your current session and log back in as an authorized user to access this function."
 deletion_succeeded = 'Deletion succeeded.'
 invite_succeeded = 'Successfully invited {name}.'
 added_tag_success = 'Successfully added tag {name}.'
-removed_user_from_tag = 'Successfully UNsubscribed {username} from tag {tag_name}.'
-added_user_to_tag = 'Successfully subscribed {username} to tag {tag_name}.'
+removed_user_from_tag = 'Successfully UNsubscribed {username} from tag "{tag_name}".'
+added_user_to_tag = 'Successfully subscribed {username} to tag "{tag_name}".'
 internal_error = 'Internal error; please refer to with this error ID: {reference}'
 
 

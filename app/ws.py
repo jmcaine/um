@@ -26,12 +26,12 @@ send_content = lambda hd, task, content, **kwargs: send(hd, task, content = cont
 _handlers = {}
 
 @shared.doublewrap
-def handler(func, admin = False):
+def handler(func, auth_func = None):
 	@wraps(func)
 	async def inner(hd, *args, **kwargs):
 		try:
-			if admin and not await admin_access(hd, hd.uid):
-				await send_content(hd, 'banner', html.error(text.admin_required))
+			if auth_func and not await auth_func(hd, hd.uid):
+				await send_content(hd, 'banner', html.error(text.auth_required))
 				return # done
 			#else:
 			await func(hd, *args, **kwargs)
@@ -49,7 +49,4 @@ def handler(func, admin = False):
 	_handlers[module][func.__name__] = inner
 	return inner
 
-
-async def admin_access(hd, user_id):
-	return await db.authorized(hd.dbc, user_id, 'admin')
 

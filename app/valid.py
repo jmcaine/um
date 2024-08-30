@@ -31,7 +31,8 @@ class Validator:
 	max_length: int | None = None
 	message: str | None = None
 
-def validate(data, fields):
+
+async def invalids(hd, data, fields, invalid_handler, break_on_one = True):
 	result = {}
 	checks = lambda field: \
 		((not field.validator.regex) or field.validator.regex.compiled.match(value) != None) \
@@ -42,4 +43,9 @@ def validate(data, fields):
 		if field.validator:
 			if (field.validator.required and not value) or (value and not checks(field)):
 				result[field_name] = field.validator.message
+				if break_on_one:
+					await invalid_handler(hd, field.validator.message)
+					break
+	if not break_on_one:
+		await invalid_handler(hd, result)
 	return result

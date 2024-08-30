@@ -1,4 +1,7 @@
 
-function messages() {
-	ws_send({task: "messages"});
+
+let messages = {
+	send: function(task, fields) {
+		ws_send({module: 'app.messages', task: task, ...fields});
+	}
 }

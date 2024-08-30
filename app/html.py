@@ -24,13 +24,15 @@ l = logging.getLogger(__name__)
 
 # Shortcuts -------------------------------------------------------------------
 
+checkbox_value = lambda data, field: 1 if data.get(field) in (1, '1', 'on') else 0
+
 _scripts = lambda scripts: [t.script(src = f'/static/js/{script}') for script in scripts]
 _yes_or_no = lambda value: 'yes' if value else 'no'
 _format_phone = lambda num: '(' + num[-10:-7] + ') ' + num[-7:-4] + '-' + num[-4:] # TODO: international extention prefixes [0:-11]
-_send_task = lambda task, **args: f'send_task("{task}"' + (f', {{ {", ".join([f"{key}: {value}" for key, value in args.items()])} }})' if args else ')')
+_send = lambda app, task, **args: f'{app}.send("{task}"' + (f', {{ {", ".join([f"{key}: {value}" for key, value in args.items()])} }})' if args else ')')
 
 
-CANCEL_BUTTON = t.button(text.cancel, onclick = 'cancel()')
+CANCEL_BUTTON = t.button(text.cancel, onclick = 'main.send("finish")')
 
 # Pages -----------------------------------------------------------------------
 
@@ -81,7 +83,7 @@ def messages(admin):
 			with t.div(cls = 'right'):
 				t.button('...', title = text.change_settings, onclick = 'send_task("settings")')
 				if admin:
-					t.button('Ѫ', title = text.admin, onclick = 'send_task("admin_screen")')
+					t.button('Ѫ', title = text.admin, onclick = 'admin.send("users")')
 				t.button('Θ', title = text.logout, onclick = 'send_task("logout")')
 
 		t.hr()
@@ -95,7 +97,7 @@ def users_page(users):
 	result = t.div(admin_button_band())
 	with result:
 		t.hr()
-		admin_menu_button_band((t.button('+', title = text.invite_new_user, onclick = 'send_task("invite")'),))
+		admin_menu_button_band((t.button('+', title = text.invite_new_user, onclick = 'admin.send("invite")'),))
 		t.div(user_table(users), id = 'user_table')
 	return result
 
@@ -103,7 +105,7 @@ def tags_page(tags):
 	result = t.div(admin_button_band())
 	with result:
 		t.hr()
-		admin_menu_button_band((t.button('+', title = text.create_new_tag, onclick = 'send_task("admin_new_tag")'),))
+		admin_menu_button_band((t.button('+', title = text.create_new_tag, onclick = 'admin.send("new_tag")'),))
 		t.div(tag_table(tags), id = 'tag_table')
 	return result
 
@@ -130,7 +132,7 @@ def build_fields(fields, data = None, label_prefix = None, invalids = None):
 
 def login(fields):
 	button = _ws_submit_button(text.login, fields.keys())
-	forgot = t.button(text.forgot_password, onclick = 'send_task("forgot_password")')
+	forgot = t.button(text.forgot_password, onclick = 'main.send("forgot_password")')
 	result = fieldset(text.login, build_fields(fields), button, forgot)
 	return result
 
@@ -146,16 +148,16 @@ def admin_button_band():
 		filterbox()
 		filterbox_checkbox(text.show_inactives, 'show_inactives')
 		with t.div(cls = 'right'):
-			t.button('...', title = text.change_settings, onclick = 'send_task("settings")')
-			t.button('Ξ', title = text.messages, onclick = 'send_task("messages")')
-			t.button('Θ', title = text.logout, onclick = 'send_task("logout")')
+			t.button('...', title = text.change_settings, onclick = 'main.send("settings")')
+			t.button('Ξ', title = text.messages, onclick = 'messages.send("messages")')
+			t.button('Θ', title = text.logout, onclick = 'main.send("logout")')
 	return result
 
 def admin_menu_button_band(left_buttons):
 	result = t.div(*left_buttons, cls = 'button_band')
 	with result:
 		with t.div(cls = 'right'):
-			t.button('☺', title = text.users, onclick = 'send_task("admin_users")')
+			t.button('☺', title = text.users, onclick = 'admin.send("users")')
 			t.button('#', title = text.tags, onclick = 'admin.send("tags")')
 	return result
 
@@ -163,16 +165,19 @@ def admin_menu_button_band(left_buttons):
 def filterbox():
 	return Input(text.filtersearch, type_ = 'search', autofocus = True, attrs = {
 		'autocomplete': 'off',
-		'oninput': _send_task('filtersearch', searchtext = 'this.value', include_extra = '$("show_inactives").checked'),
+		'oninput': _send('main', 'filtersearch', searchtext = 'this.value', include_extra = '$("show_inactives").checked'),
 	}).build('filtersearch')
 
 def filterbox_checkbox(label, name):
-	return Input(label, type_ = 'checkbox', attrs = {'onclick': _send_task('filtersearch', searchtext = '$("filtersearch").value', include_extra = 'this.checked')}).build(name)
+	return Input(label, type_ = 'checkbox', attrs = {
+		'onclick': _send('main', 'filtersearch', searchtext = '$("filtersearch").value', include_extra = 'this.checked'),
+	}).build(name)
 
 def filterbox_plain():
-	return Input(text.filtersearch, type_ = 'search', autofocus = True,
-					attrs = {'autocomplete': 'off', 'oninput': 'filtersearch(this.value, false)'}).build('filtersearch')
-
+	return Input(text.filtersearch, type_ = 'search', autofocus = True, attrs = {
+		'autocomplete': 'off',
+		'oninput': _send('main', 'filtersearch', searchtext = 'this.value', include_extra = 'false'),
+	}).build('filtersearch')
 
 
 def fieldset(title: str, html_fields: list, button: t.button, alt_button: t.button = CANCEL_BUTTON, more_func: str | None = None) -> t.fieldset:
@@ -191,20 +196,20 @@ def fieldset(title: str, html_fields: list, button: t.button, alt_button: t.butt
 
 def user_table(users):
 	result = t.table(cls = 'full_width')
-	user_detail = lambda user: _send_task('detail', table = '"user"', id = user['user_id'])
+	user_detail = lambda user: _send('admin', 'user_detail', id = user['user_id'])
 	with result:
-		with t.tr():
-			t.th('Username')
-			t.th('Name')
-			t.th('Created')
-			t.th('Verified')
-			t.th('Active')
+		with t.tr(cls = 'midlin'):
+			t.th('Username', align = 'right')
+			t.th('Name', align = 'left')
+			t.th('Created', align = 'center')
+			t.th('Verified', align = 'center')
+			t.th('Active', align = 'center')
 		for user in users:
-			with t.tr():
-				t.td(user['username'], cls = 'pointered', onclick = user_detail(user))
-				t.td(f"{user['first_name']} {user['last_name']}", cls = 'pointered', onclick = _send_task('detail', table = '"person"', id = user['person_id']))
-				t.td(datetime.fromisoformat(user['created']).strftime('%m/%d/%Y %H:%M'))
-				t.td(user['verified'] or '', cls = 'pointered', onclick = user_detail(user))
+			with t.tr(cls = 'midlin'):
+				t.td(user['username'], cls = 'pointered', align = 'right', onclick = user_detail(user))
+				t.td(f"{user['first_name']} {user['last_name']}", cls = 'pointered', align = 'left', onclick = _send('admin', 'person_detail', id = user['person_id']))
+				t.td(datetime.fromisoformat(user['created']).strftime('%m/%d/%Y %H:%M'), align = 'center')
+				t.td(user['verified'] or '', cls = 'pointered', align = 'center', onclick = user_detail(user))
 				t.td(_yes_or_no(int(user['active'])), align = 'center', cls = 'pointered', onclick = user_detail(user))
 	return result
 
@@ -217,11 +222,11 @@ def tag_table(tags):
 			t.th('Active')
 			t.th('Subscriptions')
 		for tag in tags:
-			st = _send_task('detail', table = '"tag"', id = tag['id'])
+			st = _send('admin', 'tag_detail', id = tag['id'])
 			with t.tr():
 				t.td(tag['name'], cls = 'pointered', align = 'right', onclick = st)
 				t.td(_yes_or_no(int(tag['active'])), align = 'center', cls = 'pointered', onclick = st)
-				t.td(tag['num_subscribers'], cls = 'pointered', align = 'center', onclick = _send_task('admin_tag_users', tag_id = tag['id'], tag_name = f'"{tag["name"]}"'))
+				t.td(tag['num_subscribers'], cls = 'pointered', align = 'center', onclick = _send('admin', 'tag_users', tag_id = tag['id'], tag_name = f'"{tag["name"]}"'))
 	return result
 
 
@@ -277,9 +282,9 @@ def tag_users_and_nonusers_table(tag_name, users, nonusers):
 	result = t.table(cls = 'full_width')
 	with result:
 		with t.tr(cls = 'midlin'):
-			t.th(f'Subscribed to {tag_name}')
-			t.th(t.button(text.done, onclick = 'cancel()'), colspan = 2)
-			t.th('NOT Subscribed')
+			t.th(f'Subscribed to {tag_name}', align = 'right')
+			t.th(t.button(text.done, onclick = _send('admin', 'tag_users', finished = 'true')), colspan = 2)
+			t.th('NOT Subscribed', align = 'left')
 		done = False
 		while not done:
 			user = users.pop(0) if len(users) > 0 else {}
@@ -288,8 +293,8 @@ def tag_users_and_nonusers_table(tag_name, users, nonusers):
 				break # done
 			with t.tr(cls = 'midlin'):
 				t.td(un_name(user), align = 'right')
-				t.td(t.button('-', cls = 'singleton_button red_bg', onclick = f"remove_user_from_tag({user['id']})") if user else '')
-				t.td(t.button('+', cls = 'singleton_button green_bg', onclick = f"add_user_to_tag({nonuser['id']})") if nonuser else '')
+				t.td(t.button('-', cls = 'singleton_button red_bg', onclick = _send('admin', 'remove_user_from_tag', user_id = user['id'])) if user else '')
+				t.td(t.button('+', cls = 'singleton_button green_bg', onclick = _send('admin', 'add_user_to_tag', user_id = nonuser['id'])) if nonuser else '')
 				t.td(un_name(nonuser), align = 'left')
 	return result
 

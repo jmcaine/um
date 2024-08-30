@@ -264,12 +264,13 @@ async def get_tags(dbc, active = True, like = None, get_subscribers = False, lim
 	if active:
 		where.append('active = 1')
 	_add_like(like, ('name',), args, where)
-	where = 'where ' + " and ".join(where) if where else ''
+	where = 'where ' + ' and '.join(where) if where else ''
 	count, join = '', ''
 	if get_subscribers:
 		count = ', count(user_tag.tag) as num_subscribers'
 		join = 'left outer join user_tag on tag.id = user_tag.tag'
-	return await _fetchall(dbc, f'select tag.* {count} from tag {join} {where} order by name limit {limit}', args)
+	result = await _fetchall(dbc, f'select tag.* {count} from tag {join} {where} group by tag.id order by name limit {limit}', args)
+	return result if len(result) > 0 and result[0]['id'] != None else [] # convert weird "1-empty-record" result to an empty-list, instead; this happens in the left outer join case - a single record is returned with id=None and every other field = None except 'count', which = 0; we don't care about this case, so remove it.'
 
 async def new_tag(dbc, name, active):
 	return await _insert1(dbc, 'insert into tag (name, active) values (?, ?)', (name, active))
