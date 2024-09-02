@@ -42,8 +42,8 @@ async def finish(hd, revert = True):
 		except: pass # move on, even if rollback failed (e.g., there might not even be an outstanding transaction)
 		if len(hd.prior_tasks) > 0: # no-op if there ARE no prior tasks (just stick with current task)
 			hd.task = hd.prior_tasks.pop()
-	await hd.task.handler(hd, True)
+	await hd.task.handler(hd, revert)
 
-async def clear_all(hd):
+def clear_all(hd):
 	hd.task = None
 	hd.prior_tasks = []

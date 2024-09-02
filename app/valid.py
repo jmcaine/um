@@ -1,3 +1,7 @@
+__author__ = 'J. Michael Caine'
+__copyright__ = '2024'
+__version__ = '0.1'
+__license__ = 'MIT'
 
 import logging
 
@@ -32,7 +36,7 @@ class Validator:
 	message: str | None = None
 
 
-async def invalids(hd, data, fields, invalid_handler, break_on_one = True):
+async def invalids(hd, data, fields, invalid_handler, banner, break_on_one = True):
 	result = {}
 	checks = lambda field: \
 		((not field.validator.regex) or field.validator.regex.compiled.match(value) != None) \
@@ -44,8 +48,8 @@ async def invalids(hd, data, fields, invalid_handler, break_on_one = True):
 			if (field.validator.required and not value) or (value and not checks(field)):
 				result[field_name] = field.validator.message
 				if break_on_one:
-					await invalid_handler(hd, field.validator.message)
+					await invalid_handler(hd, field.validator.message, banner)
 					break
 	if not break_on_one:
-		await invalid_handler(hd, result)
+		await invalid_handler(hd, result, banner)
 	return result

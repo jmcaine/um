@@ -31,8 +31,7 @@ _yes_or_no = lambda value: 'yes' if value else 'no'
 _format_phone = lambda num: '(' + num[-10:-7] + ') ' + num[-7:-4] + '-' + num[-4:] # TODO: international extention prefixes [0:-11]
 _send = lambda app, task, **args: f'{app}.send("{task}"' + (f', {{ {", ".join([f"{key}: {value}" for key, value in args.items()])} }})' if args else ')')
 
-
-CANCEL_BUTTON = t.button(text.cancel, onclick = 'main.send("finish")')
+_cancel_button = lambda title = text.cancel: t.button(title, onclick = 'main.send("finish")')
 
 # Pages -----------------------------------------------------------------------
 
@@ -67,14 +66,13 @@ def test(person = None):
 def login_or_join():
 	return t.div(
 		t.div(text.welcome),
-		t.div(t.button(text.login, onclick = 'send_task("login")'), cls = 'center'),
-		t.div(t.button(text.join, onclick = 'send_task("join")'), cls = 'center'),
+		t.div(t.button(text.login, onclick = 'main.send("login")'), cls = 'center'),
+		t.div(t.button(text.join, onclick = 'main.send("join")'), cls = 'center'),
 	)
 
 def messages(admin):
 	result = t.div()
 	with result:
-
 		with t.div(cls = 'button_band'):
 			#    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦
 			t.button('+', title = 'new message', onclick = 'send_task("new_message")')
@@ -85,7 +83,6 @@ def messages(admin):
 				if admin:
 					t.button('Ѫ', title = text.admin, onclick = 'admin.send("users")')
 				t.button('Θ', title = text.logout, onclick = 'send_task("logout")')
-
 		t.hr()
 		t.div('Main messages...')
 
@@ -97,7 +94,7 @@ def users_page(users):
 	result = t.div(admin_button_band())
 	with result:
 		t.hr()
-		admin_menu_button_band((t.button('+', title = text.invite_new_user, onclick = 'admin.send("invite")'),))
+		admin_menu_button_band((t.button('+', title = text.invite_new_user, onclick = 'main.send("invite")'),))
 		t.div(user_table(users), id = 'user_table')
 	return result
 
@@ -162,10 +159,10 @@ def admin_menu_button_band(left_buttons):
 	return result
 
 
-def filterbox():
+def filterbox(extra = '$("show_inactives").checked'): # set extra = 'false' to remove extra
 	return Input(text.filtersearch, type_ = 'search', autofocus = True, attrs = {
 		'autocomplete': 'off',
-		'oninput': _send('main', 'filtersearch', searchtext = 'this.value', include_extra = '$("show_inactives").checked'),
+		'oninput': _send('main', 'filtersearch', searchtext = 'this.value', include_extra = extra),
 	}).build('filtersearch')
 
 def filterbox_checkbox(label, name):
@@ -173,21 +170,15 @@ def filterbox_checkbox(label, name):
 		'onclick': _send('main', 'filtersearch', searchtext = '$("filtersearch").value', include_extra = 'this.checked'),
 	}).build(name)
 
-def filterbox_plain():
-	return Input(text.filtersearch, type_ = 'search', autofocus = True, attrs = {
-		'autocomplete': 'off',
-		'oninput': _send('main', 'filtersearch', searchtext = 'this.value', include_extra = 'false'),
-	}).build('filtersearch')
 
-
-def fieldset(title: str, html_fields: list, button: t.button, alt_button: t.button = CANCEL_BUTTON, more_func: str | None = None) -> t.fieldset:
+def fieldset(title: str, html_fields: list, button: t.button, alt_button: t.button = _cancel_button(), more_func: str | None = None) -> t.fieldset:
 	result = t.fieldset()
 	with result:
 		t.legend(title + '...')
 		for field in html_fields:
 			t.div(field)
 		if more_func:
-			t.div(t.button(text.more_detail, onclick = f'send_task("{more_func}")'))
+			t.div(t.button(text.more_detail, onclick = more_func))
 		if alt_button:
 			t.div(t.span(button, alt_button))
 		else:
@@ -230,23 +221,17 @@ def tag_table(tags):
 	return result
 
 
-def dialog(title, html_fields, field_names, button_title = text.save, alt_button: t.button = CANCEL_BUTTON, more_func = None):
+def dialog(title, html_fields, field_names, button_title = text.save, alt_button: t.button = _cancel_button(), more_func = None):
 	return t.div(
 		t.div(id = 'detail_banner_container', cls = 'container'), # for later ws-delivered banner messages
 		fieldset(title, html_fields, _ws_submit_button(button_title, field_names), alt_button, more_func),
 	)
 
-
-def dialog2(title, fields, data = None, button_title = text.save, alt_button: t.button = CANCEL_BUTTON, more_func = None):
+def dialog2(title, fields, data = None, button_title = text.save, alt_button: t.button = _cancel_button(), more_func = None):
 	return dialog(title, build_fields(fields, data), fields.keys(), button_title, alt_button, more_func)
 
 
-def cancel_to_mpd_button():
-	return t.button(text.cancel, onclick = 'send_task("more_person_detail")')
-
-
-
-def more_person_detail(emails, phones):
+def more_person_detail(person_id, emails, phones):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
 		with t.fieldset():
@@ -254,26 +239,26 @@ def more_person_detail(emails, phones):
 			for email in emails:
 				t.div(t.span(
 					email['email'],
-					t.button(text.edit, onclick = _send_task('mpd_detail', table = '"email"', id = email['id'])),
+					t.button(text.edit, onclick = _send('admin', 'email_detail', person_id = person_id, id = email['id'])),
 					t.button(text.delete, onclick = f'delete_email({email["id"]})'),
 				))
-			t.div(t.button(text.add, onclick = _send_task('mpd_detail', table = '"email"', id = 0)))
+			t.div(t.button(text.add, onclick = _send('admin', 'email_detail', person_id = person_id,  id = 0)))
 		with t.fieldset():
 			t.legend(text.phones)
 			for phone in phones:
 				t.div(t.span(
 					_format_phone(phone['phone']),
-					t.button(text.edit, onclick = _send_task('mpd_detail', table = '"phone"', id = phone['id'])),
+					t.button(text.edit, onclick = _send('admin', 'phone_detail', person_id = person_id, id = phone['id'])),
 					t.button(text.delete, onclick = f'delete_phone({phone["id"]})'),
 				))
-			t.div(t.button(text.add, onclick = _send_task('mpd_detail', table = '"phone"', id = 0)))
-		t.div(t.button(text.close, onclick = 'cancel()')) # cancel just reverts to priortask; added/changed emails/phones are saved - those deeds are done, we're just "closing" this mpd portal
+			t.div(t.button(text.add, onclick = _send('admin', 'phone_detail', person_id = person_id, id = 0)))
+		t.div(_cancel_button(text.done)) # cancel just reverts to prior task; added/changed emails/phones are saved - those deeds are done, we're just "closing" this more_person_detail portal
 	return result
 
 def tag_users_and_nonusers(tag_name, users, nonusers):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
-		t.div(filterbox_plain())
+		t.div(filterbox('false'))
 		t.div(tag_users_and_nonusers_table(tag_name, users, nonusers), id = 'users_and_nonusers_table_container')
 	return result
 
@@ -340,14 +325,15 @@ class Input: # HTML input element, `frozen` with the intention of avoiding side-
 				label = label_prefix + ' ' + label
 			label = label.capitalize()
 		value = data[name] if data else None
+		attrs = copy(self.attrs) # don't change attrs - this is just a build() instrument; should not change self!
 		if data and self.type_ == 'checkbox':
 			if value:
-				self.attrs['checked'] = 'checked'  # would prefer to make these mods to 'i' (t.input_), later, but it seems impossible
-			elif 'checked' in self.attrs: # default value vestige
-				del self.attrs['checked'] # would prefer to make these mods to 'i' (t.input_), later, but it seems impossible
+				attrs['checked'] = 'checked'  # would prefer to make these mods to 'i' (t.input_), later, but it seems impossible
+			elif 'checked' in attrs: # (and NOT value) - default value vestige to clear!
+				del attrs['checked'] # would prefer to make these mods to 'i' (t.input_), later, but it seems impossible
 
-		i = t.input_(name = name, id = name, type = self.type_ if self.type_ else 'text', **(self.attrs))
-		if self.type_ == 'checkbox' and 'onclick' not in self.attrs: # don't do the following if there's already a script assigned, to do some other thing
+		i = t.input_(name = name, id = name, type = self.type_ if self.type_ else 'text', **(attrs))
+		if self.type_ == 'checkbox' and 'onclick' not in attrs: # don't do the following if there's already a script assigned, to do some other thing
 			i['onclick'] = "this.value = this.checked ? '1' : '0';"
 		if value:
 			i['value'] = value

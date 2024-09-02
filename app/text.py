@@ -1,3 +1,8 @@
+__author__ = 'J. Michael Caine'
+__copyright__ = '2024'
+__version__ = '0.1'
+__license__ = 'MIT'
+
 
 doc_prefix = 'um... '
 
@@ -65,7 +70,7 @@ invalid_login = 'Invalid username/login; please try again or click "forgot passw
 forgot_password_prelude = "What's your email address?  We'll send a password reset link!"
 auth_required = "You aren't authorized to access this function.  If you have a different login with authorization for this function, log out from your current session and log back in as an authorized user to access this function."
 deletion_succeeded = 'Deletion succeeded.'
-invite_succeeded = 'Successfully invited {name}.'
+invite_succeeded = 'Successfully invited {name}. (User will be "inactive" until invitation is accepted.)'
 added_tag_success = 'Successfully added tag {name}.'
 removed_user_from_tag = 'Successfully UNsubscribed {username} from tag "{tag_name}".'
 added_user_to_tag = 'Successfully subscribed {username} to tag "{tag_name}".'

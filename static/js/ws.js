@@ -33,7 +33,7 @@ ws.onmessage = function(event) {
 			hide_dialog();
 			break;
 		default:
-			handle_task(payload);
+			console.log("ERROR - unknown payload task: " + payload.task);
 	}
 };
 

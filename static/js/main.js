@@ -1,5 +1,4 @@
 
-
 let main = {
 	send: function(task, fields) {
 		ws_send_task('app.main', task, fields);
@@ -7,17 +6,12 @@ let main = {
 }
 
 
-function join_or_invite(fields) {
-	ws_send({task: "join_or_invite", ...fields});
-}
-
-
 function set_content(content, clear_banner = true, focus_top_inp = true) {
-	_set_content($('content_container'), content, clear_banner);
+	_set_content($('content_container'), content, clear_banner, focus_top_inp);
 }
 
 function set_sub_content(container_id, content, clear_banner = true, focus_top_inp = false) {
-	_set_content($(container_id), content, clear_banner);
+	_set_content($(container_id), content, clear_banner, focus_top_inp);
 }
 
 function _set_content(container, content, clear_banner, focus_top_inp = true) {
@@ -52,8 +46,7 @@ function hide_dialog() {
 }
 
 function focus_top_input(container) {
-	inp = container.querySelector('input');
-	if (inp) {
-		inp.focus();
-	}
+	try {
+		container.querySelector('input').focus();
+	} catch (e) {} // We don't care; if 'input' doesn't exist, then there's nothing to set focus to, and we move on quietly
 }

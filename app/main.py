@@ -22,6 +22,7 @@ from . import fields
 from . import html
 from . import messages
 from . import settings
+from . import task
 from .task import Task
 from . import text
 from . import valid
@@ -174,6 +175,10 @@ async def ping(hd):
 	pass # nothing to do
 
 
+async def handle_invalid(hd, message, banner):
+	await ws.send_content(hd, banner, html.error(message))
+
+
 @ws.handler
 async def submit_fields(hd):
 	'''
@@ -227,11 +232,12 @@ async def login_or_join(hd):
 @ws.handler
 async def login(hd):
 	if not task.started(hd, login):
-		await send_task(hd, 'fieldset', html.login(fields.LOGIN))
+		await ws.send(hd, 'fieldset', fieldset = html.login(fields.LOGIN).render())
 	else:
 		data = hd.payload
-		if await _invalids(hd, data, fields.LOGIN):
+		if await valid.invalids(hd, data, fields.LOGIN, handle_invalid, 'banner'):
 			return # if there WERE invalids, bannar was already sent within
+		#else all good, move on!
 		uid = await db.login(hd.dbc, hd.idid, data['username'], data['password'])
 		if uid:
 			hd.uid = uid
@@ -250,78 +256,72 @@ async def logout(hd):
 
 @ws.handler
 async def forgot_password(hd):
-	#!!!	await send_banner_task(hd, 'fieldset', html.info(text.forgot_password_prelude), html.forgot_password(fields.EMAIL))
+	await ws.send(hd, 'fieldset', fieldset = html.forgot_password(fields.EMAIL))
 	await ws.send_content(hd, 'banner', html.info(text.forgot_password_prelude))
 
 @ws.handler
 async def join(hd):
-	if supertask_started(hd, join):
-		await continue_join_or_invite(hd, True, text.your)
-	else:
+	if not task.started(hd, join):
 		await start_join_or_invite(hd, text.your)
+	elif not await task.finished(hd): # e.g., dialog-box could have been "canceled"
+		await continue_join_or_invite(hd, True)
 
 @ws.handler
 async def invite(hd):
-	if supertask_started(hd, invite):
-		await continue_join_or_invite(hd, False, text.friends)
-	else:
+	if not task.started(hd, invite):
 		await start_join_or_invite(hd, text.friends)
+	elif not await task.finished(hd): # e.g., dialog-box could have been "canceled"
+		await continue_join_or_invite(hd, False)
 
-start_join_or_invite = lambda hd, label_prefix: send_task(hd, 'dialog', html.dialog(text.name, html.build_fields(fields.PERSON, None, label_prefix), fields.PERSON.keys(), text.next))
+async def start_join_or_invite(hd, label_prefix):
+	hd.task.state['label_prefix'] = label_prefix
+	await ws.send_content(hd, 'dialog', html.dialog(text.name, html.build_fields(fields.PERSON, None, label_prefix), fields.PERSON.keys(), text.next))
 
-async def continue_join_or_invite(hd, send_username_fieldset, label_prefix = None):
-	if label_prefix:
-		hd.ststate['label_prefix'] = label_prefix
-	else:
-		label_prefix = hd.ststate['label_prefix']
-
-	send_X_fs = lambda fs_title, fieldset: send_fieldset(hd, fs_title, 
-								html.build_fields(fieldset, None, label_prefix), fieldset.keys(), text.next)
-	send_Y_fs = lambda fs_title, fieldset: send_task(hd, 'dialog', html.dialog(fs_title,
+async def continue_join_or_invite(hd, send_username_fieldset):
+	label_prefix = hd.task.state['label_prefix']
+	send_fs = lambda fs_title, fieldset: ws.send_content(hd, 'dialog', html.dialog(fs_title,
 								html.build_fields(fieldset, None, label_prefix), fieldset.keys(), text.next))
-	send_person_fs = lambda: send_Y_fs(text.name, fields.PERSON)
-	send_email_fs = lambda: send_Y_fs(text.email, fields.EMAIL)
-	send_phone_fs = lambda: send_Y_fs(text.phone, fields.PHONE)
-	send_username_fs_DEPRECATE = lambda username_hint: send_fieldset(hd, text.username,
-								html.build_fields(fields.NEW_USERNAME, {'username': username_hint}, label_prefix), fields.NEW_USERNAME.keys(), text.next)
-	send_username_fs = lambda username_hint: send_task(hd, 'dialog', html.dialog(text.username,
+	send_person_fs = lambda: send_fs(text.name, fields.PERSON)
+	send_email_fs = lambda: send_fs(text.email, fields.EMAIL)
+	send_phone_fs = lambda: send_fs(text.phone, fields.PHONE)
+	send_username_fs = lambda username_hint: ws.send_content(hd, 'dialog', html.dialog(text.username,
 								html.build_fields(fields.NEW_USERNAME, {'username': username_hint}, label_prefix), fields.NEW_USERNAME.keys(), text.next))
-	send_password_fs = lambda: send_Y_fs(text.password, fields.NEW_PASSWORD)
+	send_password_fs = lambda: send_fs(text.password, fields.NEW_PASSWORD)
 
 	data = hd.payload
-	match hd.ststate.get('action', 'add_person'): # assume 'add_person' (first action) if no action yet set
+	match hd.task.state.get('action', 'add_person'): # assume 'add_person' (first action) if no action yet set
 		case 'add_person':
-			if await _invalids(hd, data, fields.PERSON, 'detail_banner'):
-				return # _invalids() handles invalid case, and there's nothing more to do here
-			#else:
+			if await valid.invalids(hd, data, fields.PERSON, handle_invalid, 'detail_banner'):
+				return # if there WERE invalids, bannar was already sent within
+			#else all good, move on!
 			await db.begin(hd.dbc) # work through ALL actions before committing (transaction) to DB
-			hd.ststate['pid'] = await db.add_person(hd.dbc, data['first_name'], data['last_name'])
-			hd.ststate['name'] = data # store name for later
-			hd.ststate['action'] = 'add_email' # next action
+			hd.task.state['pid'] = await db.add_person(hd.dbc, data['first_name'], data['last_name'])
+			hd.task.state['name'] = data # store name for later
+			hd.task.state['action'] = 'add_email' # next action
 			_bump_action(hd, 'add_email', 'add_person')
 			await send_email_fs()
 
 		case 'add_email':
-			if await _invalids(hd, data, fields.EMAIL, 'detail_banner'):
+			if await valid.invalids(hd, data, fields.EMAIL, handle_invalid, 'detail_banner'):
 				return # if there WERE invalids, bannar was already sent within
 			if _not_yet(hd, 'add_person'):
 				await send_person_fs()
 				return # finished
 			#else all good, move on!
-			await db.add_email(hd.dbc, hd.ststate['pid'], data['email'])
+			await db.add_email(hd.dbc, hd.task.state['pid'], data['email'])
 			_bump_action(hd, 'add_phone', 'add_email')
 			await send_phone_fs()
 
 		case 'add_phone':
-			if await _invalids(hd, data, fields.PHONE, 'detail_banner'):
+			if await valid.invalids(hd, data, fields.PHONE, handle_invalid, 'detail_banner'):
 				return # if there WERE invalids, bannar was already sent within
 			if _not_yet(hd, 'add_email'):
 				await send_email_fs()
 				return # finished
 			#else all good, move on!
-			await db.add_phone(hd.dbc, hd.ststate['pid'], data['phone'])
-			username_suggestion = await db.suggest_username(hd.dbc, hd.ststate['name'])
-			hd.ststate['username_suggestion'] = username_suggestion
+			await db.add_phone(hd.dbc, hd.task.state['pid'], data['phone'])
+			username_suggestion = await db.suggest_username(hd.dbc, hd.task.state['name'])
+			hd.task.state['username_suggestion'] = username_suggestion
 			if send_username_fieldset:
 				_bump_action(hd, 'add_username', 'add_phone')
 				await send_username_fs(username_suggestion)
@@ -331,66 +331,68 @@ async def continue_join_or_invite(hd, send_username_fieldset, label_prefix = Non
 				# letting you sign up yourself; there's nothing "in between" - in-between-land is usually
 				# just "annoy people" land)
 				# create the user record:
-				user_id = await db.add_user(hd.dbc, hd.ststate['pid'], username_suggestion)
+				user_id = await db.add_user(hd.dbc, hd.task.state['pid'], username_suggestion)
 				await db.commit(hd.dbc) # finally, commit it all
 				# send a password-reset code via email, to the user's email:
 				code = await db.generate_password_reset_code(hd.dbc, user_id)
 				emails = await db.get_user_emails(hd.dbc, user_id)
-				l.debug(f'inviting new user ({hd.ststate["name"]}) via email: {emails[0]["email"]}')
+				l.debug(f'inviting new user ({hd.task.state["name"]}) via email: {emails[0]["email"]}')
 				# TODO!
 				# notify inviter of success:
-				person = hd.ststate['name']
-				await revert_to_priortask(hd)
-				await send_banner(hd, html.info(text.invite_succeeded.format(name = f"{person['first_name']} {person['last_name']}")))
+				person = hd.task.state['name']
+				await task.finish(hd, True)
+				await ws.send_content(hd, 'banner', html.info(text.invite_succeeded.format(name = f"{person['first_name']} {person['last_name']}")))
 
 		case 'add_username':
-			if await _invalids(hd, data, fields.NEW_USERNAME, 'detail_banner'):
+			if await valid.invalids(hd, data, fields.NEW_USERNAME, handle_invalid, 'detail_banner'):
 				return # if there WERE invalids, bannar was already sent within
 			if _not_yet(hd, 'add_phone'):
 				await send_phone_fs()
 				return # finished
 			# else, add one more validation step: confirm that the username isn't already taken:
 			if await db.username_exists(hd.dbc, data['username']):
-				await send_banner(hd, html.error(text.Valid.username_exists))
+				await ws.send_content(hd, 'banner', html.error(text.Valid.username_exists))
+
 				return # finished
 			#else all good, move on!
-			hd.ststate['user_id'] = await db.add_user(hd.dbc, hd.ststate['pid'], data['username'])
+			hd.task.state['user_id'] = await db.add_user(hd.dbc, hd.task.state['pid'], data['username'])
 			_bump_action(hd, 'add_password', 'add_username')
 			await send_password_fs()
 
 		case 'add_password':
-			if await _invalids(hd, data, fields.NEW_PASSWORD, 'detail_banner'):
+			if await valid.invalids(hd, data, fields.NEW_PASSWORD, handle_invalid, 'detail_banner'):
 				return # if there WERE invalids, bannar was already sent within
 			if _not_yet(hd, 'add_username'):
-				await send_username_fs(hd.ststate['username_suggestion'])
+				await send_username_fs(hd.task.state['username_suggestion'])
 				return # finished
 			#else, add one more validation step: confirm passwords are identical:
 			if data['password'] != data['password_confirmation']:
-				await send_banner(hd, html.error(text.Valid.password_match))
+				await ws.send_content(hd, 'banner', html.error(text.Valid.password_match))
 				return # finished
 			#else all good, move on!
-			await db.reset_user_password(hd.dbc, hd.ststate['user_id'], data['password'])
+			await db.reset_user_password(hd.dbc, hd.task.state['user_id'], data['password'])
 			await db.commit(hd.dbc) # finally, commit it all
-			hd.uid = hd.ststate['user_id']
+			hd.uid = hd.task.state['user_id']
 			await db.force_login(hd.dbc, hd.idid, hd.uid)
-			hd.ststate = {} # reset
-			await send_content(hd, html.messages(False)) # just joined, so couldn't possibly be an admin!
+			task.clear_all(hd) # a "join" results in a clean slate - no prior tasks (note that, above, the end of invite, after the db-commit, we DO finish() to revert to prior task, which may be administrative user-list management.....
+			await ws.send(hd, 'hide_dialog')
+			await messages.messages(hd) # show main messages page
 
 
 # Utils -----------------------------------------------------------------------
 
 
 def _bump_action(hd, next_action, current_action = None):
-	if 'completed' not in hd.ststate:
-		hd.ststate['completed'] = []
-	hd.ststate['completed'].append(current_action)
-	hd.ststate['action'] = next_action
+	if 'completed' not in hd.task.state:
+		hd.task.state['completed'] = []
+	hd.task.state['completed'].append(current_action)
+	hd.task.state['action'] = next_action
 
 def _not_yet(hd, required_action):
-	if completed := hd.ststate.get('completed'):
+	if completed := hd.task.state.get('completed'):
 		if required_action in completed:
 			return False # good to continue normall processing
 	#else:
-	hd.ststate['action'] = required_action
+	hd.task.state['action'] = required_action
 	return True # "true, NOT YET ready to move on!"
 
