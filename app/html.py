@@ -48,7 +48,7 @@ def main(ws_url: str):
 				t.div("Loading...")
 		with t.div(id = 'scripts', cls = 'container'):
 			t.script(raw(f'var ws = new WebSocket("{ws_url}");'))
-			[script for script in _scripts(('basic.js', 'ws.js', 'persistence.js', 'main.js', 'admin.js', 'submit.js', 'users.js', 'messages.js'))]
+			[script for script in _scripts(('basic.js', 'ws.js', 'persistence.js', 'main.js', 'admin.js', 'submit.js', 'messages.js'))]
 	return d.render()
 
 
@@ -95,7 +95,7 @@ def users_page(users):
 	with result:
 		t.hr()
 		admin_menu_button_band((t.button('+', title = text.invite_new_user, onclick = 'main.send("invite")'),))
-		t.div(user_table(users), id = 'user_table')
+		t.div(user_table(users), id = 'user_table_container')
 	return result
 
 def tags_page(tags):
@@ -103,7 +103,7 @@ def tags_page(tags):
 	with result:
 		t.hr()
 		admin_menu_button_band((t.button('+', title = text.create_new_tag, onclick = 'admin.send("new_tag")'),))
-		t.div(tag_table(tags), id = 'tag_table')
+		t.div(tag_table(tags), id = 'tag_table_container')
 	return result
 
 
@@ -255,11 +255,14 @@ def more_person_detail(person_id, emails, phones):
 		t.div(_cancel_button(text.done)) # cancel just reverts to prior task; added/changed emails/phones are saved - those deeds are done, we're just "closing" this more_person_detail portal
 	return result
 
-def tag_users_and_nonusers(tag_name, users, nonusers):
+
+def tag_users_and_nonusers(tun_table):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
-		t.div(filterbox('false'))
-		t.div(tag_users_and_nonusers_table(tag_name, users, nonusers), id = 'users_and_nonusers_table_container')
+		with t.div(cls = 'button_band'):
+			t.div(filterbox())
+			filterbox_checkbox(text.show_inactives, 'show_inactives')
+		t.div(tun_table, id = 'users_and_nonusers_table_container')
 	return result
 
 def tag_users_and_nonusers_table(tag_name, users, nonusers):
@@ -270,8 +273,7 @@ def tag_users_and_nonusers_table(tag_name, users, nonusers):
 			t.th(f'Subscribed to {tag_name}', align = 'right')
 			t.th(t.button(text.done, onclick = _send('admin', 'tag_users', finished = 'true')), colspan = 2)
 			t.th('NOT Subscribed', align = 'left')
-		done = False
-		while not done:
+		for count in range(15): # TODO: 15 is hardcode equivalent to db/sql 'limit'; that is, the active "list size" - 'nonusers', here, COULD actually be bigger than 15, so... limiting here, as well
 			user = users.pop(0) if len(users) > 0 else {}
 			nonuser = nonusers.pop(0) if len(nonusers) > 0 else {}
 			if not user and not nonuser:
@@ -281,6 +283,36 @@ def tag_users_and_nonusers_table(tag_name, users, nonusers):
 				t.td(t.button('-', cls = 'singleton_button red_bg', onclick = _send('admin', 'remove_user_from_tag', user_id = user['id'])) if user else '')
 				t.td(t.button('+', cls = 'singleton_button green_bg', onclick = _send('admin', 'add_user_to_tag', user_id = nonuser['id'])) if nonuser else '')
 				t.td(un_name(nonuser), align = 'left')
+	return result
+
+
+
+def user_tags(ut_table):
+	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
+	with result:
+		with t.div(cls = 'button_band'):
+			t.div(filterbox())
+			filterbox_checkbox(text.show_inactives, 'show_inactives')
+		t.div(ut_table, id = 'user_tags_table_container')
+	return result
+
+def user_tags_table(user_tags, other_tags):
+	result = t.table(cls = 'full_width')
+	with result:
+		with t.tr(cls = 'midlin'):
+			t.th(f'Subscribed', align = 'right')
+			t.th(t.button(text.done, onclick = _send('admin', 'user_tags', finished = 'true')), colspan = 2)
+			t.th('NOT Subscribed', align = 'left')
+		for count in range(15): # TODO: 15 is hardcode equivalent to db/sql 'limit'; that is, the active "list size" - 'other_tags', here, COULD actually be bigger than 15, so... limiting here, as well
+			utag = user_tags.pop(0) if len(user_tags) > 0 else {}
+			otag = other_tags.pop(0) if len(other_tags) > 0 else {}
+			if not utag and not otag:
+				break # done
+			with t.tr(cls = 'midlin'):
+				t.td(utag.get('name', ''), align = 'right')
+				t.td(t.button('-', cls = 'singleton_button red_bg', onclick = _send('admin', 'remove_tag_from_user', tag_id = utag['id'])) if utag else '')
+				t.td(t.button('+', cls = 'singleton_button green_bg', onclick = _send('admin', 'add_tag_to_user', tag_id = otag['id'])) if otag else '')
+				t.td(otag.get('name', ''), align = 'left')
 	return result
 
 # Utils -----------------------------------------------------------------------

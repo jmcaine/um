@@ -41,14 +41,17 @@ async def users(hd, reverting = False):
 		await ws.send_content(hd, 'content', html.users_page(await db.get_users(hd.dbc)))
 	else:
 		u = await db.get_users(hd.dbc, like = hd.task.state.get('filtersearch_text', ''), active = not hd.task.state.get('filtersearch_include_extra', False))
-		await ws.send_content(hd, 'sub_content', html.user_table(u), container = 'user_table')
+		await ws.send_content(hd, 'sub_content', html.user_table(u), container = 'user_table_container')
 
 
 @ws.handler(auth_func = authorize)
-async def user_detail(hd):
-	if not task.started(hd, user_detail):
-		hd.task.state['user'] = await db.get_user(hd.dbc, int(hd.payload.get('id')))
-		await ws.send_content(hd, 'dialog', html.dialog2(text.user, fields.USER, hd.task.state['user']))
+async def user_detail(hd, reverting = False):
+	if reverting:
+		await task.finish(hd) # just bump back another step - see person_detail 'reverting' note...
+	elif not task.started(hd, user_detail):
+		user_id = int(hd.payload.get('id'))
+		hd.task.state['user'] = await db.get_user(hd.dbc, user_id)
+		await ws.send_content(hd, 'dialog', html.dialog2(text.user, fields.USER, hd.task.state['user'], more_func = f'admin.send("user_tags", {{ user_id: {user_id} }})'))
 	elif not await task.finished(hd): # e.g., dialog-box could have been "canceled"
 		data = hd.payload
 		if await valid.invalids(hd, data, fields.USER, handle_invalid, 'detail_banner'):
@@ -131,6 +134,38 @@ async def delete_mpd(hd):
 
 
 @ws.handler(auth_func = authorize)
+async def user_tags(hd, reverting = False):
+	if not task.started(hd, user_tags):
+		hd.task.state['uid'] = int(hd.payload.get('user_id')) # TODO: make variant for hd.uid, for non-admins to manage their own (personal) tag-subscriptions
+		await ws.send_content(hd, 'dialog', html.user_tags(await user_tags_table(hd)))
+	elif not await task.finished(hd): # dialog-box could have been "closed"
+		await ws.send_content(hd, 'sub_content', await user_tags_table(hd), container = 'user_tags_table_container')
+
+async def user_tags_table(hd):
+	utags, otags = await db.get_user_tags(hd.dbc, hd.task.state['uid'],
+													active = not hd.task.state.get('filtersearch_include_extra'),
+													like = hd.task.state.get('filtersearch_text'),
+													include_unsubscribed = True)
+	return html.user_tags_table(utags, otags)
+
+async def _remove_or_add_tag_to_user(hd, func, message):
+	tid = int(hd.payload['tag_id'])
+	await func(hd.dbc, hd.task.state['uid'], tid)
+	await ws.send_content(hd, 'sub_content', await user_tags_table(hd), container = 'user_tags_table_container')
+	tag = await db.get_tag(hd.dbc, tid, 'name')
+	await ws.send_content(hd, 'detail_banner', html.info(message.format(name = tag['name'])))
+
+@ws.handler(auth_func = authorize)
+async def remove_tag_from_user(hd):
+	await _remove_or_add_tag_to_user(hd, db.remove_user_from_tag, text.removed_tag_from_user)
+
+@ws.handler(auth_func = authorize)
+async def add_tag_to_user(hd):
+	await _remove_or_add_tag_to_user(hd, db.add_user_to_tag, text.added_tag_to_user)
+
+
+
+@ws.handler(auth_func = authorize)
 async def tags(hd, reverting = False):
 	if reverting:
 		await ws.send(hd, 'hide_dialog')
@@ -142,7 +177,7 @@ async def tags(hd, reverting = False):
 								active = not hd.task.state.get('filtersearch_include_extra', False),
 								like = hd.task.state.get('filtersearch_text', ''),
 								get_subscribers = True)
-		await ws.send_content(hd, 'sub_content', html.tag_table(t), container = 'tag_table')
+		await ws.send_content(hd, 'sub_content', html.tag_table(t), container = 'tag_table_container')
 
 
 @ws.handler(auth_func = authorize)
@@ -175,30 +210,28 @@ async def tag_detail(hd):
 		await ws.send_content(hd, 'banner', html.info(text.change_detail_success.format(change = f'"{name}"')))
 
 
-async def _get_tag_users_and_nonusers(hd, tag_id):
-	return await db.get_tag_users_and_nonusers(hd.dbc, tag_id, hd.task.state.get('filtersearch_text'))
-
 @ws.handler(auth_func = authorize)
 async def tag_users(hd):
 	if not task.started(hd, tag_users):
-		tag_id = int(hd.payload.get('tag_id'))
-		hd.task.state['tag'] = await db.get_tag(hd.dbc, tag_id)
-		users, nonusers = await _get_tag_users_and_nonusers(hd, tag_id)
-		await ws.send_content(hd, 'dialog', html.tag_users_and_nonusers(hd.payload.get('tag_name'), users, nonusers))
-	elif not await task.finished(hd): # e.g., dialog-box could have been "canceled"
-		await tag_users_table(hd)
+		hd.task.state['tag'] = await db.get_tag(hd.dbc, int(hd.payload.get('tag_id')))
+		await ws.send_content(hd, 'dialog', html.tag_users_and_nonusers(await tag_users_table(hd)))
+	elif not await task.finished(hd): # dialog-box could have been "closed"
+		await ws.send_content(hd, 'sub_content', await tag_users_table(hd), container = 'users_and_nonusers_table_container')
 
-async def tag_users_table(hd, banner = None):
-	users, nonusers = await _get_tag_users_and_nonusers(hd, int(hd.task.state['tag']['id']))
-	await ws.send_content(hd, 'sub_content', html.tag_users_and_nonusers_table(hd.task.state['tag']['name'], users, nonusers), container = 'users_and_nonusers_table_container')
-	if banner:
-		await ws.send_content(hd, 'detail_banner', banner)
+async def tag_users_table(hd):
+	users, nonusers = await db.get_tag_users(hd.dbc, hd.task.state['tag']['id'],
+															active = not hd.task.state.get('filtersearch_include_extra'),
+															like = hd.task.state.get('filtersearch_text'),
+															include_unsubscribed = True)
+	return html.tag_users_and_nonusers_table(hd.task.state['tag']['name'], users, nonusers)
 
 async def _remove_or_add_user_to_tag(hd, func, message):
 	uid = int(hd.payload['user_id'])
 	await func(hd.dbc, uid, hd.task.state['tag']['id'])
+	await ws.send_content(hd, 'sub_content', await tag_users_table(hd), container = 'users_and_nonusers_table_container')
 	username = await db.get_user(hd.dbc, uid, 'username')
-	await tag_users_table(hd, html.info(message.format(username = username['username'], tag_name = hd.task.state['tag']['name'])))
+	await ws.send_content(hd, 'detail_banner', html.info(message.format(username = username['username'], tag_name = hd.task.state['tag']['name'])))
+
 
 @ws.handler(auth_func = authorize)
 async def remove_user_from_tag(hd):

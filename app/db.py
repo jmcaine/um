@@ -258,18 +258,18 @@ async def add_role_ids(dbc, role_ids, user_id = None):
 	await dbc.executemany('insert into user_role (user, role) values (?, ?)', role_ids)
 
 
-
 async def get_tags(dbc, active = True, like = None, get_subscribers = False, limit = 15):
-	args, where = [], []
+	where, args = [], []
 	if active:
 		where.append('active = 1')
-	_add_like(like, ('name',), args, where)
+	_add_like(like, ('name',), where, args)
 	where = 'where ' + ' and '.join(where) if where else ''
 	count, join = '', ''
 	if get_subscribers:
 		count = ', count(user_tag.tag) as num_subscribers'
 		join = 'left outer join user_tag on tag.id = user_tag.tag'
-	result = await _fetchall(dbc, f'select tag.* {count} from tag {join} {where} group by tag.id order by name limit {limit}', args)
+	limit = f'limit {limit}' if limit else ''
+	result = await _fetchall(dbc, f'select tag.* {count} from tag {join} {where} group by tag.id order by name {limit}', args)
 	return result if len(result) > 0 and result[0]['id'] != None else [] # convert weird "1-empty-record" result to an empty-list, instead; this happens in the left outer join case - a single record is returned with id=None and every other field = None except 'count', which = 0; we don't care about this case, so remove it.'
 
 async def new_tag(dbc, name, active):
@@ -283,32 +283,45 @@ async def get_tag(dbc, id, fields: str | None = None):
 async def set_tag(dbc, id, name, active):
 	return await _update1(dbc, 'update tag set name = ?, active = ? where id = ?', (name, active, id))
 
-async def get_tag_users(dbc, tag_id, like = None):
-	args, where = [tag_id], ['user_tag.tag = ?']
-	_add_like(like, ('username', 'first_name', 'last_name'), args, where)
-	where = 'where ' + " and ".join(where)
-	return await _fetchall(dbc, f'select user.id, username, first_name, last_name from user join user_tag on user.id = user_tag.user join person on user.person = person.id {where} order by username', args)
 
-def _add_like(like, fields, args, where):
-	if like:
-		likes = ' or '.join([f'{field} like ?' for field in fields])
-		where.append(f'({likes})')
-		args.extend([f'%{like}%'] * len(fields))
-
-
-async def get_tag_users_and_nonusers(dbc, tag_id, like = None):
-	args, where = [], []
-	_add_like(like, ('username', 'first_name', 'last_name'), args, where)
-	where = 'where ' + " and ".join(where) if where else ''
-	tag_users = await get_tag_users(dbc, tag_id, like)
-	all_users = await _fetchall(dbc, f'select user.id, username, first_name, last_name from user join person on user.person = person.id {where} order by username', args)
+async def get_tag_users(dbc, tag_id, active = True, like = None, limit = 15, include_unsubscribed = False):
+	where, args = ['user_tag.tag = ?',], [tag_id,]
+	if active:
+		where.append('active = 1')
+	_add_like(like, ('username', 'first_name', 'last_name'), where, args)
+	where1 = 'where ' + " and ".join(where) if where else ''
+	fields = 'user.id, username, first_name, last_name'
+	order = 'order by username'
+	tag_users = await _fetchall(dbc, f'select {fields} from user join user_tag on user.id = user_tag.user join person on user.person = person.id {where1} {order} limit {limit}', args)
+	if not include_unsubscribed:
+		return tag_users
+	#else:
+	where2 = 'where ' + " and ".join(where[1:]) if where[1:] else ''
+	all_users = await _fetchall(dbc, f'select {fields} from user join person on user.person = person.id {where2} {order}', args[1:]) # NOTE: must NOT 'limit' this fetch, as many of these may be weeded out in selection, below, and we have to have plenty to make a full rhs list!
 	return tag_users, [r for r in all_users if r not in tag_users]
+
 
 async def remove_user_from_tag(dbc, user_id, tag_id):
 	return await dbc.execute(f'delete from user_tag where user = ? and tag = ?', (user_id, tag_id))
 
 async def add_user_to_tag(dbc, user_id, tag_id):
 	return await _insert1(dbc, 'insert into user_tag (user, tag) values (?, ?)', (user_id, tag_id))
+
+
+async def get_user_tags(dbc, user_id, active = True, like = None, limit = 15, include_unsubscribed = False):
+	where, args = ['user_tag.user = ?',], [user_id,]
+	if active:
+		where.append('active = 1')
+	_add_like(like, ('name',), where, args)
+	where = 'where ' + " and ".join(where) if where else ''
+	limit = f'limit {limit}' if limit else ''
+	user_tags = await _fetchall(dbc, f'select tag.* from tag join user_tag on tag.id = user_tag.tag {where} order by name {limit}', args)
+	if not include_unsubscribed:
+		return user_tags
+	#else:
+	all_tags = await get_tags(dbc, active = active, like = like, get_subscribers = False, limit = None) # NOTE: must NOT 'limit' this fetch, as many of these may be weeded out in selection, below, and we have to have plenty to make a full rhs list!
+	return user_tags, [r for r in all_tags if r not in user_tags]
+
 
 
 # Utils -----------------------------------------------------------------------
@@ -337,4 +350,9 @@ def _hashpw(password):
 async def _login(dbc, idid, user_id):
 	return await _update1(dbc, 'update id_key set user = ? where idid = ?', (user_id, idid))
 
+def _add_like(like, fields, where, args):
+	if like:
+		likes = ' or '.join([f'{field} like ?' for field in fields])
+		where.append(f'({likes})')
+		args.extend([f'%{like}%'] * len(fields))
 
