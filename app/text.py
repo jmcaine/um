@@ -77,6 +77,7 @@ added_user_to_tag = 'Successfully subscribed {username} to tag "{tag_name}".'
 internal_error = 'Internal error; please refer to with this error ID: {reference}'
 removed_tag_from_user = 'Successfully UNsubscribed from tag "{name}".'
 added_tag_to_user = 'Successfully subscribed to tag "{name}".'
+message_draft_saved = 'Message draft successfully saved for later.'
 
 # Hover / validation "title" hints:
 class Title:

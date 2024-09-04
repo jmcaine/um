@@ -307,7 +307,6 @@ async def remove_user_from_tag(dbc, user_id, tag_id):
 async def add_user_to_tag(dbc, user_id, tag_id):
 	return await _insert1(dbc, 'insert into user_tag (user, tag) values (?, ?)', (user_id, tag_id))
 
-
 async def get_user_tags(dbc, user_id, active = True, like = None, limit = 15, include_unsubscribed = False):
 	where, args = ['user_tag.user = ?',], [user_id,]
 	if active:
@@ -322,6 +321,18 @@ async def get_user_tags(dbc, user_id, active = True, like = None, limit = 15, in
 	all_tags = await get_tags(dbc, active = active, like = like, get_subscribers = False, limit = None) # NOTE: must NOT 'limit' this fetch, as many of these may be weeded out in selection, below, and we have to have plenty to make a full rhs list!
 	return user_tags, [r for r in all_tags if r not in user_tags]
 
+
+async def new_message(dbc, user_id):
+	return await _insert1(dbc, 'insert into message (author, created) values (?, ?)', (user_id, datetime.now().isoformat()))
+
+async def save_message(dbc, message_id, content):
+	return await _update1(dbc, 'update message set message = ? where id = ?', (content, message_id))
+
+async def send_message(dbc, message_id):
+	return await _update1(dbc, 'update message set sent = ? where id = ?', (datetime.now().isoformat(), message_id))
+
+async def get_message(dbc, message_id):
+	return await _fetch1(dbc, 'select * from  message where id = ?', (message_id,))
 
 
 # Utils -----------------------------------------------------------------------

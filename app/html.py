@@ -70,25 +70,22 @@ def login_or_join():
 		t.div(t.button(text.join, onclick = 'main.send("join")'), cls = 'center'),
 	)
 
-def messages(admin):
+def messages_page(admin):
 	result = t.div()
 	with result:
 		with t.div(cls = 'button_band'):
-			#    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦
-			t.button('+', title = 'new message', onclick = 'send_task("new_message")')
+			#    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦ ►
+			t.button('+', title = 'new message', onclick = 'messages.send("edit_message")')
 			filterbox()
 			filterbox_checkbox(text.deep_search, 'deep_search')
 			with t.div(cls = 'right'):
-				t.button('...', title = text.change_settings, onclick = 'send_task("settings")')
+				t.button('...', title = text.change_settings, onclick = 'main.send("settings")')
 				if admin:
 					t.button('Ѫ', title = text.admin, onclick = 'admin.send("users")')
-				t.button('Θ', title = text.logout, onclick = 'send_task("logout")')
+				t.button('Θ', title = text.logout, onclick = 'main.send("logout")')
 		t.hr()
-		t.div('Main messages...')
-
+		t.div(messages(), id = 'messages_container')
 	return result
-
-
 
 def users_page(users):
 	result = t.div(admin_button_band())
@@ -97,6 +94,7 @@ def users_page(users):
 		admin_menu_button_band((t.button('+', title = text.invite_new_user, onclick = 'main.send("invite")'),))
 		t.div(user_table(users), id = 'user_table_container')
 	return result
+
 
 def tags_page(tags):
 	result = t.div(admin_button_band())
@@ -314,6 +312,25 @@ def user_tags_table(user_tags, other_tags):
 				t.td(t.button('+', cls = 'singleton_button green_bg', onclick = _send('admin', 'add_tag_to_user', tag_id = otag['id'])) if otag else '')
 				t.td(otag.get('name', ''), align = 'left')
 	return result
+
+
+def edit_message():
+	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
+	with result:
+		t.div(contenteditable = 'true', id = 'message_content')
+		with t.div(cls = 'button_band'):
+			with t.div(cls = 'right'):
+				t.button('#', title = text.tags, onclick = 'messages.send("message_tags")')
+				t.button('▼', onclick = 'messages.finish_draft()')
+				t.button('►', title = 'send message', onclick = 'messages.send_message()')
+	return result
+
+def messages():
+	return t.div('Main messages...')
+
+def message(content):
+	return t.div(raw(content))
+
 
 # Utils -----------------------------------------------------------------------
 

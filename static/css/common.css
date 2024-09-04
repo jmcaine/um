@@ -127,6 +127,14 @@ span.invalid {
 	padding-right: 0.2em;
 }
 
+
+[contenteditable="true"]:active, [contenteditable="true"]:focus
+{
+	border:none;
+	outline:none;
+}
+
+
 /* ------------------------------------------------------------------------- */
 
 .button_band {

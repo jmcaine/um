@@ -32,6 +32,12 @@ ws.onmessage = function(event) {
 		case "hide_dialog":
 			hide_dialog();
 			break;
+		case "edit_message":
+			messages.edit_message(payload.content, payload.message_content);
+			break;
+		case "deliver_message":
+			messages.deliver_message(payload.content);
+			break;
 		default:
 			console.log("ERROR - unknown payload task: " + payload.task);
 	}

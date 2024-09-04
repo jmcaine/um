@@ -6,7 +6,6 @@ __license__ = 'MIT'
 import logging
 import traceback
 import json
-import weakref
 import copy
 
 from dataclasses import dataclass, field as dataclass_field
@@ -55,18 +54,16 @@ ws_url = lambda rq: URL.build(scheme = 'ws', host = rq.host, path = '/_ws')
 
 rt = web.RouteTableDef()
 
-_websockets = web.AppKey("websockets", weakref.WeakSet)
-
 async def _init(app):
 	l.info('Initializing...')
-	app[_websockets] = weakref.WeakSet()
+	app['hds'] = []
 	await _init_db(app)
 	l.info('...initialization complete')
 
 async def _shutdown(app):
 	l.info('Shutting down...')
-	for ws in set(app[_websockets]):
-		await ws.close(code = WSCloseCode.GOING_AWAY, message = "Server shutdown")
+	for hd in app['hds']:
+		await hd.wsr.close(code = WSCloseCode.GOING_AWAY, message = "Server shutdown")
 	l.info('...shutdown complete')
 
 async def _init_db(app):
@@ -126,11 +123,10 @@ async def main(rq):
 @rt.get('/_ws')
 async def _ws(rq):
 	wsr = web.WebSocketResponse()
-	await wsr.prepare(rq)
-	rq.app[_websockets].add(wsr)
-
 	try:
+		await wsr.prepare(rq)
 		hd = Hd(rq, wsr, await dbc(rq))
+		rq.app['hds'].append(hd)
 		async for msg in wsr:
 			match msg.type:
 				case WSMsgType.ERROR:
@@ -146,9 +142,9 @@ async def _ws(rq):
 	except Exception as e:
 		l.error(traceback.format_exc())
 		l.error('Exception processing WS messages; shutting down WS...')
-
-	rq.app[_websockets].discard(wsr)
-	l.info('Websocket connection closed')
+	finally:
+		rq.app['hds'].remove(hd)
+		l.info('Websocket connection closed')
 	return wsr
 
 
@@ -377,6 +373,7 @@ async def continue_join_or_invite(hd, send_username_fieldset):
 			task.clear_all(hd) # a "join" results in a clean slate - no prior tasks (note that, above, the end of invite, after the db-commit, we DO finish() to revert to prior task, which may be administrative user-list management.....
 			await ws.send(hd, 'hide_dialog')
 			await messages.messages(hd) # show main messages page
+
 
 
 # Utils -----------------------------------------------------------------------
