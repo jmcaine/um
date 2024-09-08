@@ -35,12 +35,12 @@ async def admin_screen(hd):
 
 @ws.handler(auth_func = authorize)
 async def users(hd, reverting = False):
-	if reverting:
-		await ws.send(hd, 'hide_dialog')
-	if not task.started(hd, users):
+	if task.just_started(hd, users):
 		await ws.send_content(hd, 'content', html.users_page(await db.get_users(hd.dbc)))
 	else:
-		u = await db.get_users(hd.dbc, like = hd.task.state.get('filtersearch_text', ''), active = not hd.task.state.get('filtersearch_include_extra', False))
+		u = await db.get_users(hd.dbc,
+								 like = hd.task.state.get('filtersearch_text', ''),
+								 active = not hd.task.state.get('filtersearch_include_extra', False))
 		await ws.send_content(hd, 'sub_content', html.user_table(u), container = 'user_table_container')
 
 
@@ -48,7 +48,8 @@ async def users(hd, reverting = False):
 async def user_detail(hd, reverting = False):
 	if reverting:
 		await task.finish(hd) # just bump back another step - see person_detail 'reverting' note...
-	elif not task.started(hd, user_detail):
+		return # nothing more to do here
+	if task.just_started(hd, user_detail):
 		user_id = int(hd.payload.get('id'))
 		hd.task.state['user'] = await db.get_user(hd.dbc, user_id)
 		await ws.send_content(hd, 'dialog', html.dialog2(text.user, fields.USER, hd.task.state['user'], more_func = f'admin.send("user_tags", {{ user_id: {user_id} }})'))
@@ -72,7 +73,8 @@ async def user_detail(hd, reverting = False):
 async def person_detail(hd, reverting = False):
 	if reverting:
 		await task.finish(hd) # just bump back another step - no value in returning to this name-edit dialog when name-editing was not the objective in the first place (email or phone number or something were); note that this is the RIGHT way to do it - we never want to "call back" (e.g., from more_person_detail() to users(), skipping this) for TWO reasons - 1) it would create a false and ever-growing task stack!, and 2) we don't necessarily know that, e.g., more_person_detail came from users() - it could have come from an individual user clicking somewhere to edit his/her own phones/emails, and then the need would be to wherever THEY came from.
-	elif not task.started(hd, person_detail):
+		return # nothing more to do here
+	if task.just_started(hd, person_detail):
 		person_id = int(hd.payload.get('id'))
 		hd.task.state['person'] = await db.get_person(hd.dbc, person_id)
 		await ws.send_content(hd, 'dialog', html.dialog2(text.person, fields.PERSON, hd.task.state['person'], more_func = f'admin.send("more_person_detail", {{ id: {person_id} }})'))
@@ -88,24 +90,25 @@ async def person_detail(hd, reverting = False):
 
 @ws.handler(auth_func = authorize)
 async def more_person_detail(hd, reverting = False):
-	if not task.started(hd, more_person_detail):
+	if task.just_started(hd, more_person_detail):
 		hd.task.state['person_id'] = int(hd.payload.get('id'))
 	if not await task.finished(hd):
 		person_id = hd.task.state['person_id']
 		emails = await db.get_person_emails(hd.dbc, person_id)
 		phones = await db.get_person_phones(hd.dbc, person_id)
 		await ws.send_content(hd, 'dialog', html.more_person_detail(person_id, emails, phones))
+	# Refactor NOTE: COULD put all of the code that's under 'not await task.finished' into top block, as long as 'if' check there also checks for 'reverting' - in both cases, send_content(...'dialog'...) is needed to repaint the whole dialog.  The only REAL purpose for the 'not await task.finished' block of code would be, for instance, to manage deletions and, possibly, re-ordering of emails/phones -- in such cases, COULD re-draw ONLY the emails and phones blocks, NOT the entire dialog.  This, in turn, might only be a useful advance if a filtersearch was offered at the top of the dialog, allowing live-updated email/phone lists based on filtersearch text; then, we wouldn't want to redraw the whole dialog and re-draw (and re-populate) the filtersearch box
 
 @ws.handler(auth_func = authorize)
-async def email_detail(hd):
-	await x_detail(hd, email_detail, 'email', fields.EMAIL, db.get_email, db.set_email, db.add_email, text.email)
+async def email_detail(hd, reverting = False):
+	await x_detail(hd, email_detail, 'email', fields.EMAIL, db.get_email, db.set_email, db.add_email, text.email, reverting)
 
 @ws.handler(auth_func = authorize)
-async def phone_detail(hd):
-	await x_detail(hd, phone_detail, 'phone', fields.PHONE, db.get_phone, db.set_phone, db.add_phone, text.phone)
+async def phone_detail(hd, reverting = False):
+	await x_detail(hd, phone_detail, 'phone', fields.PHONE, db.get_phone, db.set_phone, db.add_phone, text.phone, reverting)
 
-async def x_detail(hd, func, field, flds, db_get, db_set, db_add, txt):
-	if not task.started(hd, func):
+async def x_detail(hd, func, field, flds, db_get, db_set, db_add, txt, reverting):
+	if task.just_started(hd, func) or reverting: # 'reverting' check is currently useless, but if sub-dialogs are added here, this is necessary to repaint the whole dialog
 		id = hd.task.state['id'] = int(hd.payload.get('id'))
 		hd.task.state['person_id'] = int(hd.payload['person_id'])
 		hd.task.state[field] = await db_get(hd.dbc, id) if id else {field: ''}
@@ -124,6 +127,7 @@ async def x_detail(hd, func, field, flds, db_get, db_set, db_add, txt):
 		await task.finish(hd)
 		person = await db.get_person(hd.dbc, person_id, 'first_name, last_name')
 		await ws.send_content(hd, 'detail_banner', html.info(text.change_detail_success.format(change = f'{person["first_name"]} {person["last_name"]}')))
+	# Refactor NOTE: we happen to know that the 'prior task', in this case, is also dialog-based, so we know that 'detail_banner' is the right banner (rather than the main, full-page 'banner'), but it would be better if we could be ignorant of that detail.  This would allow this very dialog, in fact, to be called from other places, and after our finish(), here, we could send the html.info() ignorantly, and let the (js-side?) handler place the info in the correct banner.  TODO!
 
 @ws.handler(auth_func = authorize)
 async def delete_mpd(hd):
@@ -135,7 +139,7 @@ async def delete_mpd(hd):
 
 @ws.handler(auth_func = authorize)
 async def user_tags(hd, reverting = False):
-	if not task.started(hd, user_tags):
+	if task.just_started(hd, user_tags) or reverting: # 'reverting' check is currently useless, but if sub-dialogs are added here, this is necessary to repaint the whole dialog
 		hd.task.state['uid'] = int(hd.payload.get('user_id')) # TODO: make variant for hd.uid, for non-admins to manage their own (personal) tag-subscriptions
 		await ws.send_content(hd, 'dialog', html.user_tags(await user_tags_table(hd)))
 	elif not await task.finished(hd): # dialog-box could have been "closed"
@@ -167,9 +171,7 @@ async def add_tag_to_user(hd):
 
 @ws.handler(auth_func = authorize)
 async def tags(hd, reverting = False):
-	if reverting:
-		await ws.send(hd, 'hide_dialog')
-	if not task.started(hd, tags):
+	if task.just_started(hd, tags):
 		t = await db.get_tags(hd.dbc, get_subscribers = True)
 		await ws.send_content(hd, 'content', html.tags_page(t))
 	else:
@@ -181,8 +183,8 @@ async def tags(hd, reverting = False):
 
 
 @ws.handler(auth_func = authorize)
-async def new_tag(hd):
-	if not task.started(hd, new_tag):
+async def new_tag(hd, reverting = False):
+	if task.just_started(hd, new_tag) or reverting: # 'reverting' check is currently useless, but if sub-dialogs are added here, this is necessary to repaint the whole dialog
 		await ws.send_content(hd, 'dialog', html.dialog2(text.tag, fields.TAG))
 	elif not await task.finished(hd): # e.g., dialog-box could have been "canceled"
 		data = hd.payload
@@ -195,8 +197,8 @@ async def new_tag(hd):
 		await ws.send_content(hd, 'banner', html.info(text.added_tag_success.format(name = f'"{name}"')))
 
 @ws.handler(auth_func = authorize) # TODO: change to user-level auth; users that create tags can edit those tags (perhaps only some users are even allowed to create tags; need concept of publicly-discoverable tags vs. admin-directed subscription management....)
-async def tag_detail(hd):
-	if not task.started(hd, tag_detail):
+async def tag_detail(hd, reverting = False):
+	if task.just_started(hd, tag_detail) or reverting: # 'reverting' check is currently useless, but if sub-dialogs are added here, this is necessary to repaint the whole dialog
 		hd.task.state['tag'] = await db.get_tag(hd.dbc, int(hd.payload.get('id')))
 		await ws.send_content(hd, 'dialog', html.dialog2(text.tag, fields.TAG, hd.task.state['tag']))
 	elif not await task.finished(hd): # e.g., dialog-box could have been "canceled"
@@ -211,8 +213,8 @@ async def tag_detail(hd):
 
 
 @ws.handler(auth_func = authorize)
-async def tag_users(hd):
-	if not task.started(hd, tag_users):
+async def tag_users(hd, reverting = False):
+	if task.just_started(hd, tag_users) or reverting: # 'reverting' check is currently useless, but if sub-dialogs are added here, this is necessary to repaint the whole dialog
 		hd.task.state['tag'] = await db.get_tag(hd.dbc, int(hd.payload.get('tag_id')))
 		await ws.send_content(hd, 'dialog', html.tag_users_and_nonusers(await tag_users_table(hd)))
 	elif not await task.finished(hd): # dialog-box could have been "closed"

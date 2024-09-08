@@ -221,13 +221,13 @@ async def identify(hd):
 
 @ws.handler
 async def login_or_join(hd):
-	task.started(hd, login_or_join) # necessary for "cancel" fallback, from the middle of a new "join"
+	task.start(hd, login_or_join) # necessary for "cancel" fallback, from the middle of a new "join"
 	await ws.send_content(hd, 'content', html.login_or_join())
 
 
 @ws.handler
 async def login(hd):
-	if not task.started(hd, login):
+	if task.just_started(hd, login):
 		await ws.send(hd, 'fieldset', fieldset = html.login(fields.LOGIN).render())
 	else:
 		data = hd.payload
@@ -257,14 +257,14 @@ async def forgot_password(hd):
 
 @ws.handler
 async def join(hd):
-	if not task.started(hd, join):
+	if task.just_started(hd, join):
 		await start_join_or_invite(hd, text.your)
 	elif not await task.finished(hd): # e.g., dialog-box could have been "canceled"
 		await continue_join_or_invite(hd, True)
 
 @ws.handler
 async def invite(hd):
-	if not task.started(hd, invite):
+	if task.just_started(hd, invite):
 		await start_join_or_invite(hd, text.friends)
 	elif not await task.finished(hd): # e.g., dialog-box could have been "canceled"
 		await continue_join_or_invite(hd, False)

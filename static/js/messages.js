@@ -7,49 +7,58 @@ let messages = {
 	},
 	
 	
-	edit_message: function(content, message_content) {
+	edit_message: function(content) {
 		$('dialog_container').innerHTML = content;
 		show_dialog();
-		$('message_content').innerHTML = message_content;
 		$('message_content').focus();
+		setEndOfContenteditable($('message_content'));
 		messages.start_saving();
 	},
 
 	
-	draft_saver: null,
-	draft_message: null,
+	wip_saver: null,
+	wip_message: null,
 
-	save_draft: function() {
-		let new_draft = $('message_content').innerHTML;
-		if (new_draft != messages.draft_message) { // only send if there's change...
-			messages.draft_message = new_draft;
-			messages.send('save_draft', {content: messages.draft_message});
+	save_wip: function() {
+		let new_wip = $('message_content').innerHTML;
+		if (new_wip != messages.wip_message) { // only send if there's change...
+			messages.wip_message = new_wip;
+			messages.send('save_wip', {content: messages.wip_message});
 		}
 	},
 
 	start_saving: function() {
-		draft_saver = setInterval(messages.save_draft, 2000);
+		wip_saver = setInterval(messages.save_wip, 2000);
 	},
 	
 	stop_saving: function() {
-		clearInterval(draft_saver);
-		draft_saver = null;
+		clearInterval(wip_saver);
+		wip_saver = null;
 	},
 
 	
-	deliver_message: function(content) {
+	deliver_message: function(message, teaser) {
+		let content = message;
+		if (content == '') {
+			content = teaser;
+		}
+		messages.deliver_message_alert();
 		$('messages_container').insertAdjacentHTML("afterbegin", content);
 	},
 
-	finish_draft: function() {
+	deliver_message_alert: function() {
+		// TODO: 'ding' or ...?
+	},
+	
+	save_draft: function() {
 		messages.stop_saving();
-		messages.save_draft(); // one last time
+		messages.save_wip(); // one last time
 		main.send("finish");
 	},
 
 	send_message: function() {
 		messages.stop_saving();
-		messages.save_draft(); // one last time
+		messages.save_wip(); // one last time
 		messages.send("send_message");
 	},
 	

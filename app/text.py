@@ -31,12 +31,16 @@ add = 'Add...'
 delete = 'Delete'
 submit = 'Submit'
 send = 'Send!'
+send_message = 'Send message...'
+save_draft = 'Save draft'
+trash = 'Send to trash'
 finish = 'Finish!'
 more_detail = 'More detail...'
 close = 'Close'
 forgot_password = 'Forgot Password...'
 tag = 'Tag'
 done = 'Done'
+brand_new_message = 'Brand New Message...'
 
 # Label prefixes:
 your = 'Your'
@@ -48,6 +52,7 @@ new_username = 'Now create a NEW username'
 new_password = 'Set your NEW password'
 filtersearch = 'Filter / Search...'
 show_inactives = 'Show inactives, too'
+show_trashed = 'Show trashed, too'
 change_settings = 'Settings'
 admin = 'Administrative tools'
 messages = 'Messages'
@@ -56,13 +61,22 @@ deep_search = 'Search "deep"'
 tags = 'Tags'
 invite_new_user = 'Invite new user...'
 create_new_tag = 'Create new tag...'
+recipients = 'Recipients'
+not_recipients = 'Click "+" to add...'
+loading_messages = 'Loading messages...'
+archive = 'Archive message (mark as "read")'
+show_new = 'Only show "new" and "pinned" messages'
+show_all = 'Show ALL messages'
+show_trashed = 'Show only MY "trashed" messages/drafts'
+reply = 'Reply to this message'
+pin = 'Pin this message'
 
 # Fieldset legends:
 emails = 'Emails'
 phones = 'Phones'
 password_reset = 'Reset Password'
 
-# Messages:
+# Banners:
 welcome = 'Welcome!  "Log in" or "Join" to get started... '
 change_detail_success = 'Successfully changed {change}'
 detail_for = 'detail for'
@@ -70,6 +84,7 @@ invalid_login = 'Invalid username/login; please try again or click "forgot passw
 forgot_password_prelude = "What's your email address?  We'll send a password reset link!"
 auth_required = "You aren't authorized to access this function.  If you have a different login with authorization for this function, log out from your current session and log back in as an authorized user to access this function."
 deletion_succeeded = 'Deletion succeeded.'
+trash_succeeded = 'Message moved to trash.'
 invite_succeeded = 'Successfully invited {name}. (User will be "inactive" until invitation is accepted.)'
 added_tag_success = 'Successfully added tag {name}.'
 removed_user_from_tag = 'Successfully UNsubscribed {username} from tag "{tag_name}".'
@@ -78,6 +93,12 @@ internal_error = 'Internal error; please refer to with this error ID: {reference
 removed_tag_from_user = 'Successfully UNsubscribed from tag "{name}".'
 added_tag_to_user = 'Successfully subscribed to tag "{name}".'
 message_draft_saved = 'Message draft successfully saved for later.'
+removed_tag_from_message = 'Successfully removed tag "{name}" from message.'
+added_tag_to_message = 'Successfully added tag "{name}" to message.'
+choose_message_draft = f'Choose a draft message, below, to finish, or click "{brand_new_message}" to start a brand new message.  You may also delete any drafts you no longer care about.'
+no_more_drafts = f'No more draft messages! Click "{brand_new_message}", below, to start a brand new message.'
+cant_send_empty_message = 'Cannot send an empty message - type some text first!'
+message_sent = 'Message sent!'
 
 # Hover / validation "title" hints:
 class Title:

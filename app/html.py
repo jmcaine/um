@@ -75,7 +75,7 @@ def messages_page(admin):
 	with result:
 		with t.div(cls = 'button_band'):
 			#    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦ ►
-			t.button('+', title = 'new message', onclick = 'messages.send("edit_message")')
+			t.button('+', title = 'new message', onclick = 'messages.send("new_message")')
 			filterbox()
 			filterbox_checkbox(text.deep_search, 'deep_search')
 			with t.div(cls = 'right'):
@@ -83,8 +83,13 @@ def messages_page(admin):
 				if admin:
 					t.button('Ѫ', title = text.admin, onclick = 'admin.send("users")')
 				t.button('Θ', title = text.logout, onclick = 'main.send("logout")')
+		t.div(t.span(
+			t.button('New', title = text.show_new, onclick = _send('messages', 'messages', filter = 'new')),
+			t.button('All', title = text.show_all, onclick = _send('messages', 'messages', filter = 'all')),
+			t.button('Trashed', title = text.show_trashed, onclick = _send('messages', 'messages', filter = 'trashed')),
+		))
 		t.hr()
-		t.div(messages(), id = 'messages_container')
+		t.div(text.loading_messages, cls = 'container', id = 'messages_container')
 	return result
 
 def users_page(users):
@@ -278,58 +283,74 @@ def tag_users_and_nonusers_table(tag_name, users, nonusers):
 				break # done
 			with t.tr(cls = 'midlin'):
 				t.td(un_name(user), align = 'right')
-				t.td(t.button('-', cls = 'singleton_button red_bg', onclick = _send('admin', 'remove_user_from_tag', user_id = user['id'])) if user else '')
-				t.td(t.button('+', cls = 'singleton_button green_bg', onclick = _send('admin', 'add_user_to_tag', user_id = nonuser['id'])) if nonuser else '')
+				t.td(t.button('-', cls = 'singleton_button red_bg', onclick = _send('admin', 'remove_user_from_tag', user_id = user['id'])) if user else '', align = 'right')
+				t.td(t.button('+', cls = 'singleton_button green_bg', onclick = _send('admin', 'add_user_to_tag', user_id = nonuser['id'])) if nonuser else '', align = 'left')
 				t.td(un_name(nonuser), align = 'left')
 	return result
 
 
 
 def user_tags(ut_table):
-	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
-	with result:
-		with t.div(cls = 'button_band'):
-			t.div(filterbox())
-			filterbox_checkbox(text.show_inactives, 'show_inactives')
-		t.div(ut_table, id = 'user_tags_table_container')
-	return result
+	return _x_tags(ut_table, 'user_tags_table_container')
 
 def user_tags_table(user_tags, other_tags):
-	result = t.table(cls = 'full_width')
+	return _x_tags_table(user_tags, other_tags, 'Subscribed', 'NOT Subscribed', 'admin', 'user_tags', 'remove_tag_from_user', 'add_tag_to_user')
+
+
+def choose_message_draft(drafts):
+	result = t.div(t.div(info(text.choose_message_draft), id = 'detail_banner_container', cls = 'container'))
 	with result:
-		with t.tr(cls = 'midlin'):
-			t.th(f'Subscribed', align = 'right')
-			t.th(t.button(text.done, onclick = _send('admin', 'user_tags', finished = 'true')), colspan = 2)
-			t.th('NOT Subscribed', align = 'left')
-		for count in range(15): # TODO: 15 is hardcode equivalent to db/sql 'limit'; that is, the active "list size" - 'other_tags', here, COULD actually be bigger than 15, so... limiting here, as well
-			utag = user_tags.pop(0) if len(user_tags) > 0 else {}
-			otag = other_tags.pop(0) if len(other_tags) > 0 else {}
-			if not utag and not otag:
-				break # done
-			with t.tr(cls = 'midlin'):
-				t.td(utag.get('name', ''), align = 'right')
-				t.td(t.button('-', cls = 'singleton_button red_bg', onclick = _send('admin', 'remove_tag_from_user', tag_id = utag['id'])) if utag else '')
-				t.td(t.button('+', cls = 'singleton_button green_bg', onclick = _send('admin', 'add_tag_to_user', tag_id = otag['id'])) if otag else '')
-				t.td(otag.get('name', ''), align = 'left')
+		with t.div(cls = 'button_band'):
+			t.div(filterbox(extra = '$("show_trashed").checked'))
+			filterbox_checkbox(text.show_trashed, 'show_trashed')
+		t.div(choose_message_draft_table(drafts), id = 'choose_message_draft_table_container')
 	return result
 
+def choose_message_draft_table(drafts):
+	result = t.table(cls = 'full_width')
+	with result:
+		for draft in drafts:
+			with t.tr(cls = 'midlin'):
+				t.td(f"{casual_date(draft['created'])}: {draft['teaser']}", cls = 'pointered', onclick = _send('messages', 'edit_message', message_id = draft['id'])) # note, 'teaser' is already a substring - no need to chop here
+				if not draft['deleted']: # only allow "untrashed" messages to be trashed; can't "permanently" delete anything
+					t.td(t.button('x', title = text.trash, cls = 'singleton_button red_bg', onclick = _send('messages', 'trash_message', message_id = draft['id'])))
+		t.tr(t.td(t.button(text.brand_new_message, onclick = _send('messages', 'brand_new_message')), align = 'left'))		
+	return result
 
-def edit_message():
+def edit_message(content):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
-		t.div(contenteditable = 'true', id = 'message_content')
+		#TODO: raw(content) - but seems to cause exception (at least when content is '')
+		t.div(raw(content), contenteditable = 'true', id = 'message_content')
 		with t.div(cls = 'button_band'):
 			with t.div(cls = 'right'):
 				t.button('#', title = text.tags, onclick = 'messages.send("message_tags")')
-				t.button('▼', onclick = 'messages.finish_draft()')
-				t.button('►', title = 'send message', onclick = 'messages.send_message()')
+				t.button('▼', title = text.save_draft, onclick = 'messages.save_draft()')
+				t.button('►', title = text.send_message, onclick = 'messages.send_message()')
 	return result
 
-def messages():
-	return t.div('Main messages...')
+def messages(ms):
+	result = t.div(cls = 'container')
+	with result:
+		for message in ms:
+			t.div(raw(message['message']))
+			with t.div(cls = 'button_band'):
+				t.button('▼', title = text.archive, onclick = _send('messages', 'archive', message_id = message['id']))
+				t.button('◄', title = text.reply, onclick = _send('messages', 'reply', message_id = message['id']))
+				t.button('Ϯ', title = text.pin, onclick = _send('messages', 'pin', message_id = message['id']))
+				t.div(t.span(t.b('by '), message['sender'], t.b(' to '), message['tags']), cls = 'right')
+			t.hr()
+	return result
 
 def message(content):
-	return t.div(raw(content))
+	return raw(content)
+
+def message_tags(mt_table):
+	return _x_tags(mt_table, 'message_tags_table_container')
+	
+def message_tags_table(message_tags, other_tags):
+	return _x_tags_table(message_tags, other_tags, text.recipients, text.not_recipients, 'messages', 'message_tags', 'remove_tag_from_message', 'add_tag_to_message')
+
 
 
 # Utils -----------------------------------------------------------------------
@@ -350,6 +371,39 @@ def _doc(title, css = None):
 def _ws_submit_button(title: str, field_names: list):
 	args = ', '.join([f"'{name}': $('{name}').value" for name in field_names])
 	return t.button(title, id = 'submit', type = 'submit', onclick = f'submit_fields({{ {args} }})')
+
+
+def _x_tags(xt_table, div_id):
+	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
+	with result:
+		with t.div(cls = 'button_band'):
+			t.div(filterbox())
+			filterbox_checkbox(text.show_inactives, 'show_inactives')
+		t.div(xt_table, id = div_id)
+	return result
+
+def _x_tags_table(tags, other_tags, left_title, right_title, task_app, task, remove_task, add_task):
+	result = t.table(cls = 'full_width')
+	with result:
+		with t.tr(cls = 'midlin'):
+			t.th(left_title, align = 'right')
+			t.th(t.button(text.done, onclick = _send(task_app, task, finished = 'true')), colspan = 2)
+			t.th(right_title, align = 'left')
+		for count in range(15): # TODO: 15 is hardcode equivalent to db/sql 'limit'; that is, the active "list size" - 'other_tags', here, COULD actually be bigger than 15, so... limiting here, as well
+			tag = tags.pop(0) if len(tags) > 0 else {}
+			otag = other_tags.pop(0) if len(other_tags) > 0 else {}
+			if not tag and not otag:
+				break # done
+			with t.tr(cls = 'midlin'):
+				t.td(tag.get('name', ''), align = 'right')
+				t.td(t.button('-', cls = 'singleton_button red_bg', onclick = _send(task_app, remove_task, tag_id = tag['id'])) if tag else '', align = 'right')
+				t.td(t.button('+', cls = 'singleton_button green_bg', onclick = _send(task_app, add_task, tag_id = otag['id'])) if otag else '', align = 'left')
+				t.td(otag.get('name', ''), align = 'left')
+	return result
+
+
+def casual_date(date):
+	return date # TODO: make this say 'today', 'yesterday', <short_date>, etc.
 
 
 @dataclass(slots = True, frozen = True)

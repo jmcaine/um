@@ -6,13 +6,14 @@ __license__ = 'MIT'
 import logging
 
 from datetime import datetime
-from uuid import uuid4
+from enum import Enum
+from hashlib import sha256
 from random import choices as random_choices
 from string import ascii_uppercase
-from hashlib import sha256
+from uuid import uuid4
 
-import bcrypt # cf https://security.stackexchange.com/questions/133239/what-is-the-specific-reason-to-prefer-bcrypt-or-pbkdf2-over-sha256-crypt-in-pass
 import aiosqlite
+import bcrypt # cf https://security.stackexchange.com/questions/133239/what-is-the-specific-reason-to-prefer-bcrypt-or-pbkdf2-over-sha256-crypt-in-pass
 from sqlite3 import PARSE_DECLTYPES, IntegrityError
 
 from . import exception as ex
@@ -323,16 +324,90 @@ async def get_user_tags(dbc, user_id, active = True, like = None, limit = 15, in
 
 
 async def new_message(dbc, user_id):
-	return await _insert1(dbc, 'insert into message (author, created) values (?, ?)', (user_id, datetime.now().isoformat()))
+	return await _insert1(dbc, 'insert into message (message, author, created) values ("", ?, ?)', (user_id, datetime.now().isoformat()))
+
+async def get_message_drafts(dbc, user_id, include_trashed = False, like = None,  limit = 15):
+	where, args = ['sent is null and author = ?',], [user_id,]
+	if not include_trashed:
+		where.append('deleted is null')
+	_add_like(like, ('message',), where, args)
+	where = 'where ' + " and ".join(where)
+	limit = f'limit {limit}' if limit else ''
+	return await _fetchall(dbc, f'select id, SUBSTR(message, 0, 100) as teaser, created, deleted from message {where} order by created desc {limit}', args)
+
+async def trash_message(dbc, message_id):
+	return await _update1(dbc, 'update message set deleted = ? where id = ?', (datetime.now().isoformat(), message_id))
 
 async def save_message(dbc, message_id, content):
-	return await _update1(dbc, 'update message set message = ? where id = ?', (content, message_id))
+	args = [content, message_id]
+	more = ''
+	if not content: # save the message, but as trashed ('deleted'), until content actually has something in it
+		more = 'deleted = ?, '
+		args.insert(0, datetime.now().isoformat())
+	else: # otherwise, even if it used to be deleted, if we're 'saving' it now, then untrash it!
+		more = 'deleted = null, '
+	return await _update1(dbc, f'update message set {more} message = ? where id = ?', args)
 
-async def send_message(dbc, message_id):
-	return await _update1(dbc, 'update message set sent = ? where id = ?', (datetime.now().isoformat(), message_id))
+Send_Message_Result = Enum('SRM', ('EmptyMessage', 'NoTags', 'Success'))
+async def send_message(dbc, message_id) -> Send_Message_Result | dict:
+	if not await _fetch1(dbc, f'select 1 from message_tag where message_tag.message = ?', (message_id,)):
+		return Send_Message_Result.NoTags # can't send a message without tags (recipients)
+	message = await get_message(dbc, message_id)
+	content = message['message']
+	if not content or content == '<div></div>':
+		return Send_Message_Result.EmptyMessage # can't send empty message
+	more = ''
+	args = [datetime.now().isoformat(), message_id]
+	if not content.startswith('<div>'):
+		message['message'] = content = '<div>' + content + '</div>' # make sure all messages are div-bracketed (one-liner messages don't come to us this way by default)
+		more = 'message = ?, '
+		args.insert(0, content)
+	if message['deleted']:
+		more = 'deleted = null, ' # un-trash the message if it's now being sent
+	await _update1(dbc, f'update message set {more} sent = ? where id = ?', args)
+	return message
 
 async def get_message(dbc, message_id):
 	return await _fetch1(dbc, 'select * from  message where id = ?', (message_id,))
+
+_message_tag_user_tag = 'join message_tag on message.id = message_tag.message join tag on message_tag.tag = tag.id join user_tag on tag.id = user_tag.tag join user on user_tag.user = user.id'
+
+async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, limit = 15):
+	where, args = ['user.id = ?', 'sent is not null'], [user_id,]
+	if not include_trashed:
+		where.append('deleted is null')
+	if like:
+		if deep:
+			_add_like(like, ('message.message', 'tag.name'), where, args)
+		else:
+			_add_like(like, ('SUBSTR(message.message, 0, 30)', 'tag.name'), where, args)
+	where = 'where ' + " and ".join(where) if where else ''
+	limit = f'limit {limit}' if limit else ''
+	return await _fetchall(dbc, f'select message.id, message.message, sender.username as sender, message.sent, GROUP_CONCAT(tag.name, ", ") as tags from message join user as sender on message.author = sender.id {_message_tag_user_tag} {where} group by message.message order by tag.priority, tag.name, message.sent', args)
+
+async def delivery_recipient(dbc, user_id, message_id):
+	return await _fetch1(dbc, f'select 1 from message {_message_tag_user_tag} where user.id = ?', (user_id,))
+
+async def get_message_tags(dbc, message_id, active = True, like = None, limit = 15, include_others = False):
+	# TODO: this is very similar to get_user_tags - consider consolidating?
+	where, args = ['message_tag.message = ?',], [message_id,]
+	if active:
+		where.append('active = 1')
+	_add_like(like, ('name',), where, args)
+	where = 'where ' + " and ".join(where) if where else ''
+	limit = f'limit {limit}' if limit else ''
+	message_tags = await _fetchall(dbc, f'select tag.* from tag join message_tag on tag.id = message_tag.tag {where} order by name {limit}', args)
+	if not include_others:
+		return message_tags
+	#else:
+	all_tags = await get_tags(dbc, active = active, like = like, get_subscribers = False, limit = None) # NOTE: must NOT 'limit' this fetch, as many of these may be weeded out in selection, below, and we have to have plenty to make a full rhs list!
+	return message_tags, [r for r in all_tags if r not in message_tags]
+
+async def remove_tag_from_message(dbc, message_id, tag_id):
+	return await dbc.execute(f'delete from message_tag where message = ? and tag = ?', (message_id, tag_id))
+
+async def add_tag_to_message(dbc, message_id, tag_id):
+	return await _insert1(dbc, 'insert into message_tag (message, tag) values (?, ?)', (message_id, tag_id))
 
 
 # Utils -----------------------------------------------------------------------
