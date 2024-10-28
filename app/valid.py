@@ -40,7 +40,7 @@ async def invalids(hd, data, fields, invalid_handler, banner, break_on_one = Tru
 	result = {}
 	checks = lambda field: \
 		((not field.validator.regex) or field.validator.regex.compiled.match(value) != None) \
-		and (not field.validator.min_length or field.validator.min_length < len(value) < field.validator.max_length)
+		and (not field.validator.min_length or field.validator.min_length <= len(value) <= field.validator.max_length)
 
 	for field_name, field in fields.items():
 		value = str(data[field_name])

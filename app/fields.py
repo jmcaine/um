@@ -58,7 +58,7 @@ NEW_USERNAME = {
 		)),
 }
 		
-PASSWORD_VALIDATOR = Validator(True, valid.STRING32, 5, 32, text.Valid.password)
+PASSWORD_VALIDATOR = Validator(True, valid.STRING32, 6, 32, text.Valid.password)
 
 LOGIN = {
 	'username': Field(USERNAME_VALIDATOR, html.Input(text.username)),

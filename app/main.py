@@ -6,7 +6,6 @@ __license__ = 'MIT'
 import logging
 import traceback
 import json
-import copy
 
 from dataclasses import dataclass, field as dataclass_field
 from yarl import URL
@@ -134,6 +133,8 @@ async def _ws(rq):
 				case WSMsgType.TEXT:
 					hd.payload = json.loads(msg.data)
 					module = hd.payload.get('module', 'app.main')
+					if 'preprocess' in ws._handlers[module]:
+						await ws._handlers[module]['preprocess'](hd) # call the preprocessor for this module
 					await ws._handlers[module][hd.payload['task']](hd) # call the handler for the given task - functions decorated with @ws.handler are handlers; their (function) names are the task names
 				case WSMsgType.BINARY:
 					pass #TODO: await _ws_binary(hd, msg.data)
@@ -336,7 +337,7 @@ async def continue_join_or_invite(hd, send_username_fieldset):
 				# TODO!
 				# notify inviter of success:
 				person = hd.task.state['name']
-				await task.finish(hd, True)
+				await task.finish(hd)
 				await ws.send_content(hd, 'banner', html.info(text.invite_succeeded.format(name = f"{person['first_name']} {person['last_name']}")))
 
 		case 'add_username':

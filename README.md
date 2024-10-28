@@ -22,13 +22,11 @@ Install Requirements.
 
 Create the database ('apt install sqlite3' will be required for this, of course):
 
-	$ cat main.sql | sqlite3 main.db
+	$ cat um.sql | sqlite3 um.db
 
 And run your app:
 
 	$ python -m aiohttp.web -H localhost -P 8080 app.main:init
-
-(Note that you may want your 'port' variable in settings.py to be 8080; or, that is, to match the above.  See elsewhere for setting up nginx / supervisor (or uwsgi...))
 
 (Or, with [aiohttp-devtools](https://github.com/aio-libs/aiohttp-devtools)
 

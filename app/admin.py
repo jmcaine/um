@@ -25,7 +25,6 @@ async def handle_invalid(hd, message, banner):
 	await ws.send_content(hd, banner, html.error(message))
 
 
-
 @ws.handler(auth_func = authorize)
 async def admin_screen(hd):
 	#TODO! Implement!  For now, just go to admin_users page...

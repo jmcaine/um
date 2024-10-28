@@ -169,9 +169,18 @@ span.invalid {
 	box-shadow: none;
 }
 
+.button_band .selected {
+	background-color: #18a266;
+}
+
 hr {
 	clear: both;
 	margin: 4px;
 	margin-right: -12px;
 	padding: 0;
+}
+
+.dashed-hr {
+	border: 0;
+	border-top: 2px dashed #333;
 }

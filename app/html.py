@@ -29,7 +29,7 @@ checkbox_value = lambda data, field: 1 if data.get(field) in (1, '1', 'on') else
 _scripts = lambda scripts: [t.script(src = f'/static/js/{script}') for script in scripts]
 _yes_or_no = lambda value: 'yes' if value else 'no'
 _format_phone = lambda num: '(' + num[-10:-7] + ') ' + num[-7:-4] + '-' + num[-4:] # TODO: international extention prefixes [0:-11]
-_send = lambda app, task, **args: f'{app}.send("{task}"' + (f', {{ {", ".join([f"{key}: {value}" for key, value in args.items()])} }})' if args else ')')
+_send = lambda app, task, **args: f"{app}.send('{task}'" + (f', {{ {", ".join([f"{key}: {value}" for key, value in args.items()])} }})' if args else ')')
 
 _cancel_button = lambda title = text.cancel: t.button(title, onclick = 'main.send("finish")')
 
@@ -74,7 +74,7 @@ def messages_page(admin):
 	result = t.div()
 	with result:
 		with t.div(cls = 'button_band'):
-			#    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦ ►
+			# button symbols:    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦ ►
 			t.button('+', title = 'new message', onclick = 'messages.send("new_message")')
 			filterbox()
 			filterbox_checkbox(text.deep_search, 'deep_search')
@@ -84,11 +84,13 @@ def messages_page(admin):
 					t.button('Ѫ', title = text.admin, onclick = 'admin.send("users")')
 				t.button('Θ', title = text.logout, onclick = 'main.send("logout")')
 		t.div(t.span(
-			t.button('New', title = text.show_new, onclick = _send('messages', 'messages', filter = 'new')),
-			t.button('All', title = text.show_all, onclick = _send('messages', 'messages', filter = 'all')),
-			t.button('Trashed', title = text.show_trashed, onclick = _send('messages', 'messages', filter = 'trashed')),
+			t.button(text.news, title = text.show_new, onclick = _send('messages', 'messages', filt = '"new"')),
+			t.button(text.day, title = text.show_day, onclick = _send('messages', 'messages', filt = '"day"')),
+			t.button(text.this_weeks, title = text.show_this_week, onclick = _send('messages', 'messages', filt = '"this_week"')),
+			t.button(text.pinneds, title = text.show_pinned, onclick = _send('messages', 'messages', filt = '"pinned"')),
+			t.button(text.archiveds, title = text.show_archived, onclick = _send('messages', 'messages', filt = '"archived"')),
+			t.button(text.alls, title = text.show_all, onclick = _send('messages', 'messages', filt = '"all"')),
 		))
-		t.hr()
 		t.div(text.loading_messages, cls = 'container', id = 'messages_container')
 	return result
 
@@ -321,7 +323,7 @@ def edit_message(content):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
 		#TODO: raw(content) - but seems to cause exception (at least when content is '')
-		t.div(raw(content), contenteditable = 'true', id = 'message_content')
+		t.div(raw(content), contenteditable = 'true', id = 'edit_message_content')
 		with t.div(cls = 'button_band'):
 			with t.div(cls = 'right'):
 				t.button('#', title = text.tags, onclick = 'messages.send("message_tags")')
@@ -329,17 +331,41 @@ def edit_message(content):
 				t.button('►', title = text.send_message, onclick = 'messages.send_message()')
 	return result
 
+def inline_reply_box(to_sender_only):
+	result = t.div(id = 'reply_container')
+	with result:
+		t.div(contenteditable = 'true', id = 'edit_message_content')
+		with t.div(cls = 'button_band'):
+			with t.div(cls = 'right'):
+				t.button("1" if to_sender_only else "A", onclick = 'flip_reply_recipient()') # TODO: replace "1" and "A"
+				#TODO?!: t.button('▼', title = text.save_draft, onclick = 'messages.save_draft()')
+				t.button('►', title = text.send_message, onclick = f'messages.send_message({to_sender_only})')
+	return result
+
 def messages(ms):
-	result = t.div(cls = 'container')
+	result = t.div(id = 'messages', cls = 'container')
+	last_thread_updated = None
 	with result:
 		for message in ms:
-			t.div(raw(message['message']))
-			with t.div(cls = 'button_band'):
-				t.button('▼', title = text.archive, onclick = _send('messages', 'archive', message_id = message['id']))
-				t.button('◄', title = text.reply, onclick = _send('messages', 'reply', message_id = message['id']))
-				t.button('Ϯ', title = text.pin, onclick = _send('messages', 'pin', message_id = message['id']))
-				t.div(t.span(t.b('by '), message['sender'], t.b(' to '), message['tags']), cls = 'right')
-			t.hr()
+			if message['thread_updated'] == last_thread_updated:
+				t.hr(cls = 'dashed-hr') # continued thread
+			else:
+				t.hr() # new thread
+				last_thread_updated = message['thread_updated']
+			with t.div(id = f"message_{message['id']}", cls = 'container'):
+				t.div(raw(message['message']))
+				with t.div(cls = 'button_band'):
+					if message['archived']:
+						t.button('▲', title = text.unarchive, cls = 'selected', onclick = _send('messages', 'unarchive', message_id = message['id']))
+					else:
+						t.button('▼', title = text.archive, onclick = _send('messages', 'archive', message_id = message['id']))
+					t.button('◄', title = text.reply, onclick = _send('messages', 'compose_reply', message_id = message['id']))
+					if message['pinned']:
+						t.button('Ϯ', title = text.unpin, cls = 'selected', onclick = _send('messages', 'unpin', message_id = message['id']))
+					else:
+						t.button('Ϯ', title = text.pin, onclick = _send('messages', 'pin', message_id = message['id']))
+					t.div(t.span(t.b('by '), message['sender'], t.b(' to '), message['tags']), cls = 'right')
+		t.hr()
 	return result
 
 def message(content):
@@ -403,6 +429,7 @@ def _x_tags_table(tags, other_tags, left_title, right_title, task_app, task, rem
 
 
 def casual_date(date):
+	#if date > 
 	return date # TODO: make this say 'today', 'yesterday', <short_date>, etc.
 
 

@@ -6,6 +6,8 @@ __license__ = 'MIT'
 import logging
 import re
 
+from dataclasses import dataclass, field as dataclass_field
+
 from . import db
 from . import html
 from . import task
@@ -25,11 +27,15 @@ async def active(hd, user_id):
 async def messages(hd, reverting = False):
 	if task.just_started(hd, messages):
 		hd.state['message_delivery'] = 'whole' # TODO - make real; this is just a placeholder!!
+		hd.task.state['filt'] = 'new' # default to viewing new messages (only)
 		await ws.send_content(hd, 'content', html.messages_page(await is_admin(hd, hd.uid)))
 		# sending the above can happen almost immediately; as message lookup might take a moment longer, we'll do it only subsequently (below), even for the very first load, so that the user at least has the framework of the page to see, and the "loading messages..." to see (or, hopefully not, if things are fast enough!)
+	if filt := hd.payload.get('filt'):
+		hd.task.state['filt'] = filt
 	ms = await db.get_messages(hd.dbc, hd.uid,
 													deep = not hd.task.state.get('filtersearch_include_extra'),
-													like = hd.task.state.get('filtersearch_text'))
+													like = hd.task.state.get('filtersearch_text'),
+													filt = hd.task.state['filt'])
 	await ws.send_content(hd, 'sub_content', html.messages(ms), container = 'messages_container')
 
 @ws.handler(auth_func = active)
@@ -67,7 +73,7 @@ async def edit_message(hd, reverting = False, message_id = None):
 		return # finished
 	#else:
 	if first or reverting:
-		# load message; note that send_message() handles the "send" ► action
+		# load message: (note that send_message() handles the "send" ► action)
 		message = await db.get_message(hd.dbc, hd.task.state['message_id'])
 		await ws.send_content(hd, 'edit_message', html.edit_message(message["message"]))
 
@@ -86,9 +92,17 @@ async def trash_message(hd):
 async def save_wip(hd):
 	await db.save_message(hd.dbc, hd.task.state['message_id'], hd.payload['content'])
 
+
 @ws.handler(auth_func = active)
 async def send_message(hd):
-	message = await db.send_message(hd.dbc, hd.task.state['message_id'])
+	mid = hd.task.state['message_id']
+	match hd.payload.get('to_sender_only', -1): # versus "to all original recipients"; only really applies to replies...
+		case 1: # yup, replier wishes to send only to the original (parent_mid) sender, and leave others out of it...
+			await db.add_tag_to_message(hd.dbc, mid, (await db.get_author_tag(hd.dbc, hd.task.state['parent_mid']))['id'])
+		case 0: # nope, rather, replier wishes to send "to all original recipients", instead...
+			await db.set_reply_message_tags(hd.dbc, mid)
+		#else, this isn't a "reply", and the message tags are already set by user (or they aren't and the next call will fail gracefully
+	message = await db.send_message(hd.dbc, mid)
 	match message:
 		case db.Send_Message_Result.NoTags:
 			await message_tags(hd, resume_sending_on_revert = True) # note: revert is to edit_message task; send_message isn't actually a task, it's just a helper-handler!
@@ -101,6 +115,28 @@ async def send_message(hd):
 	for other_hd in hd.rq.app['hds']:
 		teaser = await deliver_message(other_hd, message, teaser)
 	await ws.send_content(hd, 'detail_banner', html.info(text.message_sent))
+
+@ws.handler(auth_func = active)
+async def preprocess(hd):
+	hd.state['message_delivery'] = 'alert'
+
+@dataclass(slots = True)
+class MD_Inject:
+	parent_id: int
+	patriarch_id: int | None
+
+@ws.handler(auth_func = active)
+async def compose_reply(hd):
+	started = task.just_started(hd, compose_reply)
+	mid = hd.task.state['parent_mid'] = hd.payload['message_id']
+	patriarch_id = await db.get_patriarch_message_id(hd.dbc, mid)
+	selection = hd.payload.get('selection') # TODO: (int, int) range? or actual text, or...?
+	# While replying, allow other replies to the same parent or grandparent message to be injected in real-time:
+	hd.state['message_delivery'] = MD_Inject(mid, patriarch_id)
+	new_mid = hd.task.state['message_id'] = await db.new_message(hd.dbc, hd.uid, mid, patriarch_id)
+	# load (empty) reply-box: (note that send_message() handles the "send" ► action)
+	await ws.send_content(hd, 'inline_reply_box', html.inline_reply_box(hd.payload.get('to_sender_only', 1)), message_id = mid)
+
 
 async def deliver_message(hd, message, teaser):
 	delivery = hd.state.get('message_delivery')
@@ -150,6 +186,27 @@ async def remove_tag_from_message(hd):
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
 async def add_tag_to_message(hd):
 	await _remove_or_add_tag_to_message(hd, db.add_tag_to_message, text.added_tag_to_message)
+
+
+@ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
+async def archive(hd):
+	await db.archive_message(hd.dbc, hd.payload['message_id'], hd.uid)
+	await messages(hd)
+
+@ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
+async def unarchive(hd):
+	await db.unarchive_message(hd.dbc, hd.payload['message_id'], hd.uid)
+	await messages(hd)
+
+@ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
+async def pin(hd):
+	await db.pin_message(hd.dbc, hd.payload['message_id'], hd.uid)
+	await messages(hd)
+
+@ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
+async def unpin(hd):
+	await db.unpin_message(hd.dbc, hd.payload['message_id'], hd.uid)
+	await messages(hd)
 
 
 # -----------------------------------------------------------------------------

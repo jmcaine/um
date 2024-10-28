@@ -41,6 +41,9 @@ ws.onmessage = function(event) {
 		case "deliver_message_alert":
 			messages.deliver_message_alert();
 			break;
+		case "inline_reply_box":
+			messages.inline_reply_box(payload.content, payload.message_id);
+			break;
 		default:
 			console.log("ERROR - unknown payload task: " + payload.task);
 	}

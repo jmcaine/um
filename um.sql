@@ -1,5 +1,5 @@
 --
--- File generated with SQLiteStudio v3.4.4 on Sat Sep 7 20:23:39 2024
+-- File generated with SQLiteStudio v3.4.4 on Sun Oct 27 23:32:06 2024
 --
 -- Text encoding used: UTF-8
 --
@@ -13,16 +13,16 @@ CREATE TABLE email (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, p
 CREATE TABLE id_key (id INTEGER PRIMARY KEY AUTOINCREMENT, idid TEXT, key TEXT UNIQUE, user INTEGER REFERENCES user (id) ON DELETE CASCADE ON UPDATE CASCADE, timestamp TEXT NOT NULL, expires TEXT);
 
 -- Table: message
-CREATE TABLE message (id INTEGER PRIMARY KEY AUTOINCREMENT, message TEXT, author INTEGER REFERENCES user (id) ON DELETE CASCADE ON UPDATE CASCADE, reply_to INTEGER REFERENCES message (id) ON DELETE CASCADE ON UPDATE CASCADE, sms INTEGER DEFAULT (0), created TEXT NOT NULL, sent TEXT, deleted TEXT);
+CREATE TABLE message (id INTEGER PRIMARY KEY AUTOINCREMENT, message TEXT, author INTEGER REFERENCES user (id) ON DELETE RESTRICT ON UPDATE CASCADE, reply_to INTEGER REFERENCES message (id) ON DELETE CASCADE ON UPDATE CASCADE, re TEXT, reply_chain_patriarch INTEGER, sms INTEGER DEFAULT (0), created TEXT NOT NULL, sent TEXT, thread_updated TEXT, deleted TEXT);
 
--- Table: message_flag
-CREATE TABLE message_flag (message INTEGER REFERENCES message (id) ON DELETE CASCADE ON UPDATE CASCADE, user INTEGER REFERENCES user (id) ON DELETE CASCADE ON UPDATE CASCADE, reminder TEXT);
+-- Table: message_pin
+CREATE TABLE message_pin (message INTEGER REFERENCES message (id) ON DELETE CASCADE ON UPDATE CASCADE, user INTEGER REFERENCES user (id) ON DELETE CASCADE ON UPDATE CASCADE, reminder TEXT);
 
 -- Table: message_read
 CREATE TABLE message_read (message INTEGER REFERENCES message (id) ON DELETE CASCADE ON UPDATE CASCADE, read_by INTEGER REFERENCES user (id) ON DELETE CASCADE ON UPDATE CASCADE);
 
--- Table: message_recipient
-CREATE TABLE message_recipient (message INTEGER REFERENCES message (id) ON DELETE CASCADE ON UPDATE CASCADE, recipient INTEGER REFERENCES user (id) ON DELETE CASCADE ON UPDATE CASCADE);
+-- Table: message_recipient_DEPRECATE
+CREATE TABLE message_recipient_DEPRECATE (message INTEGER REFERENCES message (id) ON DELETE CASCADE ON UPDATE CASCADE, recipient INTEGER REFERENCES user (id) ON DELETE CASCADE ON UPDATE CASCADE);
 
 -- Table: message_tag
 CREATE TABLE message_tag (message INTEGER REFERENCES message (id) ON DELETE CASCADE ON UPDATE CASCADE, tag INTEGER REFERENCES tag (id) ON DELETE CASCADE ON UPDATE CASCADE);
@@ -40,7 +40,7 @@ CREATE TABLE reset_code (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NUL
 CREATE TABLE role (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE);
 
 -- Table: tag
-CREATE TABLE tag (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, active INTEGER NOT NULL DEFAULT (1), sms_messages INTEGER DEFAULT (0) NOT NULL, admin_only_post INTEGER DEFAULT (0) NOT NULL, priority INTEGER DEFAULT (5));
+CREATE TABLE tag (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, user REFERENCES user (id) ON DELETE CASCADE ON UPDATE CASCADE, active INTEGER NOT NULL DEFAULT (1), sms_messages INTEGER DEFAULT (0) NOT NULL, admin_only_post INTEGER DEFAULT (0) NOT NULL);
 
 -- Table: user
 CREATE TABLE user (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password TEXT, person INTEGER REFERENCES person (id) ON DELETE CASCADE ON UPDATE CASCADE NOT NULL, created TEXT, verified TEXT, active INTEGER DEFAULT (0) NOT NULL);
@@ -50,6 +50,21 @@ CREATE TABLE user_role (user INTEGER REFERENCES user (id) ON DELETE CASCADE ON U
 
 -- Table: user_tag
 CREATE TABLE user_tag (user INTEGER REFERENCES user (id) ON DELETE CASCADE ON UPDATE CASCADE, tag INTEGER REFERENCES tag (id) ON DELETE CASCADE ON UPDATE CASCADE);
+
+-- Index: message_pin_unique
+CREATE UNIQUE INDEX message_pin_unique ON message_pin (message, user);
+
+-- Index: message_read_unique
+CREATE UNIQUE INDEX message_read_unique ON message_read (message, read_by);
+
+-- Index: message_tag_unique
+CREATE UNIQUE INDEX message_tag_unique ON message_tag (message, tag);
+
+-- Trigger: auto_reply_chain_patriarch
+CREATE TRIGGER auto_reply_chain_patriarch AFTER INSERT ON message FOR EACH ROW WHEN NEW.reply_chain_patriarch IS NULL BEGIN UPDATE message SET reply_chain_patriarch = NEW.id WHERE rowid = NEW.rowid; END;
+
+-- Trigger: create_users_tag
+CREATE TRIGGER create_users_tag AFTER INSERT ON user FOR EACH ROW BEGIN insert into tag (name, user, active) values (NEW.username, NEW.id, 1); END;
 
 COMMIT TRANSACTION;
 PRAGMA foreign_keys = on;
