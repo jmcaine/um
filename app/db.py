@@ -4,6 +4,8 @@ __version__ = '0.1'
 __license__ = 'MIT'
 
 import logging
+import re
+import unittest
 
 from copy import copy
 from datetime import datetime, date, timedelta
@@ -21,6 +23,21 @@ from . import exception as ex
 
 l = logging.getLogger(__name__)
 
+# Unit testing suite/setup ----------------------------------------------------
+# Decorator motif, to allow test functions to be added right after the implementation functions, below
+class Tests(unittest.TestCase):
+	pass
+def addtest():
+	def decorator(func):
+		setattr(Tests, func.__name__, func)
+		return func
+	return decorator
+def unittests():
+	unittest.main()
+#Note the '__main__' at end of this file, which can be used to run from parent dir as:
+#   python -m app.db
+
+# -----------------------------------------------------------------------------
 async def connect(filename):
 	result = await aiosqlite.connect(filename, isolation_level = None, detect_types = PARSE_DECLTYPES) # "isolation_level = None disables the Python wrapper's automatic handling of issuing BEGIN etc. for you. What's left is the underlying C library, which does do "autocommit" by default. That autocommit, however, is disabled when you do a BEGIN (b/c you're signaling a transaction with that statement" - from https://stackoverflow.com/questions/15856976/transactions-with-python-sqlite3 - thanks Thanatos
 	def dict_factory(cursor, row):
@@ -366,16 +383,34 @@ async def send_message(dbc, message_id) -> Send_Message_Result | dict:
 	content = message['message']
 	if not content or content == '<div></div>':
 		return Send_Message_Result.EmptyMessage # can't send empty message
-	more = ''
-	args = [message_id,]
+
+	more = 'teaser = ?, '
+	args = [make_teaser(content), message_id]
 	if not content.startswith('<div>'):
 		message['message'] = content = '<div>' + content + '</div>' # make sure all messages are div-bracketed (one-liner messages don't come to us this way by default)
-		more = 'message = ?, '
-		args.insert(0, content)
+		more += 'message = ?, '
+		args.insert(-1, content) # message_id has to stay "last" in arg list
 	if message['deleted']:
-		more = 'deleted = null, ' # un-trash the message if it's now being sent
+		more += 'deleted = null, ' # un-trash the message if it's now being sent
 	await _update1(dbc, f'update message set {more} sent = datetime("now") where id = ?', args)
 	return message
+
+def make_teaser(content):
+	return strip_tags(content[:50])[:20] # [:50] to just operate on opening portion of content, but then, once stripped of tags, whittle down to [:20]; if only one of these was used, "taggy" content would be rather over-shrunk or under-taggy content would be rather under-shrunk
+
+def strip_tags(content):
+	return re.sub('<.*', '', re.sub('<[^<]+?>', '', re.sub('</[^<]+?>', '...', content)))
+
+@addtest()
+def test_strip_tags(self):
+	t = lambda to_strip, result: self.assertEqual(strip_tags(to_strip), result)
+	t('hello', 'hello')
+	t('<div>hello</di', 'hello')
+	t('<div>hello</div>', 'hello...')
+	t('<div>hello</div><di', 'hello...')
+	t('<div>hello</div><div>', 'hello...')
+	t('<div>hello</div><div>oh', 'hello...oh')
+
 
 async def get_message(dbc, message_id):
 	return await _fetch1(dbc, 'select * from  message where id = ?', (message_id,))
@@ -505,3 +540,5 @@ def _add_like(like, fields, where, args):
 		where.append(f'({likes})')
 		args.extend([f'%{like}%'] * len(fields))
 
+if __name__ == '__main__':
+	unittests()

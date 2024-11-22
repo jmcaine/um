@@ -7,6 +7,7 @@ import logging
 import re
 
 from dataclasses import dataclass, field as dataclass_field
+from enum import Enum
 
 from . import db
 from . import html
@@ -18,25 +19,29 @@ from .admin import authorize as is_admin
 
 l = logging.getLogger(__name__)
 
+NewMessageNotify = Enum('NewMessageNotify', ['Reload', 'InjectReplies', 'Tease'])
 
 async def active(hd, user_id):
 	return (await db.get_user(hd.dbc, user_id, 'active'))['active']
 
 
+
 @ws.handler(auth_func = active)
 async def messages(hd, reverting = False):
 	if task.just_started(hd, messages):
-		hd.state['message_delivery'] = 'whole' # TODO - make real; this is just a placeholder!!
+		hd.state['message_notify'] = NewMessageNotify.Reload
 		hd.task.state['filt'] = 'new' # default to viewing new messages (only)
 		await ws.send_content(hd, 'content', html.messages_page(await is_admin(hd, hd.uid)))
 		# sending the above can happen almost immediately; as message lookup might take a moment longer, we'll do it only subsequently (below), even for the very first load, so that the user at least has the framework of the page to see, and the "loading messages..." to see (or, hopefully not, if things are fast enough!)
 	if filt := hd.payload.get('filt'):
 		hd.task.state['filt'] = filt
+		if filt != 'new':
+			hd.state['message_notify'] = NewMessageNotify.Tease # send alerts/teasers only, since user is looking at non-new messages
 	ms = await db.get_messages(hd.dbc, hd.uid,
 													deep = not hd.task.state.get('filtersearch_include_extra'),
 													like = hd.task.state.get('filtersearch_text'),
 													filt = hd.task.state['filt'])
-	await ws.send_content(hd, 'sub_content', html.messages(ms), container = 'messages_container')
+	await ws.send_content(hd, 'messages', html.messages(ms))
 
 @ws.handler(auth_func = active)
 async def new_message(hd, reverting = False):
@@ -111,14 +116,13 @@ async def send_message(hd):
 			await ws.send_content(hd, 'detail_banner', html.error(text.cant_send_empty_message))
 			return # finished here
 	await task.finish(hd) # actually finishing the edit_message task, here!
-	teaser = None # poor-man's cache
 	for other_hd in hd.rq.app['hds']:
-		teaser = await deliver_message(other_hd, message, teaser)
+		await deliver_message(other_hd, message)
 	await ws.send_content(hd, 'detail_banner', html.info(text.message_sent))
 
 @ws.handler(auth_func = active)
 async def preprocess(hd):
-	hd.state['message_delivery'] = 'alert'
+	hd.state['message_notify'] = NewMessageNotify.Tease
 
 @dataclass(slots = True)
 class MD_Inject:
@@ -132,34 +136,34 @@ async def compose_reply(hd):
 	patriarch_id = await db.get_patriarch_message_id(hd.dbc, mid)
 	selection = hd.payload.get('selection') # TODO: (int, int) range? or actual text, or...?
 	# While replying, allow other replies to the same parent or grandparent message to be injected in real-time:
-	hd.state['message_delivery'] = MD_Inject(mid, patriarch_id)
+	hd.state['message_notify'] = MD_Inject(mid, patriarch_id)
 	new_mid = hd.task.state['message_id'] = await db.new_message(hd.dbc, hd.uid, mid, patriarch_id)
 	# load (empty) reply-box: (note that send_message() handles the "send" ► action)
 	await ws.send_content(hd, 'inline_reply_box', html.inline_reply_box(hd.payload.get('to_sender_only', 1)), message_id = mid)
 
 
-async def deliver_message(hd, message, teaser):
-	delivery = hd.state.get('message_delivery')
-	if delivery:
-		if await db.delivery_recipient(hd.dbc, hd.uid, message['id']):
-			if delivery in ('teaser', 'whole'): # don't bother if just 'alert'
-				if not teaser:
-					teaser = make_teaser(message)
-			match delivery:
-				case 'alert':
-					await ws.send(hd, 'deliver_message_alert')
-				case 'teaser':
-					#TODO: fix - shouldn't be doing a deliver_message; rather, deliver_teaser or something....
-					await ws.send(hd, 'deliver_message', '', teaser = teaser)
-				case 'whole':
-					await ws.send(hd, 'deliver_message', message = html.message(message['message']).render(), teaser = teaser)
-	return teaser # cache
-
-def make_teaser(message):
-	return strip_tags(message['message'][:50])[:20] # [:50] to just operate on opening portion of content, but then, once stripped of tags, whittle down to [:20]; if only one of these was used, "taggy" content would be rather over-shrunk or under-taggy content would be rather under-shrunk
-
-def strip_tags(content):
-	return re.sub('<.*', '', re.sub('<[^<]+?>', '..', content)) # TODO: improve this to regex-replace "<tag>" with empty string and </tag> with "..." and any (final) "<..." (incomplete open- or close-tag) with empty string (that part already done)
+async def deliver_message(hd, message):
+	'''
+	Consider scenarios - 
+	1) user is staring at (or staring away from) new-messages screen - new messages can pop up (on top, according to scheme)
+		likewise, replies can pop up in-place
+		both of these can be achieved by a reload, which will have the added effect (benefit) of limiting the showing messages to the normal #
+		SO, for this scenario, we just want a message-list reload!
+	2) user is typing a reply - replies to the same thread want to pop "insert" above the active text/typing box; no reload here - just a DOM insert, so that the text/typing doesn't have to re-load (alternately, we COULD reload, as the active reply should be periodically auto-saving, and we could do one more (last) auto-save before the reload, and, of course, re-load with the editing reply still in edit mode and the carat where it belongs, but this could get tricky(?) if the user is precisely in the middle of fast typing; e.g., perhaps a keystroke will be lost?!
+	Note that we KNOW this detail (whether a user is typing a reply) here, server-side - we don't have to send to recipients and make decisions client-side.
+		SO, for this scenario, we care about the message the user is replying to; if it shares inheritance, we have to DOM-insert; if it does not, we can treat this as if it's scenario 3 (below)
+	3) user is doing something else in the application, not looking at messages at all (e.g., in "settings", or typing a completely new message...) but, in any event, NOT looking at (or ignoring) the normal "messages" screen
+		SO, for this scenario, we want to do NOTHING (or send teaser only!) - next time user goes to messages screen, it'll reload properly
+	'''
+	if await db.delivery_recipient(hd.dbc, hd.uid, message['id']):
+		match hd.state.get('message_notify'):
+			case NewMessageNotify.Tease:
+				await ws.send(hd, 'deliver_message_teaser', teaser = message['teaser'])
+			case NewMessageNotify.Reload:
+				await messages(hd)
+			case NewMessageNotify.InjectReplies:
+				pass#!!!!
+				#await ws.send(hd, 'deliver_message', message = html.message(message['message']).render(), teaser = teaser)
 
 @ws.handler(auth_func = active)
 async def message_tags(hd, reverting = False, resume_sending_on_revert = False):

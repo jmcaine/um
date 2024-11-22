@@ -43,11 +43,11 @@ let messages = {
 		if (content == '') {
 			content = teaser;
 		}
-		messages.deliver_message_alert();
 		$('messages').insertAdjacentHTML("afterbegin", content);
 	},
 
-	deliver_message_alert: function() {
+	deliver_message_teaser: function(teaser) {
+		console.log(teaser);
 		// TODO: 'ding' or ...?
 	},
 	

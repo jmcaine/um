@@ -35,11 +35,14 @@ ws.onmessage = function(event) {
 		case "edit_message":
 			messages.edit_message(payload.content);
 			break;
-		case "deliver_message":
-			messages.deliver_message(payload.message, payload.teaser);
+		case "messages":
+			set_sub_content('messages_container', payload.content);
+			if (payload.filtering_message) {
+				set_sub_content('banner_container', payload.filtering_message);
+			}
 			break;
-		case "deliver_message_alert":
-			messages.deliver_message_alert();
+		case "deliver_message_teaser":
+			messages.deliver_message_teaser(payload.teaser);
 			break;
 		case "inline_reply_box":
 			messages.inline_reply_box(payload.content, payload.message_id);
