@@ -1,5 +1,5 @@
 --
--- File generated with SQLiteStudio v3.4.4 on Sun Oct 27 23:32:06 2024
+-- File generated with SQLiteStudio v3.4.4 on Fri Nov 22 21:16:33 2024
 --
 -- Text encoding used: UTF-8
 --
@@ -13,7 +13,7 @@ CREATE TABLE email (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, p
 CREATE TABLE id_key (id INTEGER PRIMARY KEY AUTOINCREMENT, idid TEXT, key TEXT UNIQUE, user INTEGER REFERENCES user (id) ON DELETE CASCADE ON UPDATE CASCADE, timestamp TEXT NOT NULL, expires TEXT);
 
 -- Table: message
-CREATE TABLE message (id INTEGER PRIMARY KEY AUTOINCREMENT, message TEXT, author INTEGER REFERENCES user (id) ON DELETE RESTRICT ON UPDATE CASCADE, reply_to INTEGER REFERENCES message (id) ON DELETE CASCADE ON UPDATE CASCADE, re TEXT, reply_chain_patriarch INTEGER, sms INTEGER DEFAULT (0), created TEXT NOT NULL, sent TEXT, thread_updated TEXT, deleted TEXT);
+CREATE TABLE message (id INTEGER PRIMARY KEY AUTOINCREMENT, message TEXT, author INTEGER REFERENCES user (id) ON DELETE RESTRICT ON UPDATE CASCADE, reply_to INTEGER REFERENCES message (id) ON DELETE CASCADE ON UPDATE CASCADE, re TEXT, reply_chain_patriarch INTEGER, sms INTEGER DEFAULT (0), created TEXT NOT NULL, sent TEXT, thread_updated TEXT, deleted TEXT, teaser TEXT);
 
 -- Table: message_pin
 CREATE TABLE message_pin (message INTEGER REFERENCES message (id) ON DELETE CASCADE ON UPDATE CASCADE, user INTEGER REFERENCES user (id) ON DELETE CASCADE ON UPDATE CASCADE, reminder TEXT);
