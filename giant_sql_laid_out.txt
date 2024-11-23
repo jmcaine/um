@@ -1,0 +1,45 @@
+# Note that the second select in the following union is very similar to the first; programatically this is enforced (see code), and there's no reliance on repition (DRY), but the resulting SQL seems long.  Nevertheless, this is effective; an alternative would be: every message SENT to a recipient would also be SENT to the sender himself, resulting in another record in message_tag table for every message.  This "send to self, too" approach has its own drawbacks, in addition to the doubling of records in the message_tag table (though that may be the biggest).
+#-------
+
+select message.id, message.message, message.re, sender.username as sender, message.reply_to, message.sent, message.deleted, patriarch.thread_updated,
+	GROUP_CONCAT(tag.name, ", ") as tags,
+	(select 1 from message_pin where user = ? and message = message.id) as pinned,
+	(select 1 from message_read where read_by = ? and message = message.id) as archived
+	
+	from message
+		join user as sender on message.author = sender.id
+		join message as patriarch on message.reply_chain_patriarch = patriarch.id
+		join message_tag on message.id = message_tag.message
+		join tag on message_tag.tag = tag.id
+		join user_tag on tag.id = user_tag.tag
+		join user on user_tag.user = user.id
+		where
+			user.id = ?
+			and message.sent is not null
+			and message.deleted is null
+			and message.id not in (select message from message_read where read_by = ?)
+		
+		group by message.message
+
+UNION
+
+select message.id, message.message, message.re, sender.username as sender, message.reply_to, message.sent, message.deleted, patriarch.thread_updated,
+	GROUP_CONCAT(tag.name, ", ") as tags,
+	(select 1 from message_pin where user = ? and message = message.id) as pinned,
+	(select 1 from message_read where read_by = ? and message = message.id) as archived
+	
+	from message
+		join user as sender on message.author = sender.id
+		join message as patriarch on message.reply_chain_patriarch = patriarch.id
+		join message_tag on message.id = message_tag.message
+		join tag on message_tag.tag = tag.id
+		
+		where
+			message.sent is not null
+			and message.deleted is null
+			and message.id not in (select message from message_read where read_by = ?)
+			and message.author = ?
+			
+		group by message.message
+		
+order by patriarch.thread_updated desc, message.sent asc
