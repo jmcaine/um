@@ -38,6 +38,9 @@ def unittests():
 #   python -m app.db
 
 # -----------------------------------------------------------------------------
+
+k_now = "strftime('%Y-%m-%d %H:%M:%SZ')" # could use datetime('now'), but that produces a result in UTC (what we want) but WITHOUT the 'Z' at the end; the problem with this is that using python datetime.fromisoformat() then interprets the datetime to be naive, rather than explicitly UTC, which results in the need to do a .replace(tzinfo = timezone.utc) in order to proceed with timezone shifts.  This use of sqlite's strftime(), where we explicitly append the Z, results in python calls to fromisoformat() returning UTC-specific datetime objects automatically.
+
 async def connect(filename):
 	result = await aiosqlite.connect(filename, isolation_level = None, detect_types = PARSE_DECLTYPES) # "isolation_level = None disables the Python wrapper's automatic handling of issuing BEGIN etc. for you. What's left is the underlying C library, which does do "autocommit" by default. That autocommit, however, is disabled when you do a BEGIN (b/c you're signaling a transaction with that statement" - from https://stackoverflow.com/questions/15856976/transactions-with-python-sqlite3 - thanks Thanatos
 	def dict_factory(cursor, row):
@@ -71,7 +74,7 @@ async def rollback(dbc):
 
 
 async def add_idid_key(dbc, idid, key):
-	r = await dbc.execute('insert into id_key (idid, key, timestamp) values (?, ?, datetime("now"))', (idid, key))
+	r = await dbc.execute(f'insert into id_key (idid, key, timestamp) values (?, ?, {k_now})', (idid, key))
 	return r.lastrowid
 
 async def get_user_by_id_key(dbc, idid, pub, hsh):
@@ -145,8 +148,8 @@ async def suggest_username(dbc, person):
 
 async def add_user(dbc, person_id, username):
 	try:
-		# Note: user is inactive until reset_user_password() completes, and activates (inactive until password is set, that is)
-		r = await dbc.execute('insert into user (username, person, created, active) values (?, ?, datetime("now"), 0)', (username, person_id,))
+		# Note that user is inactive until reset_user_password() completes, and activates (inactive until password is set, that is)
+		r = await dbc.execute(f'insert into user (username, person, created, active) values (?, ?, {k_now}, 0)', (username, person_id,)) # NOTE: this TRIGGERs (SQL) to insert new tag (user's own tag) and that, in turn, TRIGGERs an insert into user_tag
 		return r.lastrowid
 	except IntegrityError:
 		raise ex.AlreadyExists() # should be rare if username_exists() is used properly, but there's still a chance
@@ -177,7 +180,7 @@ async def get_users(dbc, active = True, persons = True, like = None, limit = 15)
 	return await _fetchall(dbc, f'select user.id as user_id, username, created, verified, active {join_fields} from user {join} {where} order by username limit {limit}', args)
 
 async def verify_new_user(dbc, username):
-	return await _update1(dbc, 'update user set verified = datetime("now") where username = ? and active = 1', (username,))
+	return await _update1(dbc, f'update user set verified = {k_now} where username = ? and active = 1', (username,))
 
 async def login(dbc, idid, username, password):
 	if password: # password is required!
@@ -199,7 +202,7 @@ async def force_login(dbc, idid, user_id):
 async def authorized(dbc, uid, role):
 	if uid == None:
 		raise Exception()
-	result = await _fetch1(dbc, 'select 1 from role join user_role on role.id = user_role.role join user on user.id = user_role.user where user.id = ?', (uid,))
+	result = await _fetch1(dbc, 'select 1 from role join user_role on role.id = user_role.role join user on user.id = user_role.user where user.id = ? and role.name = ?', (uid, role))
 	return bool(result)
 
 async def authorized_roles(dbc, uid, roles):
@@ -232,7 +235,7 @@ async def get_user_emails(dbc, user_id):
 
 async def generate_password_reset_code(dbc, user_id):
 	code = ''.join(random_choices(ascii_uppercase, k=6))
-	await dbc.execute('insert into reset_code (code, user, timestamp) values (?, ?, datetime("now"))', (code, user_id))
+	await dbc.execute(f'insert into reset_code (code, user, timestamp) values (?, ?, {k_now})', (code, user_id))
 	return code
 
 async def validate_reset_password_code(dbc, code, user_id):
@@ -339,10 +342,9 @@ async def get_user_tags(dbc, user_id, active = True, like = None, limit = 15, in
 	all_tags = await get_tags(dbc, active = active, like = like, get_subscribers = False, limit = None) # NOTE: must NOT 'limit' this fetch, as many of these may be weeded out in selection, below, and we have to have plenty to make a full rhs list!
 	return user_tags, [r for r in all_tags if r not in user_tags]
 
-
 async def new_message(dbc, user_id, reply_to = None, reply_chain_patriarch = None):
 	fields = ['message', 'author', 'created', 'thread_updated']
-	values = '"", ?, datetime("now"), datetime("now")'
+	values = f'"", ?, {k_now}, {k_now}'
 	args = [user_id,]
 	if reply_to:
 		fields.append('reply_to')
@@ -361,16 +363,16 @@ async def get_message_drafts(dbc, user_id, include_trashed = False, like = None,
 	_add_like(like, ('message',), where, args)
 	where = 'where ' + " and ".join(where)
 	limit = f'limit {limit}' if limit else ''
-	return await _fetchall(dbc, f'select id, SUBSTR(message, 0, 100) as teaser, created, deleted from message {where} order by created desc {limit}', args)
+	return await _fetchall(dbc, f'select id, teaser, created, deleted from message {where} order by created desc {limit}', args)
 
 async def trash_message(dbc, message_id):
-	return await _update1(dbc, 'update message set deleted = datetime("now") where id = ?', (message_id,))
+	return await _update1(dbc, f'update message set deleted = {k_now} where id = ?', (message_id,))
 
 async def save_message(dbc, message_id, content):
 	args = [content, message_id]
 	more = ''
 	if not content: # save the message, but as trashed ('deleted'), until content actually has something in it
-		more = 'deleted = datetime("now"), '
+		more = f'deleted = {k_now}, '
 	else: # otherwise, even if it used to be deleted, if we're 'saving' it now, then untrash it!
 		more = 'deleted = null, '
 	return await _update1(dbc, f'update message set {more} message = ? where id = ?', args)
@@ -385,14 +387,15 @@ async def send_message(dbc, message_id) -> Send_Message_Result | dict:
 		return Send_Message_Result.EmptyMessage # can't send empty message
 
 	more = 'teaser = ?, '
-	args = [make_teaser(content), message_id]
+	teaser = message['teaser'] = make_teaser(content)
+	args = [teaser, message_id]
 	if not content.startswith('<div>'):
 		message['message'] = content = '<div>' + content + '</div>' # make sure all messages are div-bracketed (one-liner messages don't come to us this way by default)
 		more += 'message = ?, '
 		args.insert(-1, content) # message_id has to stay "last" in arg list
 	if message['deleted']:
 		more += 'deleted = null, ' # un-trash the message if it's now being sent
-	await _update1(dbc, f'update message set {more} sent = datetime("now") where id = ?', args)
+	await _update1(dbc, f'update message set {more} sent = {k_now} where id = ?', args)
 	return message
 
 def make_teaser(content):
@@ -419,7 +422,7 @@ _message_tag_user_tag_join_pre = 'join message_tag on message.id = message_tag.m
 
 _message_tag_user_tag_join = _message_tag_user_tag_join_pre + ' join user_tag on tag.id = user_tag.tag join user on user_tag.user = user.id'
 
-async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = 'new', limit = 15):
+async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = 'new', skip = 0, limit = 15):
 	where, args = ['user.id = ?', 'message.sent is not null'], [user_id, user_id, user_id,] # first two user_ids are for sub-selects in query (below)
 	if not include_trashed:
 		where.append('message.deleted is null')
@@ -439,21 +442,28 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 			where.append('message.id in (select message from message_read where read_by = ?)')
 			args.append(user_id)
 		case 'day':
-			where.append(f'message.sent >= "{(datetime.now() - timedelta(days=1)).isoformat()}"')
+			where.append(f'message.sent >= "{(datetime.now() - timedelta(days=1)).isoformat()}Z"')
 		case 'this_week': # we'll interpret as "7 days back"
-			where.append(f'message.sent >= "{(datetime.combine(date.today(), datetime.min.time()) - timedelta(days=7)).isoformat()}"')
+			where.append(f'message.sent >= "{(datetime.combine(date.today(), datetime.min.time()) - timedelta(days=7)).isoformat()}Z"')
 	where1 = 'where ' + " and ".join(where) if where else ''
 	# now set up the second query - for messages authored by the user:
 	where.append('message.author = ?')
 	args = args + args[1:] # the second query looks like the first, except for first and last args...
 	args.append(user_id)
 	where2 = 'where ' + " and ".join(where[1:]) # don't need the first user.id that the other select depends on
-	limit = f'limit {limit}' if limit else ''
-	select = 'select message.id, message.message, message.re, sender.username as sender, message.reply_to, message.sent, message.deleted, patriarch.thread_updated, GROUP_CONCAT(tag.name, ", ") as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_read where read_by = ? and message = message.id) as archived from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id'
+	select = 'select message.id, message.message, message.re, sender.username as sender, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(tag.name, ", ") as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_read where read_by = ? and message = message.id) as archived from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id'
 	group_by = 'group by message.message'
 	#l.debug(f'{select} {_message_tag_user_tag_join} {where1} {group_by} union {select} {_message_tag_user_tag_join_pre} {where2} {group_by} order by patriarch.thread_updated desc, message.sent asc')
 	# SEE: giant_sql_laid_out.txt to show/study the above laid out for straight comprehension.
-	return await _fetchall(dbc, f'{select} {_message_tag_user_tag_join} {where1} {group_by} union {select} {_message_tag_user_tag_join_pre} {where2} {group_by} order by patriarch.thread_updated desc, message.sent asc', args)
+	asc_order = f'order by thread_updated asc, sent asc'
+	query = f'{select} {_message_tag_user_tag_join} {where1} {group_by} union {select} {_message_tag_user_tag_join_pre} {where2} {group_by}'
+	if skip < 0: # indicating "last page" / "latest stuff"
+		skip = 0 if skip == -1 else skip # change skip to 0 if it's the flag "-1"; else leave it alone
+		desc_order = f'order by thread_updated desc, sent desc'
+		query = f'select * from ({query} {desc_order} limit {-skip}, {limit}) {asc_order} limit {limit}' # subquery on desc_order to get the LIMIT right, then properly asc_order that final resultset
+	else:
+		query = f'{query} {asc_order} limit {skip}, {limit}'
+	return await _fetchall(dbc, query, args)
 
 async def delivery_recipient(dbc, user_id, message_id):
 	return await _fetch1(dbc, f'select 1 from message {_message_tag_user_tag_join} where user.id = ?', (user_id,))

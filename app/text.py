@@ -81,6 +81,8 @@ show_all = 'Show ALL messages'
 reply = 'Reply to this message'
 pin = 'Pin this message'
 unpin = 'UNpin this message'
+view_older = 'View older messages'
+view_newer = 'View newer messages'
 
 # Fieldset legends:
 emails = 'Emails'

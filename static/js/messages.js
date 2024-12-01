@@ -1,7 +1,15 @@
 
+window.addEventListener('scroll', () => {
+	const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+	if (scrollTop + clientHeight >= scrollHeight) {
+		messages.send('more_messages');
+		console.log('Bottom reached!');
+	}
+});
+
 
 let messages = {
-		
+
 	send: function(task, fields) {
 		ws_send({module: 'app.messages', task: task, ...fields});
 	},
@@ -37,18 +45,19 @@ let messages = {
 	},
 
 	
-	deliver_message: function(message, teaser) {
-		// TODO: NO LONGER USED!!!!
-		let content = message;
-		if (content == '') {
-			content = teaser;
-		}
-		$('messages').insertAdjacentHTML("afterbegin", content);
-	},
-
 	deliver_message_teaser: function(teaser) {
 		console.log(teaser);
 		// TODO: 'ding' or ...?
+	},
+
+	inject_deliver_new_message: function(content, placement) {
+		if (placement != 0) {
+			// inject above parent message-id, which is what 'placement' is, in this case:
+			$('message_' + placement).insertAdjacentHTML("beforebegin", content);
+		} else {
+			// inject immediately above the active reply:
+			$('edit_message_content').insertAdjacentHTML("beforebegin", content);
+		}
 	},
 	
 	save_draft: function() {
@@ -69,5 +78,20 @@ let messages = {
 		messages.save_wip(); // one last time
 		messages.send("send_message", {to_sender_only: to_sender_only});
 	},
-	
+
+	show_messages: function(content, filtering_message) {
+		set_sub_content('messages_container', content);
+		if (filtering_message) {
+			set_sub_content('banner_container', filtering_message);
+		}
+		const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+		if (scrollTop + clientHeight >= scrollHeight) {
+			console.log('Bottom visible!');
+		}
+	},
+
+	show_more_messages(content) {
+		$('messages_container').insertAdjacentHTML("beforeend", content);
+	},
+
 };

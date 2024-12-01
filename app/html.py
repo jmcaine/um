@@ -8,7 +8,8 @@ import logging
 from copy import copy
 from dataclasses import dataclass, field as dataclass_field
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, date, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from dominate import document
 from dominate import tags as t
@@ -48,7 +49,7 @@ def main(ws_url: str):
 				t.div("Loading...")
 		with t.div(id = 'scripts', cls = 'container'):
 			t.script(raw(f'var ws = new WebSocket("{ws_url}");'))
-			[script for script in _scripts(('basic.js', 'ws.js', 'persistence.js', 'main.js', 'admin.js', 'submit.js', 'messages.js'))]
+			[script for script in _scripts(('basic.js', 'ws.js', 'persistence.js', 'main.js', 'admin.js', 'submit.js', 'messages.js'))] # TODO: only load admin.js if user is an admin!
 	return d.render()
 
 
@@ -83,15 +84,20 @@ def messages_page(admin):
 				if admin:
 					t.button('Ѫ', title = text.admin, onclick = 'admin.send("users")')
 				t.button('Θ', title = text.logout, onclick = 'main.send("logout")')
+		with t.div(cls = 'clear_both'):
+			t.span(
+				t.button(text.news, title = text.show_new, onclick = _send('messages', 'messages', filt = '"new"')),
+				t.button(text.day, title = text.show_day, onclick = _send('messages', 'messages', filt = '"day"')),
+				t.button(text.this_weeks, title = text.show_this_week, onclick = _send('messages', 'messages', filt = '"this_week"')),
+				t.button(text.pinneds, title = text.show_pinned, onclick = _send('messages', 'messages', filt = '"pinned"')),
+				t.button(text.archiveds, title = text.show_archived, onclick = _send('messages', 'messages', filt = '"archived"')),
+				t.button(text.alls, title = text.show_all, onclick = _send('messages', 'messages', filt = '"all"')),
+			)
 		t.div(t.span(
-			t.button(text.news, title = text.show_new, onclick = _send('messages', 'messages', filt = '"new"')),
-			t.button(text.day, title = text.show_day, onclick = _send('messages', 'messages', filt = '"day"')),
-			t.button(text.this_weeks, title = text.show_this_week, onclick = _send('messages', 'messages', filt = '"this_week"')),
-			t.button(text.pinneds, title = text.show_pinned, onclick = _send('messages', 'messages', filt = '"pinned"')),
-			t.button(text.archiveds, title = text.show_archived, onclick = _send('messages', 'messages', filt = '"archived"')),
-			t.button(text.alls, title = text.show_all, onclick = _send('messages', 'messages', filt = '"all"')),
+			t.button('« older', title = text.view_older, onclick = _send('messages', 'view_older')),
+			t.button('» newer', title = text.view_newer, onclick = _send('messages', 'view_newer')),
 		))
-		t.div(text.loading_messages, cls = 'container', id = 'messages_container')
+		t.div(text.loading_messages, cls = 'scroller container', id = 'messages_container')
 	return result
 
 def users_page(users):
@@ -364,7 +370,7 @@ def messages(ms):
 						t.button('Ϯ', title = text.unpin, cls = 'selected', onclick = _send('messages', 'unpin', message_id = message['id']))
 					else:
 						t.button('Ϯ', title = text.pin, onclick = _send('messages', 'pin', message_id = message['id']))
-					t.div(t.span(t.b('by '), message['sender'], t.b(' to '), message['tags']), cls = 'right')
+					t.div(t.span(t.b('by '), message['sender'], t.b(' to '), message['tags'], f' · {casual_date(message["sent"])}'), cls = 'right')
 		t.hr()
 	return result
 
@@ -427,10 +433,26 @@ def _x_tags_table(tags, other_tags, left_title, right_title, task_app, task, rem
 				t.td(otag.get('name', ''), align = 'left')
 	return result
 
-
-def casual_date(date):
-	#if date > 
-	return date # TODO: make this say 'today', 'yesterday', <short_date>, etc.
+k_fake_localtz = 'America/Los_Angeles' # TODO - implement user-local timezones (this will be a per-user field in db)!
+def casual_date(raw_date):
+	zi = ZoneInfo(k_fake_localtz) # manage all datetimes wrt/ user's local tz, so that "yesterday" means that from the local user's perspective, not from UTC or server-local
+	dt = datetime.fromisoformat(raw_date).astimezone(zi) # no need to .replace(tzinfo = timezone.utc) on fromisoformat result because we put the trailing 'Z' on dates in the db, so this fromisoformat() will interpret the datetime not as naive, but at explicitly UTC
+	now = datetime.now(timezone.utc).astimezone(zi)
+	today = datetime.combine(now.date(), datetime.min.time(), now.tzinfo)
+	if now - dt < timedelta(hours = 1): # within the last hour
+		diff = now - dt
+		if diff.seconds < 2:
+			return 'just now'
+		elif diff.seconds < 60:
+			return f"{diff.seconds} seconds ago"
+		else:
+			return f"{diff.seconds // 60} minutes ago"
+	elif dt >= today: # earlier today
+		return dt.strftime('%I:%M %p')
+	elif today - timedelta(days = 1) < dt < today: # yesterday
+		return f"yesterday @ {dt.strftime('%I:%M %p')}"
+	else: # before yesterday
+		return dt.strftime('%m/%d/%Y')
 
 
 @dataclass(slots = True, frozen = True)

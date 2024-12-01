@@ -1,0 +1,18 @@
+html,
+body {
+	height: 100vh; /* fallback, older style, that mostly works (this line must come first) */
+	height: 100dvh; /* newer, for mobile browsers with disappearing address bars (https://stackoverflow.com/a/72245072) */
+	margin: 0;
+}
+
+.viewport-column {
+	display: flex;
+	flex-flow: column;
+	height: 100%;
+}
+
+.viewport-column .head {
+	flex: 0 1 auto;
+}
+
+/* https://stackoverflow.com/questions/90178/make-a-div-fill-the-height-of-the-remaining-screen-space */

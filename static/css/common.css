@@ -43,6 +43,10 @@ div.container {
 	margin: 0;
 }
 
+div.scroller {
+	overflow-y: auto;
+}
+
 span.invalid {
 	color: red;
 	padding: 0; /* zero-impact container (elements within space as if this container didn't contain them) */
@@ -183,4 +187,8 @@ hr {
 .dashed-hr {
 	border: 0;
 	border-top: 2px dashed #333;
+}
+
+.clear_both {
+	clear: both;
 }

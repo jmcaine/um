@@ -1,5 +1,5 @@
 --
--- File generated with SQLiteStudio v3.4.4 on Fri Nov 22 21:16:33 2024
+-- File generated with SQLiteStudio v3.4.4 on Sun Dec 1 13:34:48 2024
 --
 -- Text encoding used: UTF-8
 --
@@ -62,6 +62,9 @@ CREATE UNIQUE INDEX message_tag_unique ON message_tag (message, tag);
 
 -- Trigger: auto_reply_chain_patriarch
 CREATE TRIGGER auto_reply_chain_patriarch AFTER INSERT ON message FOR EACH ROW WHEN NEW.reply_chain_patriarch IS NULL BEGIN UPDATE message SET reply_chain_patriarch = NEW.id WHERE rowid = NEW.rowid; END;
+
+-- Trigger: create_user_tag
+CREATE TRIGGER create_user_tag AFTER INSERT ON tag WHEN NEW.user is not NULL  BEGIN insert into user_tag (user, tag) values (NEW.user, NEW.id); END;
 
 -- Trigger: create_users_tag
 CREATE TRIGGER create_users_tag AFTER INSERT ON user FOR EACH ROW BEGIN insert into tag (name, user, active) values (NEW.username, NEW.id, 1); END;

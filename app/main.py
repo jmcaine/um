@@ -56,13 +56,18 @@ rt = web.RouteTableDef()
 async def _init(app):
 	l.info('Initializing...')
 	app['hds'] = []
+	app['active_module'] = 'app.main' # default to ourselves
 	await _init_db(app)
 	l.info('...initialization complete')
 
 async def _shutdown(app):
 	l.info('Shutting down...')
-	for hd in app['hds']:
-		await hd.wsr.close(code = WSCloseCode.GOING_AWAY, message = "Server shutdown")
+	while True:
+		try:
+			hd = app['hds'].pop()
+			await hd.wsr.close(code = WSCloseCode.GOING_AWAY, message = "Server shutdown")
+		except IndexError:
+			break # done
 	l.info('...shutdown complete')
 
 async def _init_db(app):
@@ -118,7 +123,6 @@ async def test(rq):
 async def main(rq):
 	return hr(html.main(ws_url(rq)))
 
-
 @rt.get('/_ws')
 async def _ws(rq):
 	wsr = web.WebSocketResponse()
@@ -131,22 +135,33 @@ async def _ws(rq):
 				case WSMsgType.ERROR:
 					raise wsr.exception()
 				case WSMsgType.TEXT:
-					hd.payload = json.loads(msg.data)
-					module = hd.payload.get('module', 'app.main')
-					if 'preprocess' in ws._handlers[module]:
-						await ws._handlers[module]['preprocess'](hd) # call the preprocessor for this module
-					await ws._handlers[module][hd.payload['task']](hd) # call the handler for the given task - functions decorated with @ws.handler are handlers; their (function) names are the task names
+					await _handle_ws_text(rq, hd, msg.data)
 				case WSMsgType.BINARY:
-					pass #TODO: await _ws_binary(hd, msg.data)
+					pass #TODO: await _handle_ws_binary(hd, msg.data)
 				case _:
 					l.error('Unexpected/invalid WebSocketResponse message type; ignoring... anxiously')
 	except Exception as e:
 		l.error(traceback.format_exc())
 		l.error('Exception processing WS messages; shutting down WS...')
 	finally:
-		rq.app['hds'].remove(hd)
+		try: rq.app['hds'].remove(hd)
+		except ValueError: pass # not in list; already removed!
 		l.info('Websocket connection closed')
 	return wsr
+
+async def _handle_ws_text(rq, hd, data):
+	hd.payload = json.loads(data)
+	module = hd.payload.get('module', 'app.main')
+	active_module = rq.app['active_module']
+	if module != active_module and hd.payload['task'] != 'ping': # (don't switch module for mere (periodic and automatic) pings!)
+		# Call the exit/enter handlers, if switching modules:
+		if 'exit_module' in ws._handlers[active_module]:
+			await ws._handlers[active_module]['exit_module'](hd)
+		if 'enter_module' in ws._handlers[module]:
+			await ws._handlers[module]['enter_module'](hd)
+		rq.app['active_module'] = module
+	# Now call the handler for the given task - functions decorated with @ws.handler are handlers; their (function) names are the task names
+	await ws._handlers[module][hd.payload['task']](hd)
 
 
 # -----------------------------------------------------------------------------
@@ -164,6 +179,14 @@ class Hd: # handler data class; for grouping stuff more convenient to pass aroun
 	payload: dict | None = None
 	task: Task | None = None
 	prior_tasks: list = dataclass_field(default_factory = list)
+
+@ws.handler
+async def enter_module(hd):
+	pass
+
+@ws.handler
+async def exit_module(hd):
+	pass
 
 
 @ws.handler
