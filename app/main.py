@@ -114,14 +114,10 @@ if settings.debug:
 	async def favico(rq):
 		return web.FileResponse('./static/favicon.ico')
 
-@rt.get('/test')
-async def test(rq):
-	return hr(html.test())
-
 
 @rt.get('/')
 async def main(rq):
-	return hr(html.main(ws_url(rq)))
+	return hr(html.document(ws_url(rq)))
 
 @rt.get('/_ws')
 async def _ws(rq):

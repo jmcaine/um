@@ -11,11 +11,12 @@ from enum import Enum
 from datetime import datetime, date, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from dominate import document
+from dominate import document as dominate_document
 from dominate import tags as t
 from dominate.util import raw
 
 from . import text
+from .settings import cache_buster
 
 
 # Logging ---------------------------------------------------------------------
@@ -27,38 +28,33 @@ l = logging.getLogger(__name__)
 
 checkbox_value = lambda data, field: 1 if data.get(field) in (1, '1', 'on') else 0
 
-_scripts = lambda scripts: [t.script(src = f'/static/js/{script}') for script in scripts]
 _yes_or_no = lambda value: 'yes' if value else 'no'
 _format_phone = lambda num: '(' + num[-10:-7] + ') ' + num[-7:-4] + '-' + num[-4:] # TODO: international extention prefixes [0:-11]
 _send = lambda app, task, **args: f"{app}.send('{task}'" + (f', {{ {", ".join([f"{key}: {value}" for key, value in args.items()])} }})' if args else ')')
 
 _cancel_button = lambda title = text.cancel: t.button(title, onclick = 'main.send("finish")')
 
-# Pages -----------------------------------------------------------------------
+# Document --------------------------------------------------------------------
 
-# Note that there's really only one "page", main()...
+# Note that there's really only one "document"
 
-def main(ws_url: str):
-	d = _doc('')
+def document(ws_url: str):
+	d = _doc(('common.css',))
 	with d:
-		t.div(id = 'gray_screen', cls = 'gray_screen hide') # invisible at first; for "dialog box" divs, later
-		t.div(id = 'dialog_container', cls = 'dialog_container small hide') # invisible at first....
-		with t.div(id = 'page'):
+		t.div(id = 'gray_screen', cls = 'hide') # invisible at first; for dialog_screen, later
+		t.div(id = 'dialog_screen', cls = 'hide') # invisible at first
+		t.div(id = 'header_pane')
+
+		with t.div(id = 'main_pane'):
 			t.div(t.div(id = 'banner_container', cls = 'container')) # for later ws-delivered banner messages
 			with t.div(id = 'content_container', cls = 'container'):
 				t.div("Loading...")
+
 		with t.div(id = 'scripts', cls = 'container'):
 			t.script(raw(f'var ws = new WebSocket("{ws_url}");'))
-			[script for script in _scripts(('basic.js', 'ws.js', 'persistence.js', 'main.js', 'admin.js', 'submit.js', 'messages.js'))] # TODO: only load admin.js if user is an admin!
-	return d.render()
+			for script in ('basic.js', 'ws.js', 'persistence.js', 'main.js', 'admin.js', 'submit.js', 'messages.js'): # TODO: only load admin.js if user is an admin (somehow? - dom-manipulate with $('scripts').insertAdjacentHTML("beforeend", ...) after login!)!
+				t.script(src = f'/static/js/{script}')
 
-
-def test(person = None):
-	d = _doc('Test')
-	with d:
-		if person:
-			t.div(f'Hello {person["first_name"]}!')
-		t.div('This is a test')
 	return d.render()
 
 
@@ -71,7 +67,7 @@ def login_or_join():
 		t.div(t.button(text.join, onclick = 'main.send("join")'), cls = 'center'),
 	)
 
-def messages_page(admin):
+def messages_head(admin):
 	result = t.div()
 	with result:
 		with t.div(cls = 'button_band'):
@@ -86,19 +82,18 @@ def messages_page(admin):
 				t.button('Θ', title = text.logout, onclick = 'main.send("logout")')
 		with t.div(cls = 'clear_both'):
 			t.span(
-				t.button(text.news, title = text.show_new, onclick = _send('messages', 'messages', filt = '"new"')),
+				t.button(text.news, title = text.show_new, onclick = _send('messages', 'messages', filt = '"unarchived"')),
 				t.button(text.day, title = text.show_day, onclick = _send('messages', 'messages', filt = '"day"')),
 				t.button(text.this_weeks, title = text.show_this_week, onclick = _send('messages', 'messages', filt = '"this_week"')),
 				t.button(text.pinneds, title = text.show_pinned, onclick = _send('messages', 'messages', filt = '"pinned"')),
 				t.button(text.archiveds, title = text.show_archived, onclick = _send('messages', 'messages', filt = '"archived"')),
-				t.button(text.alls, title = text.show_all, onclick = _send('messages', 'messages', filt = '"all"')),
+				#t.button(text.alls, title = text.show_all, onclick = _send('messages', 'messages', filt = '"all"')), # NO SUCH thing as "all" - we need only "new" ("unarchived") and "archived".  (even "day" and "this_weeks", do NOT include unread messages! - make those "sub-categories" of "Archived" to force user to always "interact" with archived messages except when in "processing new messages (only)" mode.
 			)
-		t.div(t.span(
-			t.button('« older', title = text.view_older, onclick = _send('messages', 'view_older')),
-			t.button('» newer', title = text.view_newer, onclick = _send('messages', 'view_newer')),
-		))
-		t.div(text.loading_messages, cls = 'scroller container', id = 'messages_container')
 	return result
+
+def messages_container():
+	return t.div(text.loading_messages, cls = 'scroller container', id = 'messages_container')
+
 
 def users_page(users):
 	result = t.div(admin_button_band())
@@ -171,7 +166,7 @@ def admin_menu_button_band(left_buttons):
 
 
 def filterbox(extra = '$("show_inactives").checked'): # set extra = 'false' to remove extra
-	return Input(text.filtersearch, type_ = 'search', autofocus = True, attrs = {
+	return Input(text.filtersearch, type_ = 'search', autofocus = True, attrs = { # NOTE: autofocus = True is the supposed cause of Firefox FOUC https://bugzilla.mozilla.org/show_bug.cgi?id=1404468 - but it does NOT cause the warning in FF console to go away AND we don't see any visual blink evidence, so we're leaving autofocus=True, but an alternative would be to set autofocus in the JS that loads the header content
 		'autocomplete': 'off',
 		'oninput': _send('main', 'filtersearch', searchtext = 'this.value', include_extra = extra),
 	}).build('filtersearch')
@@ -353,11 +348,14 @@ def messages(ms):
 	last_thread_updated = None
 	with result:
 		for message in ms:
-			if message['thread_updated'] == last_thread_updated:
-				t.hr(cls = 'dashed-hr') # continued thread
-			else:
-				t.hr() # new thread
+			if last_thread_updated == None: # first time through, skip (just assign last_thread_updated:
 				last_thread_updated = message['thread_updated']
+			else: # thereafter, prepend each (next) message with an hr() or dashed-hr(), to separate messages:
+				if message['thread_updated'] == last_thread_updated:
+					t.hr(cls = 'dashed-hr') # continued thread
+				else:
+					t.hr() # new thread
+					last_thread_updated = message['thread_updated']
 			with t.div(id = f"message_{message['id']}", cls = 'container'):
 				t.div(raw(message['message']))
 				with t.div(cls = 'button_band'):
@@ -371,7 +369,6 @@ def messages(ms):
 					else:
 						t.button('Ϯ', title = text.pin, onclick = _send('messages', 'pin', message_id = message['id']))
 					t.div(t.span(t.b('by '), message['sender'], t.b(' to '), message['tags'], f' · {casual_date(message["sent"])}'), cls = 'right')
-		t.hr()
 	return result
 
 def message(content):
@@ -388,15 +385,15 @@ def message_tags_table(message_tags, other_tags):
 # Utils -----------------------------------------------------------------------
 
 
-k_cache_buster = '?v=1'
-def _doc(title, css = None):
-	d = document(title = text.doc_prefix + title)
+def _doc(css = None): # `css` expected to be a list/tuple of filenames, like ('default.css', 'extra.css', )
+	d = dominate_document(title = text.doc_title)
 	with d.head:
 		t.meta(name = 'viewport', content = 'width=device-width, initial-scale=1')
-		t.link(href = '/static/css/common.css' + k_cache_buster, rel = 'stylesheet')
 		if css:
 			for c in css:
-				t.link(href = f'/static/css/{c}' + k_cache_buster, rel = 'stylesheet')
+				t.link(href = f'/static/css/{c}?{cache_buster}', rel = 'stylesheet')
+		t.script(raw('let FF_FOUC_FIX;')) # trick to avoid possible FOUC complaints (https://stackoverflow.com/questions/21147149/flash-of-unstyled-content-fouc-in-firefox-only-is-ff-slow-renderer) - note that this doesn't cause the warning to go away, it seems, but may cause the problem (if it actually ever visually exhibited) to go away.
+
 	return d
 
 

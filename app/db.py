@@ -422,7 +422,7 @@ _message_tag_user_tag_join_pre = 'join message_tag on message.id = message_tag.m
 
 _message_tag_user_tag_join = _message_tag_user_tag_join_pre + ' join user_tag on tag.id = user_tag.tag join user on user_tag.user = user.id'
 
-async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = 'new', skip = 0, limit = 15):
+async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = 'unarchived', skip = 0, limit = 15):
 	where, args = ['user.id = ?', 'message.sent is not null'], [user_id, user_id, user_id,] # first two user_ids are for sub-selects in query (below)
 	if not include_trashed:
 		where.append('message.deleted is null')
@@ -432,7 +432,7 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 		else:
 			_add_like(like, ('SUBSTR(message.message, 0, 30)', 'tag.name'), where, args)
 	match filt:
-		case 'new':
+		case 'unarchived':
 			where.append('message.id not in (select message from message_read where read_by = ?)')
 			args.append(user_id)
 		case 'pinned':
@@ -457,12 +457,13 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 	# SEE: giant_sql_laid_out.txt to show/study the above laid out for straight comprehension.
 	asc_order = f'order by thread_updated asc, sent asc'
 	query = f'{select} {_message_tag_user_tag_join} {where1} {group_by} union {select} {_message_tag_user_tag_join_pre} {where2} {group_by}'
-	if skip < 0: # indicating "last page" / "latest stuff"
-		skip = 0 if skip == -1 else skip # change skip to 0 if it's the flag "-1"; else leave it alone
+	if skip < 0: # usually indicating "backing up", but -1 indicates "last page" / "latest stuff"
+		this_skip = 0 if skip == -1 else skip # skip 0 if it's the flag "-1"; else skip `skip` (negative numbers will result proper 
 		desc_order = f'order by thread_updated desc, sent desc'
-		query = f'select * from ({query} {desc_order} limit {-skip}, {limit}) {asc_order} limit {limit}' # subquery on desc_order to get the LIMIT right, then properly asc_order that final resultset
+		query = f'select * from ({query} {desc_order} limit {-this_skip}, {limit}) {asc_order} limit {limit}' # subquery on desc_order to get the LIMIT right, then properly asc_order that final resultset
 	else:
 		query = f'{query} {asc_order} limit {skip}, {limit}'
+
 	return await _fetchall(dbc, query, args)
 
 async def delivery_recipient(dbc, user_id, message_id):

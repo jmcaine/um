@@ -1,18 +1,26 @@
 html,
-body {
+body,
+.full_screen {
 	height: 100vh; /* fallback, older style, that mostly works (this line must come first) */
 	height: 100dvh; /* newer, for mobile browsers with disappearing address bars (https://stackoverflow.com/a/72245072) */
 	margin: 0;
+	padding: 0;
 }
-
-.viewport-column {
+.full_screen {
 	display: flex;
-	flex-flow: column;
-	height: 100%;
+	flex-flow: column nowrap;
 }
 
-.viewport-column .head {
-	flex: 0 1 auto;
+.head {
+	flex: 0 0 auto;
 }
 
-/* https://stackoverflow.com/questions/90178/make-a-div-fill-the-height-of-the-remaining-screen-space */
+.content {
+	flex: 1 1 auto; /* shrink:1 is necessary to cause .foot to stick to the floor, and for the overflow-scroll (below) to work as expected... */
+	overflow-y: auto; /* ... causing an overflow to result in a .content-contained vertical scrollbar */
+}
+
+.foot {
+	flex: 0 0 auto;
+}
+

@@ -20,6 +20,9 @@ ws.onmessage = function(event) {
 			}
 			focus_top_input();
 			break;
+		case "header_content":
+			set_header_content(payload.content);
+			break;
 		case "content":
 			set_content(payload.content, true);
 			break;
@@ -36,10 +39,13 @@ ws.onmessage = function(event) {
 			messages.edit_message(payload.content);
 			break;
 		case "messages":
-			messages.show_messages(payload.content, payload.filtering_message);
+			messages.show_messages(payload.content, payload.scroll_to_bottom, payload.filtering_banner);
 			break;
-		case "more_messages":
-			messages.show_more_messages(payload.content)
+		case "more_old_messages":
+			messages.show_more_old_messages(payload.content)
+			break;
+		case "more_new_messages":
+			messages.show_more_new_messages(payload.content)
 			break;
 		case "deliver_message_teaser":
 			messages.deliver_message_teaser(payload.teaser);

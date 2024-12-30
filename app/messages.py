@@ -11,6 +11,7 @@ from enum import Enum
 
 from . import db
 from . import html
+from . import settings
 from . import task
 from . import text
 from . import ws
@@ -33,31 +34,54 @@ async def enter_module(hd):
 async def exit_module(hd):
 	hd.state['message_notify'] = NewMessageNotify.Tease
 
-
-k_limit = 15 # TODO: parameterize to user prefs(?!!!)
-
 @ws.handler(auth_func = active)
 async def messages(hd, reverting = False):
 	if task.just_started(hd, messages):
-		hd.state['message_notify'] = NewMessageNotify.Reload
-		hd.task.state['filt'] = 'new' # default to viewing new messages (only)
-		hd.task.state['skip'] = 0
-		await ws.send_content(hd, 'content', html.messages_page(await is_admin(hd, hd.uid)))
+		await ws.send_content(hd, 'header_content', html.messages_head(await is_admin(hd, hd.uid)))
+		await ws.send_content(hd, 'content', html.messages_container())
 		# sending the above can happen almost immediately; as message lookup might take a moment longer, we'll do it only subsequently (below), even for the very first load, so that the user at least has the framework of the page to see, and the "loading messages..." to see (or, hopefully not, if things are fast enough!)
 	filt = hd.payload.get('filt')
-	if filt != hd.task.state['filt']: # if it's changed (from before)...
-		hd.task.state['filt'] = filt
-		if filt != 'new':
-			hd.state['message_notify'] = NewMessageNotify.Tease # send alerts/teasers only, since user is looking at non-new messages
-			hd.task.state['skip'] = -1 # start at "last page" - with most recent messages (but still in ascending order)
+	hd.task.state['filt'] = filt if filt else hd.task.state.get('filt', 'unarchived') # default to viewing new ('unarchived') messages (only)
+	if hd.task.state['filt'] == 'unarchived':
+		hd.task.state['skip'] = 0
+		scroll_to_bottom = 0
+		hd.state['message_notify'] = NewMessageNotify.Reload
+	else:
+		# For any fetch other than "new (unarchived) messages", we fetch the "latest":
+		hd.task.state['skip'] = -1 # start at "last page" - with most recent messages (but still in ascending order)
+		scroll_to_bottom = 1
+		hd.state['message_notify'] = NewMessageNotify.Tease # send alerts/teasers only, since user is looking at non-new (archived) messages
 	ms = await _get_messages(hd)
-	await ws.send_content(hd, 'messages', html.messages(ms))
+	hd.task.state['skip'] += len(ms) if hd.task.state['skip'] >= 0 else -len(ms)
+	await ws.send_content(hd, 'messages', html.messages(ms), scroll_to_bottom = scroll_to_bottom)
 
 @ws.handler(auth_func = active)
-async def more_messages(hd):
-	hd.task.state['skip'] += k_limit
+async def more_new_messages_forward_only(hd): # this is only called if a screen is taller than the default # of messages can fill, so more messages are immediately needed; note that a skip of -1 canNOT result in a more_new_messages call or we'll have an infinite loop because the number of "newest" messages fits on screen, with room for more, but calling for more incessantly won't result in any change; this method is ONLY for forward (skipping-forward, from old messages) orientations
+	if hd.task.state['skip'] > 0:
+		return await more_new_messages(hd)
+	#else no-op
+
+@ws.handler(auth_func = active)
+async def more_new_messages(hd): # inspired by "down-scroll" below "bottom"
+	if hd.task.state['skip'] < 0:
+		# We're fetching "newest" additions; we need to re-load the whole set (not just add-on; we'd be adding on duplicates!):
+		task = 'messages'
+		hd.task.state['skip'] = -1
+	else:
+		# We're fetching "newer" messages than we have (or have ever had in this load), so we can just tack them on to the bottom with a "more_messages" task:
+		task = 'more_new_messages'
 	ms = await _get_messages(hd)
-	await ws.send_content(hd, 'more_messages', html.messages(ms))
+	hd.task.state['skip'] += len(ms) if hd.task.state['skip'] >= 0 else -len(ms)
+	await ws.send_content(hd, task, html.messages(ms))
+
+@ws.handler(auth_func = active)
+async def more_old_messages(hd): # inspired by "up-scroll" above "top"
+	if hd.task.state['filt'] == 'unarchived':
+		return # nothing to do - 'unarchived' load always starts with the oldest unarchived ("new") messages and never auto-expires (when scrolling "down" for "newer" new messages), so, scrolling to the top never needs to invoke any lookups; there's nothing more to load
+	#else:
+	ms = await _get_messages(hd)
+	hd.task.state['skip'] -= len(ms)
+	await ws.send_content(hd, 'more_old_messages', html.messages(ms))
 
 async def _get_messages(hd):
 	return await db.get_messages(hd.dbc, hd.uid,
@@ -65,7 +89,7 @@ async def _get_messages(hd):
 													like = hd.task.state.get('filtersearch_text'),
 													filt = hd.task.state['filt'],
 													skip = hd.task.state['skip'],
-													limit = k_limit)
+													limit = settings.messages_per_load)
 
 
 @ws.handler(auth_func = active)

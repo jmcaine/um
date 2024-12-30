@@ -4,7 +4,7 @@ __version__ = '0.1'
 __license__ = 'MIT'
 
 
-doc_prefix = 'um... '
+doc_title = 'um... '
 
 # Page titles:
 users = 'Users'
