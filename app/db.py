@@ -438,20 +438,21 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 			_add_like(like, ('message.message', 'tag.name'), where, args)
 		else:
 			_add_like(like, ('SUBSTR(message.message, 0, 30)', 'tag.name'), where, args)
+	archived = 'message.id in (select message from message_read where read_by = ?)'
 	match filt:
 		case Filter.unarchived:
 			where.append('message.id not in (select message from message_read where read_by = ?)')
 			args.append(user_id)
 		case Filter.archived:
-			where.append('message.id in (select message from message_read where read_by = ?)')
+			where.append(archived)
 			args.append(user_id)
-		case 'pinned': #TODO - migrate to Filter.Pinned!
-			where.append('message.id in (select message from message_pin where user = ?)')
+		case Filter.Pinned:
+			where.append(f'{archived} and message.id in (select message from message_pin where user = ?)')
 			args.append(user_id)
-		case 'day': #TODO - migrate to Filter.Day!
-			where.append(f'message.sent >= "{(datetime.now() - timedelta(days=1)).isoformat()}Z"')
-		case 'this_week': # we'll interpret as "7 days back"  TODO - migrate to Filter.Week!
-			where.append(f'message.sent >= "{(datetime.combine(date.today(), datetime.min.time()) - timedelta(days=7)).isoformat()}Z"')
+		case Filter.Day:
+			where.append(f'{archived} and message.sent >= "{(datetime.now() - timedelta(days=1)).isoformat()}Z"')
+		case Filter.Week: # we'll interpret as "7 days back"
+			where.append(f'{archived} and message.sent >= "{(datetime.combine(date.today(), datetime.min.time()) - timedelta(days=7)).isoformat()}Z"')
 	where1 = 'where ' + " and ".join(where) if where else ''
 	# now set up the second query - for messages authored by the user:
 	where.append('message.author = ?')
