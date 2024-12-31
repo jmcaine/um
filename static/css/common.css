@@ -177,7 +177,7 @@ span.invalid {
 }
 
 .button_band button {
-	width: 2.3em;
+	min-width: 2.3em;
 	margin: 1px 2px;
 	padding: 1px 5px;
 	font-size: 1em;
@@ -194,18 +194,41 @@ span.invalid {
 	background-color: #18a266;
 }
 
+.button_band .unselected {
+	background-color: #6567a8;
+}
+
+
+
 hr {
 	clear: both;
+	height: 1px;
+	border: 0;
+	background-color: black;
 	margin: 4px;
 	margin-right: -12px;
 	padding: 0;
 }
 
-.dashed-hr {
-	border: 0;
-	border-top: 2px dashed #333;
+hr.top {
+	height: 2px;
+	background-color: #6567a8;
+}
+
+hr.gray {
+	background-color: lightgray;
 }
 
 .clear_both {
 	clear: both;
+}
+
+
+.spacer { /* kludgey; meant to match button_band button */
+	width: 2.3em;
+	margin: 1px 2px;
+}
+
+.italic {
+	font-style: italic;
 }

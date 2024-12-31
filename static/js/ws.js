@@ -20,9 +20,6 @@ ws.onmessage = function(event) {
 			}
 			focus_top_input();
 			break;
-		case "header_content":
-			set_header_content(payload.content);
-			break;
 		case "content":
 			set_content(payload.content, true);
 			break;
@@ -39,7 +36,7 @@ ws.onmessage = function(event) {
 			messages.edit_message(payload.content);
 			break;
 		case "messages":
-			messages.show_messages(payload.content, payload.scroll_to_bottom, payload.filtering_banner);
+			messages.show_messages(payload.content, payload.scroll_to_bottom, payload.filt, payload.filtering_banner);
 			break;
 		case "more_old_messages":
 			messages.show_more_old_messages(payload.content)

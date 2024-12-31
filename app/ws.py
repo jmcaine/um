@@ -21,6 +21,7 @@ l = logging.getLogger(__name__)
 
 send = lambda hd, task, **kwargs: hd.wsr.send_json(dict({'task': task}, **kwargs))
 send_content = lambda hd, task, content, **kwargs: send(hd, task, content = content.render(), **kwargs)
+send_sub_content = lambda hd, container, content, **kwargs: send_content(hd, 'sub_content', content, container = container, **kwargs)
 
 _handlers = {}
 

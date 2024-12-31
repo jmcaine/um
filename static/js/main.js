@@ -1,14 +1,10 @@
 
 let main = {
-	send: function(task, fields) {
+	send_ws: function(task, fields) {
 		ws_send_task('app.main', task, fields);
 	}
 }
 
-
-function set_header_content(content) {
-	$('header_pane').innerHTML = content;
-}
 
 function set_content(content, clear_banner = true, focus_top_inp = true) {
 	_set_content($('content_container'), content, clear_banner, focus_top_inp);

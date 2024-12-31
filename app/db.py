@@ -20,6 +20,7 @@ import bcrypt # cf https://security.stackexchange.com/questions/133239/what-is-t
 from sqlite3 import PARSE_DECLTYPES, IntegrityError
 
 from . import exception as ex
+from .messages_const import *
 
 l = logging.getLogger(__name__)
 
@@ -343,17 +344,20 @@ async def get_user_tags(dbc, user_id, active = True, like = None, limit = 15, in
 	return user_tags, [r for r in all_tags if r not in user_tags]
 
 async def new_message(dbc, user_id, reply_to = None, reply_chain_patriarch = None):
-	fields = ['message', 'author', 'created', 'thread_updated']
-	values = f'"", ?, {k_now}, {k_now}'
+	fields = ['message', 'author', 'created',]
+	values = f'"", ?, {k_now}'
 	args = [user_id,]
 	if reply_to:
 		fields.append('reply_to')
 		values += ', ?'
 		args.append(reply_to)
-	if reply_chain_patriarch: # NOTE that a trigger auto-sets reply_chain_patriarch to id, after insert, if it's not manually set like this; thus, new messages (not replies), for which reply_chain_patriarch is left as None, above, will get a reply_chain_patriarch set to the newly inserted record's id (that is, itself); this is desirable.  All messages must have a reply_chain_patriarch, and new top-level messages' reply_chain_patriarch values should be their own ids
-		fields.append('reply_chain_patriarch')
+		assert(reply_chain_patriarch != None)
+		fields.append('reply_chain_patriarch') # NOTE that a trigger auto-sets reply_chain_patriarch to id, after insert, for normal (non-reply) messages; thus, new messages (not replies), for which reply_chain_patriarch is left as None, above, will get a reply_chain_patriarch set to the newly inserted record's id (that is, itself); this is desirable.  All messages must have a reply_chain_patriarch, and new top-level messages' reply_chain_patriarch values should be their own ids
 		values += ', ?'
 		args.append(reply_chain_patriarch)
+	else:
+		fields.append('thread_updated') # a field for root messages, only; gets updated when replies chain on
+		values += f', {k_now}'
 	return await _insert1(dbc, f'insert into message ({", ".join(fields)}) values ({values})', args)
 
 async def get_message_drafts(dbc, user_id, include_trashed = False, like = None,  limit = 15):
@@ -396,6 +400,9 @@ async def send_message(dbc, message_id) -> Send_Message_Result | dict:
 	if message['deleted']:
 		more += 'deleted = null, ' # un-trash the message if it's now being sent
 	await _update1(dbc, f'update message set {more} sent = {k_now} where id = ?', args)
+	if message['reply_chain_patriarch'] != message['id']:
+		# Need to update reply_chain_patriarch's thread_updated field, too:
+		await _update1(dbc, f'update message set thread_updated = {k_now} where id = ?', (message['reply_chain_patriarch'],))
 	return message
 
 def make_teaser(content):
@@ -422,7 +429,7 @@ _message_tag_user_tag_join_pre = 'join message_tag on message.id = message_tag.m
 
 _message_tag_user_tag_join = _message_tag_user_tag_join_pre + ' join user_tag on tag.id = user_tag.tag join user on user_tag.user = user.id'
 
-async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = 'unarchived', skip = 0, limit = 15):
+async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = Filter.unarchived, skip = 0, limit = 15):
 	where, args = ['user.id = ?', 'message.sent is not null'], [user_id, user_id, user_id,] # first two user_ids are for sub-selects in query (below)
 	if not include_trashed:
 		where.append('message.deleted is null')
@@ -432,18 +439,18 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 		else:
 			_add_like(like, ('SUBSTR(message.message, 0, 30)', 'tag.name'), where, args)
 	match filt:
-		case 'unarchived':
+		case Filter.unarchived:
 			where.append('message.id not in (select message from message_read where read_by = ?)')
 			args.append(user_id)
-		case 'pinned':
-			where.append('message.id in (select message from message_pin where user = ?)')
-			args.append(user_id)
-		case 'archived':
+		case Filter.archived:
 			where.append('message.id in (select message from message_read where read_by = ?)')
 			args.append(user_id)
-		case 'day':
+		case 'pinned': #TODO - migrate to Filter.Pinned!
+			where.append('message.id in (select message from message_pin where user = ?)')
+			args.append(user_id)
+		case 'day': #TODO - migrate to Filter.Day!
 			where.append(f'message.sent >= "{(datetime.now() - timedelta(days=1)).isoformat()}Z"')
-		case 'this_week': # we'll interpret as "7 days back"
+		case 'this_week': # we'll interpret as "7 days back"  TODO - migrate to Filter.Week!
 			where.append(f'message.sent >= "{(datetime.combine(date.today(), datetime.min.time()) - timedelta(days=7)).isoformat()}Z"')
 	where1 = 'where ' + " and ".join(where) if where else ''
 	# now set up the second query - for messages authored by the user:
@@ -451,9 +458,9 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 	args = args + args[1:] # the second query looks like the first, except for first and last args...
 	args.append(user_id)
 	where2 = 'where ' + " and ".join(where[1:]) # don't need the first user.id that the other select depends on
-	select = 'select message.id, message.message, message.re, sender.username as sender, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(tag.name, ", ") as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_read where read_by = ? and message = message.id) as archived from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id'
-	group_by = 'group by message.message'
-	#l.debug(f'{select} {_message_tag_user_tag_join} {where1} {group_by} union {select} {_message_tag_user_tag_join_pre} {where2} {group_by} order by patriarch.thread_updated desc, message.sent asc')
+	select = 'select message.id, message.message, message.re, message.reply_chain_patriarch, parent.teaser as parent_teaser, sender.username as sender, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(tag.name, ", ") as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_read where read_by = ? and message = message.id) as archived from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id'
+	group_by = 'group by message.message' # TODO: what does this do?!?!
+	#l.debug(f'{select} {_message_tag_user_tag_join} {where1} {group_by} union {select} {_message_tag_user_tag_join_pre} {where2} {group_by} order by thread_updated desc, message.sent asc')
 	# SEE: giant_sql_laid_out.txt to show/study the above laid out for straight comprehension.
 	asc_order = f'order by thread_updated asc, sent asc'
 	query = f'{select} {_message_tag_user_tag_join} {where1} {group_by} union {select} {_message_tag_user_tag_join_pre} {where2} {group_by}'

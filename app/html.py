@@ -17,6 +17,7 @@ from dominate.util import raw
 
 from . import text
 from .settings import cache_buster
+from .messages_const import *
 
 
 # Logging ---------------------------------------------------------------------
@@ -30,9 +31,9 @@ checkbox_value = lambda data, field: 1 if data.get(field) in (1, '1', 'on') else
 
 _yes_or_no = lambda value: 'yes' if value else 'no'
 _format_phone = lambda num: '(' + num[-10:-7] + ') ' + num[-7:-4] + '-' + num[-4:] # TODO: international extention prefixes [0:-11]
-_send = lambda app, task, **args: f"{app}.send('{task}'" + (f', {{ {", ".join([f"{key}: {value}" for key, value in args.items()])} }})' if args else ')')
+_send = lambda app, task, **args: f"{app}.send_ws('{task}'" + (f', {{ {", ".join([f"{key}: {value}" for key, value in args.items()])} }})' if args else ')')
 
-_cancel_button = lambda title = text.cancel: t.button(title, onclick = 'main.send("finish")')
+_cancel_button = lambda title = text.cancel: t.button(title, onclick = 'main.send_ws("finish")')
 
 # Document --------------------------------------------------------------------
 
@@ -43,10 +44,13 @@ def document(ws_url: str):
 	with d:
 		t.div(id = 'gray_screen', cls = 'hide') # invisible at first; for dialog_screen, later
 		t.div(id = 'dialog_screen', cls = 'hide') # invisible at first
-		t.div(id = 'header_pane')
+		with t.div(id = 'header_pane'):
+			t.div(id = 'topbar_container', cls = 'container')
+			t.div(id = 'filter_container', cls = 'container')
+			t.hr(cls = 'top')
 
 		with t.div(id = 'main_pane'):
-			t.div(t.div(id = 'banner_container', cls = 'container')) # for later ws-delivered banner messages
+			t.div(id = 'banner_container', cls = 'container') # for later ws-delivered banner messages
 			with t.div(id = 'content_container', cls = 'container'):
 				t.div("Loading...")
 
@@ -63,32 +67,36 @@ def document(ws_url: str):
 def login_or_join():
 	return t.div(
 		t.div(text.welcome),
-		t.div(t.button(text.login, onclick = 'main.send("login")'), cls = 'center'),
-		t.div(t.button(text.join, onclick = 'main.send("join")'), cls = 'center'),
+		t.div(t.button(text.login, onclick = 'main.send_ws("login")'), cls = 'center'),
+		t.div(t.button(text.join, onclick = 'main.send_ws("join")'), cls = 'center'),
 	)
 
-def messages_head(admin):
-	result = t.div()
+def messages_topbar(admin):
+	result = t.div(cls = 'button_band')
 	with result:
-		with t.div(cls = 'button_band'):
-			# button symbols:    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦ ►
-			t.button('+', title = 'new message', onclick = 'messages.send("new_message")')
-			filterbox()
-			filterbox_checkbox(text.deep_search, 'deep_search')
-			with t.div(cls = 'right'):
-				t.button('...', title = text.change_settings, onclick = 'main.send("settings")')
-				if admin:
-					t.button('Ѫ', title = text.admin, onclick = 'admin.send("users")')
-				t.button('Θ', title = text.logout, onclick = 'main.send("logout")')
-		with t.div(cls = 'clear_both'):
-			t.span(
-				t.button(text.news, title = text.show_new, onclick = _send('messages', 'messages', filt = '"unarchived"')),
-				t.button(text.day, title = text.show_day, onclick = _send('messages', 'messages', filt = '"day"')),
-				t.button(text.this_weeks, title = text.show_this_week, onclick = _send('messages', 'messages', filt = '"this_week"')),
-				t.button(text.pinneds, title = text.show_pinned, onclick = _send('messages', 'messages', filt = '"pinned"')),
-				t.button(text.archiveds, title = text.show_archived, onclick = _send('messages', 'messages', filt = '"archived"')),
-				#t.button(text.alls, title = text.show_all, onclick = _send('messages', 'messages', filt = '"all"')), # NO SUCH thing as "all" - we need only "new" ("unarchived") and "archived".  (even "day" and "this_weeks", do NOT include unread messages! - make those "sub-categories" of "Archived" to force user to always "interact" with archived messages except when in "processing new messages (only)" mode.
-			)
+		# button symbols:    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦ ►
+		t.button('+', title = 'new message', onclick = 'messages.send_ws("new_message")')
+		filterbox()
+		filterbox_checkbox(text.deep_search, 'deep_search')
+		with t.div(cls = 'right'):
+			t.button('...', title = text.change_settings, onclick = 'main.send_ws("settings")')
+			if admin:
+				t.button('Ѫ', title = text.admin, onclick = 'admin.send_ws("users")')
+			t.button('Θ', title = text.logout, onclick = 'main.send_ws("logout")')
+	return result
+
+def messages_filter(filt):
+	result = t.div(cls = 'button_band clear_both') # TODO: is clear_both necessary now??!
+	with result:
+		t.div(cls = 'spacer')
+		t.div('Filters:')
+		filt_button = lambda title, hint, _filt: t.button(title, title = hint, cls = 'selected' if filt == _filt else 'unselected', onclick = f'messages.filter(id, "{_filt}")')
+		filt_button(text.news, text.show_news, Filter.unarchived)
+		filt_button(text.archiveds, text.show_archiveds, Filter.archived)
+		if filt == Filter.archived: # sub-categories for archived messages only:
+			filt_button(text.days, text.show_days, Filter.day)
+			filt_button(text.this_weeks, text.show_this_weeks, Filter.this_week)
+			filt_button(text.pinneds, text.show_pinneds, Filter.pinned)
 	return result
 
 def messages_container():
@@ -99,7 +107,7 @@ def users_page(users):
 	result = t.div(admin_button_band())
 	with result:
 		t.hr()
-		admin_menu_button_band((t.button('+', title = text.invite_new_user, onclick = 'main.send("invite")'),))
+		admin_menu_button_band((t.button('+', title = text.invite_new_user, onclick = 'main.send_ws("invite")'),))
 		t.div(user_table(users), id = 'user_table_container')
 	return result
 
@@ -108,7 +116,7 @@ def tags_page(tags):
 	result = t.div(admin_button_band())
 	with result:
 		t.hr()
-		admin_menu_button_band((t.button('+', title = text.create_new_tag, onclick = 'admin.send("new_tag")'),))
+		admin_menu_button_band((t.button('+', title = text.create_new_tag, onclick = 'admin.send_ws("new_tag")'),))
 		t.div(tag_table(tags), id = 'tag_table_container')
 	return result
 
@@ -135,7 +143,7 @@ def build_fields(fields, data = None, label_prefix = None, invalids = None):
 
 def login(fields):
 	button = _ws_submit_button(text.login, fields.keys())
-	forgot = t.button(text.forgot_password, onclick = 'main.send("forgot_password")')
+	forgot = t.button(text.forgot_password, onclick = 'main.send_ws("forgot_password")')
 	result = fieldset(text.login, build_fields(fields), button, forgot)
 	return result
 
@@ -151,17 +159,17 @@ def admin_button_band():
 		filterbox()
 		filterbox_checkbox(text.show_inactives, 'show_inactives')
 		with t.div(cls = 'right'):
-			t.button('...', title = text.change_settings, onclick = 'main.send("settings")')
-			t.button('Ξ', title = text.messages, onclick = 'messages.send("messages")')
-			t.button('Θ', title = text.logout, onclick = 'main.send("logout")')
+			t.button('...', title = text.change_settings, onclick = 'main.send_ws("settings")')
+			t.button('Ξ', title = text.messages, onclick = 'messages.send_ws("messages")')
+			t.button('Θ', title = text.logout, onclick = 'main.send_ws("logout")')
 	return result
 
 def admin_menu_button_band(left_buttons):
 	result = t.div(*left_buttons, cls = 'button_band')
 	with result:
 		with t.div(cls = 'right'):
-			t.button('☺', title = text.users, onclick = 'admin.send("users")')
-			t.button('#', title = text.tags, onclick = 'admin.send("tags")')
+			t.button('☺', title = text.users, onclick = 'admin.send_ws("users")')
+			t.button('#', title = text.tags, onclick = 'admin.send_ws("tags")')
 	return result
 
 
@@ -327,7 +335,7 @@ def edit_message(content):
 		t.div(raw(content), contenteditable = 'true', id = 'edit_message_content')
 		with t.div(cls = 'button_band'):
 			with t.div(cls = 'right'):
-				t.button('#', title = text.tags, onclick = 'messages.send("message_tags")')
+				t.button('#', title = text.tags, onclick = 'messages.send_ws("message_tags")')
 				t.button('▼', title = text.save_draft, onclick = 'messages.save_draft()')
 				t.button('►', title = text.send_message, onclick = 'messages.send_message()')
 	return result
@@ -345,18 +353,23 @@ def inline_reply_box(to_sender_only):
 
 def messages(ms):
 	result = t.div(id = 'messages', cls = 'container')
-	last_thread_updated = None
+	last_thread = None
 	with result:
 		for message in ms:
-			if last_thread_updated == None: # first time through, skip (just assign last_thread_updated:
-				last_thread_updated = message['thread_updated']
-			else: # thereafter, prepend each (next) message with an hr() or dashed-hr(), to separate messages:
-				if message['thread_updated'] == last_thread_updated:
-					t.hr(cls = 'dashed-hr') # continued thread
+			reply_prefix = None
+			if last_thread == None: # first time through, skip (just assign last_thread):
+				last_thread = message['thread_updated']
+			else: # thereafter, prepend each (next) message with an hr() or "gray" hr() (for replies), to separate messages:
+				if message['thread_updated'] == last_thread:
+					t.hr(cls = 'gray') # continued thread
 				else:
 					t.hr() # new thread
-					last_thread_updated = message['thread_updated']
+					last_thread = message['thread_updated']
+					if message['id'] != message['reply_chain_patriarch']:
+						reply_prefix = f'''Reply to "{message['parent_teaser']}...":'''
 			with t.div(id = f"message_{message['id']}", cls = 'container'):
+				if reply_prefix:
+					t.div(reply_prefix, cls = 'italic')
 				t.div(raw(message['message']))
 				with t.div(cls = 'button_band'):
 					if message['archived']:

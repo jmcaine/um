@@ -4,10 +4,10 @@ let g_main_pane = $('main_pane');
 g_main_pane.addEventListener('scroll', () => {
 	if (!g_forced_scroll) {
 		if (g_main_pane.scrollTop + g_main_pane.clientHeight >= g_main_pane.scrollHeight) {
-			messages.send('more_new_messages');
+			messages.send_ws('more_new_messages');
 		}
 		else if (g_main_pane.scrollTop == 0){
-			messages.send('more_old_messages');
+			messages.send_ws('more_old_messages');
 		}
 	}
 	else {
@@ -18,11 +18,19 @@ g_main_pane.addEventListener('scroll', () => {
 
 let messages = {
 
-	send: function(task, fields) {
-		ws_send({module: 'app.messages', task: task, ...fields});
+	send_ws: function(task, fields) {
+		ws_send_task('app.messages', task, fields);
 	},
-	
-	
+
+	// ---------------
+
+	filter: function(id, filt) {
+		messages.send_ws('messages', {filt: filt});
+		$('messages_container').innerHTML = "Loading messages..."; // set placeholder, awaiting loading... TODO: deport hard string!
+
+	},
+
+
 	edit_message: function(content) {
 		$('dialog_screen').innerHTML = content;
 		show_dialog();
@@ -31,7 +39,7 @@ let messages = {
 		messages.start_saving();
 	},
 
-	
+
 	wip_saver: null,
 	wip_message: null,
 
@@ -39,7 +47,7 @@ let messages = {
 		let new_wip = $('edit_message_content').innerHTML;
 		if (new_wip != messages.wip_message) { // only send if there's change...
 			messages.wip_message = new_wip;
-			messages.send('save_wip', {content: messages.wip_message});
+			messages.send_ws('save_wip', {content: messages.wip_message});
 		}
 	},
 
@@ -84,7 +92,7 @@ let messages = {
 	send_message: function(to_sender_only = -1) {
 		messages.stop_saving();
 		messages.save_wip(); // one last time
-		messages.send("send_message", {to_sender_only: to_sender_only});
+		messages.send_ws("send_message", {to_sender_only: to_sender_only});
 	},
 
 	show_messages: function(content, scroll_to_bottom, filtering_banner) {
@@ -97,10 +105,10 @@ let messages = {
 		if (g_main_pane.scrollTop + g_main_pane.clientHeight >= g_main_pane.scrollHeight) {
 			// the bottom is visible!  
 			if (scroll_to_bottom == 1) {
-				messages.send('more_old_messages')
+				messages.send_ws('more_old_messages')
 			}
 			else {
-				messages.send('more_new_messages_forward_only');
+				messages.send_ws('more_new_messages_forward_only');
 			}
 		}
 		if (scroll_to_bottom == 1) {

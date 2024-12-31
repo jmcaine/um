@@ -7,7 +7,6 @@ import logging
 import re
 
 from dataclasses import dataclass, field as dataclass_field
-from enum import Enum
 
 from . import db
 from . import html
@@ -17,10 +16,10 @@ from . import text
 from . import ws
 
 from .admin import authorize as is_admin
+from .messages_const import *
 
 l = logging.getLogger(__name__)
 
-NewMessageNotify = Enum('NewMessageNotify', ['Reload', 'InjectReplies', 'Tease'])
 
 async def active(hd, user_id):
 	return (await db.get_user(hd.dbc, user_id, 'active'))['active']
@@ -28,32 +27,34 @@ async def active(hd, user_id):
 
 @ws.handler
 async def enter_module(hd):
-	hd.state['message_notify'] = NewMessageNotify.Tease # probably unnecessary, except perhaps the first time ever, such that this is just an initializer
+	hd.state['message_notify'] = NewMessageNotify.tease # probably unnecessary, except perhaps the first time ever, such that this is just an initializer
 
 @ws.handler
 async def exit_module(hd):
-	hd.state['message_notify'] = NewMessageNotify.Tease
+	hd.state['message_notify'] = NewMessageNotify.tease
 
 @ws.handler(auth_func = active)
 async def messages(hd, reverting = False):
-	if task.just_started(hd, messages):
-		await ws.send_content(hd, 'header_content', html.messages_head(await is_admin(hd, hd.uid)))
+	just_started = task.just_started(hd, messages) # have to do this first, before referencing hd.task.state, below
+	filt = hd.task.state['filt'] = hd.payload.get('filt', hd.task.state.get('filt', Filter.unarchived)) # prefer filt sent in payload, then filt already recorded, and, finally, if nothing, default to viewing new ('unarchived') messages (only)
+
+	if just_started:
+		await ws.send_sub_content(hd, 'topbar_container', html.messages_topbar(await is_admin(hd, hd.uid)))
 		await ws.send_content(hd, 'content', html.messages_container())
 		# sending the above can happen almost immediately; as message lookup might take a moment longer, we'll do it only subsequently (below), even for the very first load, so that the user at least has the framework of the page to see, and the "loading messages..." to see (or, hopefully not, if things are fast enough!)
-	filt = hd.payload.get('filt')
-	hd.task.state['filt'] = filt if filt else hd.task.state.get('filt', 'unarchived') # default to viewing new ('unarchived') messages (only)
-	if hd.task.state['filt'] == 'unarchived':
+	await ws.send_sub_content(hd, 'filter_container', html.messages_filter(filt))
+	if filt == 'unarchived':
 		hd.task.state['skip'] = 0
 		scroll_to_bottom = 0
-		hd.state['message_notify'] = NewMessageNotify.Reload
+		hd.state['message_notify'] = NewMessageNotify.reload
 	else:
 		# For any fetch other than "new (unarchived) messages", we fetch the "latest":
 		hd.task.state['skip'] = -1 # start at "last page" - with most recent messages (but still in ascending order)
 		scroll_to_bottom = 1
-		hd.state['message_notify'] = NewMessageNotify.Tease # send alerts/teasers only, since user is looking at non-new (archived) messages
+		hd.state['message_notify'] = NewMessageNotify.tease # send alerts/teasers only, since user is looking at non-new (archived) messages
 	ms = await _get_messages(hd)
 	hd.task.state['skip'] += len(ms) if hd.task.state['skip'] >= 0 else -len(ms)
-	await ws.send_content(hd, 'messages', html.messages(ms), scroll_to_bottom = scroll_to_bottom)
+	await ws.send_content(hd, 'messages', html.messages(ms), scroll_to_bottom = scroll_to_bottom, filt = filt)
 
 @ws.handler(auth_func = active)
 async def more_new_messages_forward_only(hd): # this is only called if a screen is taller than the default # of messages can fill, so more messages are immediately needed; note that a skip of -1 canNOT result in a more_new_messages call or we'll have an infinite loop because the number of "newest" messages fits on screen, with room for more, but calling for more incessantly won't result in any change; this method is ONLY for forward (skipping-forward, from old messages) orientations
@@ -166,8 +167,8 @@ async def send_message(hd):
 			return # finished here
 	# otherwise it's a real message...
 	await task.finish(hd) # actually finishing the edit_message task, here!
-	if hd.state['message_notify'] == NewMessageNotify.InjectReplies:
-		hd.state['message_notify'] = NewMessageNotify.Reload # finished authoring reply (about to send it), so go back to "Reload" notify-state (do this before deliver_message() calls so that message will be delivered to sender with a proper reload)
+	if hd.state['message_notify'] == NewMessageNotify.inject_replies:
+		hd.state['message_notify'] = NewMessageNotify.reload # finished authoring reply (about to send it), so go back to "Reload" notify-state (do this before deliver_message() calls so that message will be delivered to sender with a proper reload)
 	for other_hd in hd.rq.app['hds']:
 		await deliver_message(other_hd, message)
 	await ws.send_content(hd, 'banner', html.info(text.message_sent)) # TODO: if this was a reply scenario, make the banner text (to the sender!) indicate that the message is now at the bottom of the chain
@@ -185,7 +186,7 @@ async def compose_reply(hd):
 	patriarch_id = await db.get_patriarch_message_id(hd.dbc, parent_mid)
 	selection = hd.payload.get('selection') # TODO: (int, int) range? or actual text, or...?
 	# While replying, allow other replies to the same parent or grandparent message to be injected in real-time:
-	hd.state['message_notify'] = NewMessageNotify.InjectReplies
+	hd.state['message_notify'] = NewMessageNotify.inject_replies
 	hd.state['message_notify_inject'] = Active_Reply(parent_mid, patriarch_id)
 	new_mid = hd.task.state['message_id'] = await db.new_message(hd.dbc, hd.uid, parent_mid, patriarch_id)
 	# load (empty) reply-box: (note that send_message() handles the "send" ► action)
@@ -207,11 +208,11 @@ async def deliver_message(hd, message):
 	'''
 	if await db.delivery_recipient(hd.dbc, hd.uid, message['id']):
 		match hd.state.get('message_notify'):
-			case NewMessageNotify.Tease:
+			case NewMessageNotify.tease:
 				await ws.send(hd, 'deliver_message_teaser', teaser = message['teaser'])
-			case NewMessageNotify.Reload:
+			case NewMessageNotify.reload:
 				await messages(hd)
-			case NewMessageNotify.InjectReplies:
+			case NewMessageNotify.inject_replies:
 				active_reply = hd.state['message_notify_inject']
 				# The following seem like meaningful locations in the tree to inject-show the new message now, even while the active-replier is typing
 				placement = -1 # default: don't inject at all (just let the new message show next time a reload happens)
