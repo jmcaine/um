@@ -47,10 +47,10 @@ def document(ws_url: str):
 		with t.div(id = 'header_pane'):
 			t.div(id = 'topbar_container', cls = 'container')
 			t.div(id = 'filter_container', cls = 'container')
+			t.div(id = 'banner_container', cls = 'container') # for later ws-delivered banner messages
 			t.hr(cls = 'top')
 
 		with t.div(id = 'main_pane'):
-			t.div(id = 'banner_container', cls = 'container') # for later ws-delivered banner messages
 			with t.div(id = 'content_container', cls = 'container'):
 				t.div("Loading...")
 
@@ -72,35 +72,34 @@ def login_or_join():
 	)
 
 def messages_topbar(admin):
-	result = t.div(cls = 'button_band')
+	result = t.div(cls = 'buttonbar')
 	with result:
 		# button symbols:    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦ ►
 		t.button('+', title = 'new message', onclick = 'messages.send_ws("new_message")')
-		filterbox()
-		filterbox_checkbox(text.deep_search, 'deep_search')
-		with t.div(cls = 'right'):
-			t.button('...', title = text.change_settings, onclick = 'main.send_ws("settings")')
-			if admin:
-				t.button('Ѫ', title = text.admin, onclick = 'admin.send_ws("users")')
-			t.button('Θ', title = text.logout, onclick = 'main.send_ws("logout")')
+		t.div(filterbox())
+		t.div(filterbox_checkbox(text.deep_search, 'deep_search'))
+		t.div(cls = 'spacer')
+		t.button('...', title = text.change_settings, onclick = 'main.send_ws("settings")')
+		if admin:
+			t.button('Ѫ', title = text.admin, onclick = 'admin.send_ws("users")')
+		t.button('Θ', title = text.logout, onclick = 'main.send_ws("logout")')
 	return result
 
 def messages_filter(filt):
-	result = t.div(cls = 'button_band clear_both') # TODO: is clear_both necessary now??!
+	result = t.div(cls = 'buttonbar')
 	with result:
-		t.div(cls = 'spacer')
+		t.div(cls = 'indent')
 		t.div('Filters:')
-		filt_button = lambda title, hint, _filt: t.button(title, title = hint, cls = 'selected' if filt == _filt else 'unselected', onclick = f'messages.filter(id, "{_filt}")')
+		filt_button = lambda title, hint, _filt: t.button(title, title = hint, cls = 'selected' if filt == _filt else '', onclick = f'messages.filter(id, "{_filt}")')
 		filt_button(text.news, text.show_news, Filter.unarchived)
 		filt_button(text.archiveds, text.show_archiveds, Filter.archived)
-		if filt == Filter.archived: # sub-categories for archived messages only:
-			filt_button(text.days, text.show_days, Filter.day)
-			filt_button(text.this_weeks, text.show_this_weeks, Filter.this_week)
-			filt_button(text.pinneds, text.show_pinneds, Filter.pinned)
+		filt_button(text.days, text.show_days, Filter.day)
+		filt_button(text.this_weeks, text.show_this_weeks, Filter.this_week)
+		filt_button(text.pinneds, text.show_pinneds, Filter.pinned)
 	return result
 
 def messages_container():
-	return t.div(text.loading_messages, cls = 'scroller container', id = 'messages_container')
+	return t.div(text.loading_messages, cls = 'container', id = 'messages_container')
 
 
 def users_page(users):
@@ -154,22 +153,22 @@ def forgot_password(fields):
 
 
 def admin_button_band():
-	result = t.div(cls = 'button_band')
+	result = t.div(cls = 'buttonbar')
 	with result:
 		filterbox()
 		filterbox_checkbox(text.show_inactives, 'show_inactives')
-		with t.div(cls = 'right'):
-			t.button('...', title = text.change_settings, onclick = 'main.send_ws("settings")')
-			t.button('Ξ', title = text.messages, onclick = 'messages.send_ws("messages")')
-			t.button('Θ', title = text.logout, onclick = 'main.send_ws("logout")')
+		t.div(cls = 'spacer')
+		t.button('...', title = text.change_settings, onclick = 'main.send_ws("settings")')
+		t.button('Ξ', title = text.messages, onclick = 'messages.send_ws("messages")')
+		t.button('Θ', title = text.logout, onclick = 'main.send_ws("logout")')
 	return result
 
 def admin_menu_button_band(left_buttons):
-	result = t.div(*left_buttons, cls = 'button_band')
+	result = t.div(*left_buttons, cls = 'buttonbar')
 	with result:
-		with t.div(cls = 'right'):
-			t.button('☺', title = text.users, onclick = 'admin.send_ws("users")')
-			t.button('#', title = text.tags, onclick = 'admin.send_ws("tags")')
+		t.div(cls = 'spacer')
+		t.button('☺', title = text.users, onclick = 'admin.send_ws("users")')
+		t.button('#', title = text.tags, onclick = 'admin.send_ws("tags")')
 	return result
 
 
@@ -273,7 +272,7 @@ def more_person_detail(person_id, emails, phones):
 def tag_users_and_nonusers(tun_table):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
-		with t.div(cls = 'button_band'):
+		with t.div(cls = 'buttonbar'):
 			t.div(filterbox())
 			filterbox_checkbox(text.show_inactives, 'show_inactives')
 		t.div(tun_table, id = 'users_and_nonusers_table_container')
@@ -311,7 +310,7 @@ def user_tags_table(user_tags, other_tags):
 def choose_message_draft(drafts):
 	result = t.div(t.div(info(text.choose_message_draft), id = 'detail_banner_container', cls = 'container'))
 	with result:
-		with t.div(cls = 'button_band'):
+		with t.div(cls = 'buttonbar'):
 			t.div(filterbox(extra = '$("show_trashed").checked'))
 			filterbox_checkbox(text.show_trashed, 'show_trashed')
 		t.div(choose_message_draft_table(drafts), id = 'choose_message_draft_table_container')
@@ -333,59 +332,60 @@ def edit_message(content):
 	with result:
 		#TODO: raw(content) - but seems to cause exception (at least when content is '')
 		t.div(raw(content), contenteditable = 'true', id = 'edit_message_content')
-		with t.div(cls = 'button_band'):
-			with t.div(cls = 'right'):
-				t.button('#', title = text.tags, onclick = 'messages.send_ws("message_tags")')
-				t.button('▼', title = text.save_draft, onclick = 'messages.save_draft()')
-				t.button('►', title = text.send_message, onclick = 'messages.send_message()')
+		with t.div(cls = 'buttonbar'):
+			t.div(cls = 'spacer')
+			t.button('#', title = text.tags, onclick = 'messages.send_ws("message_tags")')
+			t.button('▼', title = text.save_draft, onclick = 'messages.save_draft()')
+			t.button('►', title = text.send_message, onclick = 'messages.send_message()')
 	return result
 
 def inline_reply_box(to_sender_only):
 	result = t.div(id = 'reply_container')
 	with result:
 		t.div(contenteditable = 'true', id = 'edit_message_content')
-		with t.div(cls = 'button_band'):
-			with t.div(cls = 'right'):
-				t.button("1" if to_sender_only else "A", onclick = 'flip_reply_recipient()') # TODO: replace "1" and "A"
-				#TODO?!: t.button('▼', title = text.save_draft, onclick = 'messages.save_draft()')
-				t.button('►', title = text.send_message, onclick = f'messages.send_message({to_sender_only})')
+		with t.div(cls = 'buttonbar'):
+			t.div(cls = 'spacer')
+			t.button("1" if to_sender_only else "A", onclick = 'flip_reply_recipient()') # TODO: replace "1" and "A"
+			#TODO?!: t.button('▼', title = text.save_draft, onclick = 'messages.save_draft()')
+			t.button('►', title = text.send_message, onclick = f'messages.send_reply({to_sender_only})')
 	return result
 
-def messages(ms):
+def messages(msgs, clean_top):
 	result = t.div(id = 'messages', cls = 'container')
-	last_thread = None
-	with result:
-		for message in ms:
-			reply_prefix = None
-			if last_thread == None: # first time through, skip (just assign last_thread):
-				last_thread = message['thread_updated']
-			else: # thereafter, prepend each (next) message with an hr() or "gray" hr() (for replies), to separate messages:
-				if message['thread_updated'] == last_thread:
-					t.hr(cls = 'gray') # continued thread
-				else:
-					t.hr() # new thread
-					last_thread = message['thread_updated']
-					if message['id'] != message['reply_chain_patriarch']:
-						reply_prefix = f'''Reply to "{message['parent_teaser']}...":'''
-			with t.div(id = f"message_{message['id']}", cls = 'container'):
-				if reply_prefix:
-					t.div(reply_prefix, cls = 'italic')
-				t.div(raw(message['message']))
-				with t.div(cls = 'button_band'):
-					if message['archived']:
-						t.button('▲', title = text.unarchive, cls = 'selected', onclick = _send('messages', 'unarchive', message_id = message['id']))
-					else:
-						t.button('▼', title = text.archive, onclick = _send('messages', 'archive', message_id = message['id']))
-					t.button('◄', title = text.reply, onclick = _send('messages', 'compose_reply', message_id = message['id']))
-					if message['pinned']:
-						t.button('Ϯ', title = text.unpin, cls = 'selected', onclick = _send('messages', 'unpin', message_id = message['id']))
-					else:
-						t.button('Ϯ', title = text.pin, onclick = _send('messages', 'pin', message_id = message['id']))
-					t.div(t.span(t.b('by '), message['sender'], t.b(' to '), message['tags'], f' · {casual_date(message["sent"])}'), cls = 'right')
+	thread_patriarch = None
+	for msg in msgs:
+		thread_patriarch, final_message = message(msg, thread_patriarch, clean_top)
+		result.add(final_message)
 	return result
 
-def message(content):
-	return raw(content)
+def message(msg, thread_patriarch = None, clean_top = False):
+	result = t.div(id = f"message_{msg['id']}", cls = 'container')
+	with result:
+		if clean_top and thread_patriarch == None: # first time through, skip (just assign thread_patriarch):
+			thread_patriarch = msg['reply_chain_patriarch']
+		else: # thereafter, prepend each (next) msg with an hr() or "gray" hr() (for replies), to separate messages:
+			if msg['reply_chain_patriarch'] == thread_patriarch:
+				t.hr(cls = 'gray') # continued thread
+			else:
+				t.hr() # new thread (or clean_top is False, so we never set thread_patriarch; but this is fine, as we would never want a 'gray' line in that case; the oddity is that the following reply-prefix is likely to be set, if this is a reply, and it's possible that the parent is just above, but was simply sitting there from the last load (last call to messages(), so we lost track of that old thread_patriarch)... this is fine.  It might be nice, actually, for really long reply-chains, to occasionally have the "reminder" when the user keeps scrolling down to see more....)
+				thread_patriarch = msg['reply_chain_patriarch']
+				if msg['id'] != thread_patriarch: # then this msg is actually a reply, but the patriarch is elsewhere (e.g., archived), so we need to provide the reply-prefix teaser:
+					t.div(f'''Reply to "{msg['parent_teaser']}...":''', cls = 'italic')
+		t.div(raw(msg['message']))
+		with t.div(cls = 'buttonbar'):
+			if msg['archived']:
+				t.button(t.i(cls = 'i i-unarchive'), title = text.unarchive, cls = 'selected', onclick = _send('messages', 'unarchive', message_id = msg['id'])) # '▲'
+			else:
+				t.button(t.i(cls = 'i i-archive'), title = text.archive, onclick = _send('messages', 'archive', message_id = msg['id'])) # '▼'
+			t.button(t.i(cls = 'i i-reply'), title = text.reply, onclick = _send('messages', 'compose_reply', message_id = msg['id'])) # '◄'
+			if msg['pinned']:
+				t.button(t.i(cls = 'i i-pin'), title = text.unpin, cls = 'selected', onclick = _send('messages', 'unpin', message_id = msg['id'])) # 'Ϯ'
+			else:
+				t.button(t.i(cls = 'i i-pin'), title = text.pin, onclick = _send('messages', 'pin', message_id = msg['id'])) # 'Ϯ'
+			t.div(cls = 'spacer')
+			t.div(t.span(t.b('by '), msg['sender'], t.b(' to '), msg['tags'], f' · {casual_date(msg["sent"])}'))
+	return thread_patriarch, result
+
 
 def message_tags(mt_table):
 	return _x_tags(mt_table, 'message_tags_table_container')
@@ -418,7 +418,7 @@ def _ws_submit_button(title: str, field_names: list):
 def _x_tags(xt_table, div_id):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
-		with t.div(cls = 'button_band'):
+		with t.div(cls = 'buttonbar'):
 			t.div(filterbox())
 			filterbox_checkbox(text.show_inactives, 'show_inactives')
 		t.div(xt_table, id = div_id)
@@ -445,6 +445,8 @@ def _x_tags_table(tags, other_tags, left_title, right_title, task_app, task, rem
 
 k_fake_localtz = 'America/Los_Angeles' # TODO - implement user-local timezones (this will be a per-user field in db)!
 def casual_date(raw_date):
+	if not raw_date:
+		return '<No date!>'
 	zi = ZoneInfo(k_fake_localtz) # manage all datetimes wrt/ user's local tz, so that "yesterday" means that from the local user's perspective, not from UTC or server-local
 	dt = datetime.fromisoformat(raw_date).astimezone(zi) # no need to .replace(tzinfo = timezone.utc) on fromisoformat result because we put the trailing 'Z' on dates in the db, so this fromisoformat() will interpret the datetime not as naive, but at explicitly UTC
 	now = datetime.now(timezone.utc).astimezone(zi)
@@ -513,6 +515,6 @@ class Input: # HTML input element, `frozen` with the intention of avoiding side-
 		else:
 			result = i
 		if invalids and name in invalids.keys():
-			result = t.div(result, t.span(invalids[name], cls = 'invalid'))
+			result = t.div(result, t.span(invalids[name], cls = 'invalid container'))
 		return result
 

@@ -1,0 +1,5 @@
+
+import c
+
+c.foo()
+

@@ -1,26 +1,30 @@
 html,
-body,
-.full_screen {
+body {
 	height: 100vh; /* fallback, older style, that mostly works (this line must come first) */
 	height: 100dvh; /* newer, for mobile browsers with disappearing address bars (https://stackoverflow.com/a/72245072) */
 	margin: 0;
 	padding: 0;
 }
-.full_screen {
+body {
 	display: flex;
 	flex-flow: column nowrap;
 }
 
-.head {
+#header_pane,
+#footer_pane {
 	flex: 0 0 auto;
+	margin: 0 auto;
+	min-width: 70vw;
+
+	background-color: green;
 }
 
-.content {
+#main_pane {
 	flex: 1 1 auto; /* shrink:1 is necessary to cause .foot to stick to the floor, and for the overflow-scroll (below) to work as expected... */
 	overflow-y: auto; /* ... causing an overflow to result in a .content-contained vertical scrollbar */
-}
+	margin: 0 auto;
+	width: 70vw;
 
-.foot {
-	flex: 0 0 auto;
+	background-color: red;
 }
 

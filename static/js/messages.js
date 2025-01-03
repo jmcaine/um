@@ -88,11 +88,25 @@ let messages = {
 		messages.start_saving();
 	},
 
+	remove_reply_container: function() {
+		$('reply_container').remove();
+	},
 
-	send_message: function(to_sender_only = -1) {
+	post_completed_reply: function(content) {
+		$('reply_container').insertAdjacentHTML("beforebegin", content);
+		$('reply_container').remove();
+	},
+
+	send_message: function() {
 		messages.stop_saving();
 		messages.save_wip(); // one last time
-		messages.send_ws("send_message", {to_sender_only: to_sender_only});
+		messages.send_ws("send_message");
+	},
+
+	send_reply: function(to_sender_only) {
+		messages.stop_saving();
+		messages.save_wip(); // one last time
+		messages.send_ws("send_reply", {to_sender_only: to_sender_only});
 	},
 
 	show_messages: function(content, scroll_to_bottom, filtering_banner) {
@@ -118,7 +132,9 @@ let messages = {
 	},
 
 	show_more_old_messages(content) {
+		let old_scroll_height = g_main_pane.scrollHeight;
 		$('messages_container').insertAdjacentHTML("afterbegin", content);
+		g_main_pane.scrollTo(0, g_main_pane.scrollHeight - old_scroll_height); // scroll back to where user was before the inserted (which also caused a scroll-up)
 	},
 	show_more_new_messages(content) {
 		$('messages_container').insertAdjacentHTML("beforeend", content);

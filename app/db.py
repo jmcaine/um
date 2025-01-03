@@ -40,7 +40,8 @@ def unittests():
 
 # -----------------------------------------------------------------------------
 
-k_now = "strftime('%Y-%m-%d %H:%M:%SZ')" # could use datetime('now'), but that produces a result in UTC (what we want) but WITHOUT the 'Z' at the end; the problem with this is that using python datetime.fromisoformat() then interprets the datetime to be naive, rather than explicitly UTC, which results in the need to do a .replace(tzinfo = timezone.utc) in order to proceed with timezone shifts.  This use of sqlite's strftime(), where we explicitly append the Z, results in python calls to fromisoformat() returning UTC-specific datetime objects automatically.
+k_now_ = '%Y-%m-%d %H:%M:%SZ'
+k_now = f"strftime('{k_now_}')" # could use datetime('now'), but that produces a result in UTC (what we want) but WITHOUT the 'Z' at the end; the problem with this is that using python datetime.fromisoformat() then interprets the datetime to be naive, rather than explicitly UTC, which results in the need to do a .replace(tzinfo = timezone.utc) in order to proceed with timezone shifts.  This use of sqlite's strftime(), where we explicitly append the Z, results in python calls to fromisoformat() returning UTC-specific datetime objects automatically.
 
 async def connect(filename):
 	result = await aiosqlite.connect(filename, isolation_level = None, detect_types = PARSE_DECLTYPES) # "isolation_level = None disables the Python wrapper's automatic handling of issuing BEGIN etc. for you. What's left is the underlying C library, which does do "autocommit" by default. That autocommit, however, is disabled when you do a BEGIN (b/c you're signaling a transaction with that statement" - from https://stackoverflow.com/questions/15856976/transactions-with-python-sqlite3 - thanks Thanatos
@@ -381,11 +382,11 @@ async def save_message(dbc, message_id, content):
 		more = 'deleted = null, '
 	return await _update1(dbc, f'update message set {more} message = ? where id = ?', args)
 
-Send_Message_Result = Enum('SRM', ('EmptyMessage', 'NoTags', 'Success'))
-async def send_message(dbc, message_id) -> Send_Message_Result | dict:
+Send_Message_Result = Enum('SMR', ('EmptyMessage', 'NoTags', 'Success'))
+async def send_message(dbc, user_id, message_id) -> Send_Message_Result | dict:
 	if not await _fetch1(dbc, f'select 1 from message_tag where message_tag.message = ?', (message_id,)):
 		return Send_Message_Result.NoTags # can't send a message without tags (recipients)
-	message = await get_message(dbc, message_id)
+	message = await get_message(dbc, user_id, message_id)
 	content = message['message']
 	if not content or content == '<div></div>':
 		return Send_Message_Result.EmptyMessage # can't send empty message
@@ -400,6 +401,7 @@ async def send_message(dbc, message_id) -> Send_Message_Result | dict:
 	if message['deleted']:
 		more += 'deleted = null, ' # un-trash the message if it's now being sent
 	await _update1(dbc, f'update message set {more} sent = {k_now} where id = ?', args)
+	message['sent'] = datetime.utcnow().strftime(k_now_) # kludge - parties using the return from this function (message) sometimes need that 'sent' field, but it's not actually set upon update, in the message object itself, and it seems needless to do a fetch; so, just set the date the same as it is in the DB... (NOTE: # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!)
 	if message['reply_chain_patriarch'] != message['id']:
 		# Need to update reply_chain_patriarch's thread_updated field, too:
 		await _update1(dbc, f'update message set thread_updated = {k_now} where id = ?', (message['reply_chain_patriarch'],))
@@ -422,8 +424,11 @@ def test_strip_tags(self):
 	t('<div>hello</div><div>oh', 'hello...oh')
 
 
-async def get_message(dbc, message_id):
-	return await _fetch1(dbc, 'select * from  message where id = ?', (message_id,))
+_mega_message_select = 'select message.id, message.message, message.reply_chain_patriarch, parent.teaser as parent_teaser, sender.username as sender, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(tag.name, ", ") as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_read where read_by = ? and message = message.id) as archived from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id'
+
+async def get_message(dbc, user_id, message_id):
+	return await _fetch1(dbc, f'{_mega_message_select} {_message_tag_user_tag_join_pre} where message.id = ?', (user_id, user_id, message_id,))
+
 
 _message_tag_user_tag_join_pre = 'join message_tag on message.id = message_tag.message join tag on message_tag.tag = tag.id'
 
@@ -446,25 +451,24 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 		case Filter.archived:
 			where.append(archived)
 			args.append(user_id)
-		case Filter.Pinned:
-			where.append(f'{archived} and message.id in (select message from message_pin where user = ?)')
+		case Filter.pinned:
+			where.append(f'message.id in (select message from message_pin where user = ?)')
 			args.append(user_id)
-		case Filter.Day:
-			where.append(f'{archived} and message.sent >= "{(datetime.now() - timedelta(days=1)).isoformat()}Z"')
-		case Filter.Week: # we'll interpret as "7 days back"
-			where.append(f'{archived} and message.sent >= "{(datetime.combine(date.today(), datetime.min.time()) - timedelta(days=7)).isoformat()}Z"')
+		case Filter.day:
+			where.append(f'message.sent >= "{(datetime.utcnow() - timedelta(days=1)).isoformat()}Z"') # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!
+		case Filter.this_week: # we'll interpret as "7 days back"
+			where.append(f'message.sent >= "{(datetime.combine(datetime.utcnow().date(), datetime.min.time()) - timedelta(days=7)).isoformat()}Z"') # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!
 	where1 = 'where ' + " and ".join(where) if where else ''
 	# now set up the second query - for messages authored by the user:
 	where.append('message.author = ?')
 	args = args + args[1:] # the second query looks like the first, except for first and last args...
 	args.append(user_id)
 	where2 = 'where ' + " and ".join(where[1:]) # don't need the first user.id that the other select depends on
-	select = 'select message.id, message.message, message.re, message.reply_chain_patriarch, parent.teaser as parent_teaser, sender.username as sender, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(tag.name, ", ") as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_read where read_by = ? and message = message.id) as archived from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id'
 	group_by = 'group by message.message' # TODO: what does this do?!?!
-	#l.debug(f'{select} {_message_tag_user_tag_join} {where1} {group_by} union {select} {_message_tag_user_tag_join_pre} {where2} {group_by} order by thread_updated desc, message.sent asc')
+	#l.debug(f'{_mega_message_select} {_message_tag_user_tag_join} {where1} {group_by} union {_mega_message_select} {_message_tag_user_tag_join_pre} {where2} {group_by} order by thread_updated desc, message.sent asc')
 	# SEE: giant_sql_laid_out.txt to show/study the above laid out for straight comprehension.
 	asc_order = f'order by thread_updated asc, sent asc'
-	query = f'{select} {_message_tag_user_tag_join} {where1} {group_by} union {select} {_message_tag_user_tag_join_pre} {where2} {group_by}'
+	query = f'{_mega_message_select} {_message_tag_user_tag_join} {where1} {group_by} union {_mega_message_select} {_message_tag_user_tag_join_pre} {where2} {group_by}'
 	if skip < 0: # usually indicating "backing up", but -1 indicates "last page" / "latest stuff"
 		this_skip = 0 if skip == -1 else skip # skip 0 if it's the flag "-1"; else skip `skip` (negative numbers will result proper 
 		desc_order = f'order by thread_updated desc, sent desc'

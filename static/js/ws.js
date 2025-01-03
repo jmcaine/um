@@ -53,6 +53,12 @@ ws.onmessage = function(event) {
 		case "inline_reply_box":
 			messages.inline_reply_box(payload.content, payload.message_id);
 			break;
+		case "remove_reply_container":
+			messages.remove_reply_container();
+			break;
+		case "post_completed_reply":
+			messages.post_completed_reply(payload.content)
+			break;
 		default:
 			console.log("ERROR - unknown payload task: " + payload.task);
 	}

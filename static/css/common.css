@@ -1,5 +1,7 @@
 /* Common style */
 
+/* page structure */
+
 html,
 body {
 	height: 100vh; /* fallback, older style, that mostly works (this line must come first) */
@@ -16,15 +18,17 @@ body {
 #footer_pane {
 	flex: 0 0 auto;
 	margin: 0 auto;
-	min-width: 70vw;
+	width: 70vw;
 }
 
 #main_pane {
 	flex: 1 1 auto; /* shrink:1 is necessary to cause .foot to stick to the floor, and for the overflow-scroll (below) to work as expected... */
 	overflow-y: auto; /* ... causing an overflow to result in a .content-contained vertical scrollbar */
 	margin: 0 auto;
-	min-width: 70vw;
+	width: 70vw;
 }
+
+/* special screens */
 
 #gray_screen {
 	position: absolute;
@@ -59,24 +63,44 @@ body {
 	overflow-x: auto;
 }
 
-.show {
-	display: block;
-}
-.hide {
-	display: none;
-}
-
-
+/* defaults / variations */
 
 div {
+	margin: 2px;
+	padding: 2px;
+}
+
+div.container {
+	padding: 0; /* zero-impact container (elements within space as if this container didn't contain them) */
+	margin: 0;
+}
+
+span.invalid {
+	color: red;
+}
+
+
+hr {
+	clear: both; /* TODO: no longer necessary? */
+	height: 1px;
+	border: 0;
+	background-color: black;
 	margin: 4px;
-	padding: 4px;
+	margin-right: -12px;
+	padding: 0;
 }
 
-.full_width {
-	width: 100%;
+hr.top {
+	height: 2px;
+	background-color: #6567a8;
 }
 
+hr.gray {
+	background-color: lightgray;
+}
+
+
+/* bordered content */
 
 fieldset, .info, .warning, .error {
 	border: 2px solid #888;
@@ -97,19 +121,26 @@ fieldset, .info, .warning, .error {
 	background-color: #e88;
 }
 
-div.container {
-	padding: 0; /* zero-impact container (elements within space as if this container didn't contain them) */
-	margin: 0;
+
+/* dynamics */
+
+.show {
+	display: block;
+}
+.hide {
+	display: none;
 }
 
-div.scroller {
-	overflow-y: auto;
+
+
+/* mix-ins */
+
+.italic {
+	font-style: italic;
 }
 
-span.invalid {
-	color: red;
-	padding: 0; /* zero-impact container (elements within space as if this container didn't contain them) */
-	margin: 0;
+.full_width {
+	width: 100%;
 }
 
 .pointered {
@@ -118,19 +149,6 @@ span.invalid {
 
 .center {
 	margin: auto;
-}
-
-.singleton_button { /* TODO: CONSOLIDATE! ALMOST SAME as .button_band button -- consolidate! */
-	width: 2.3em;
-	margin: 1px 2px;
-	padding: 1px 5px;
-	font-size: 1em;
-	border: 2px;
-	border-radius: 5px;
-	border-style: solid;
-	color: white;
-	cursor: pointer;
-	box-shadow: none;
 }
 
 .red_bg {
@@ -149,6 +167,8 @@ span.invalid {
 }
 
 
+/* content edit area (invisible edit-box) */
+
 [contenteditable="true"]:active, [contenteditable="true"]:focus
 {
 	border:none;
@@ -158,26 +178,14 @@ span.invalid {
 
 /* ------------------------------------------------------------------------- */
 
-.button_band {
-	width: 100%;
-	margin-bottom: 20px;
+
+.buttonbar {
+	display: flex;
+	flex-flow: row wrap; /* should wrap only when screen is too narrow */
 }
 
-.button_band > * {
-	display: block;
-	margin: 2px;
-	padding: 1px;
-	float: left;
-}
-
-.button_band .right {
-	float:right;
-	margin: 0;
-	padding: 0;
-}
-
-.button_band button {
-	min-width: 2.3em;
+.buttonbar button {
+	min-width: 20px;
 	margin: 1px 2px;
 	padding: 1px 5px;
 	font-size: 1em;
@@ -189,46 +197,59 @@ span.invalid {
 	cursor: pointer;
 	box-shadow: none;
 }
+.buttonbar button:hover {
+	background-color: #999999;
+}
 
-.button_band .selected {
+.buttonbar button.selected {
 	background-color: #18a266;
 }
 
-.button_band .unselected {
+.buttonbar button.unselected {
 	background-color: #6567a8;
 }
 
-
-
-hr {
-	clear: both;
-	height: 1px;
-	border: 0;
-	background-color: black;
-	margin: 4px;
-	margin-right: -12px;
-	padding: 0;
+.buttonbar .spacer {
+	flex-grow: 1;
 }
 
-hr.top {
-	height: 2px;
-	background-color: #6567a8;
-}
-
-hr.gray {
-	background-color: lightgray;
-}
-
-.clear_both {
-	clear: both;
+.buttonbar .indent { /* kludgey "indent" */
+	width: 2.3em;
 }
 
 
-.spacer { /* kludgey; meant to match button_band button */
+.i {
+	 width: 12px; /* YES, must do this (width and height AND set the same info inline, below, in the background: line!) */
+	 height: 12px;
+	 display: block;
+	 filter: invert(100%);
+}
+.i-archive {
+    background: url(ico/archive.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87541/PNG/32/ - https://icon-icons.com/icon/download-folder/87541 dripicons (https://icon-icons.com/users/PHEoYFqoi7DZt6BnC1SoR/icon-sets/) */
+}
+.i-unarchive {
+    background: url(ico/unarchive.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87531/PNG/32/ - https://icon-icons.com/icon/upload-arrow/87531 dripicons (https://icon-icons.com/users/PHEoYFqoi7DZt6BnC1SoR/icon-sets/) */
+}
+.i-reply {
+    background: url(ico/reply.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87524/PNG/32/ */
+}
+.i-pin {
+    background: url(ico/pin.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/259178/PNG/32/ */
+}
+
+/* ------------------------------------------------------------------------- */
+/* TODO: FIX! */
+
+.singleton_button { /* TODO: CONSOLIDATE! ALMOST SAME as .button_band button -- consolidate! */
 	width: 2.3em;
 	margin: 1px 2px;
+	padding: 1px 5px;
+	font-size: 1em;
+	border: 2px;
+	border-radius: 5px;
+	border-style: solid;
+	color: white;
+	cursor: pointer;
+	box-shadow: none;
 }
 
-.italic {
-	font-style: italic;
-}

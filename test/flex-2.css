@@ -1,0 +1,63 @@
+html,
+body {
+	height: 100vh; /* fallback, older style, that mostly works (this line must come first) */
+	height: 100dvh; /* newer, for mobile browsers with disappearing address bars (https://stackoverflow.com/a/72245072) */
+	margin: 0;
+	padding: 0;
+}
+body {
+	display: flex;
+	flex-flow: column nowrap;
+}
+
+#header_pane,
+#footer_pane {
+	flex: 0 0 auto;
+	margin: 0 auto;
+	width: 70vw;
+
+	background-color: green;
+}
+
+#main_pane {
+	flex: 1 1 auto; /* shrink:1 is necessary to cause .foot to stick to the floor, and for the overflow-scroll (below) to work as expected... */
+	overflow-y: auto; /* ... causing an overflow to result in a .content-contained vertical scrollbar */
+	margin: 0 auto;
+	width: 70vw;
+
+	display: flex;
+	flex-flow: column nowrap;
+
+	background-color: red;
+}
+
+.sub_pane {
+	flex: 0 0 auto;
+	margin: 0 auto;
+	width: 100%;
+
+	background-color: blue;
+}
+
+.buttonbar {
+	display: flex;
+	flex-flow: row wrap; /* should wrap only when screen is too narrow */
+}
+
+.buttonbar button {
+	min-width: 2.3em;
+	margin: 1px 2px;
+	padding: 1px 5px;
+	font-size: 1em;
+	border: 2px;
+	border-radius: 5px;
+	border-style: solid;
+	color: white;
+	background-color: #6567a8;
+	cursor: pointer;
+	box-shadow: none;
+}
+
+.buttonbar .spacer {
+	flex-grow: 1;
+}
