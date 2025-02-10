@@ -374,13 +374,13 @@ async def trash_message(dbc, message_id):
 	return await _update1(dbc, f'update message set deleted = {k_now} where id = ?', (message_id,))
 
 async def save_message(dbc, message_id, content):
-	args = [content, message_id]
+	args = [content, make_teaser(content), message_id]
 	more = ''
 	if not content: # save the message, but as trashed ('deleted'), until content actually has something in it
 		more = f'deleted = {k_now}, '
 	else: # otherwise, even if it used to be deleted, if we're 'saving' it now, then untrash it!
 		more = 'deleted = null, '
-	return await _update1(dbc, f'update message set {more} message = ? where id = ?', args)
+	return await _update1(dbc, f'update message set {more} message = ?, teaser = ? where id = ?', args)
 
 Send_Message_Result = Enum('SMR', ('EmptyMessage', 'NoTags', 'Success'))
 async def send_message(dbc, user_id, message_id) -> Send_Message_Result | dict:
@@ -391,9 +391,8 @@ async def send_message(dbc, user_id, message_id) -> Send_Message_Result | dict:
 	if not content or content == '<div></div>':
 		return Send_Message_Result.EmptyMessage # can't send empty message
 
-	more = 'teaser = ?, '
-	teaser = message['teaser'] = make_teaser(content)
-	args = [teaser, message_id]
+	more = ''
+	args = [message_id,]
 	if not content.startswith('<div>'):
 		message['message'] = content = '<div>' + content + '</div>' # make sure all messages are div-bracketed (one-liner messages don't come to us this way by default)
 		more += 'message = ?, '
@@ -424,18 +423,19 @@ def test_strip_tags(self):
 	t('<div>hello</div><div>oh', 'hello...oh')
 
 
-_mega_message_select = 'select message.id, message.message, message.reply_chain_patriarch, parent.teaser as parent_teaser, sender.username as sender, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(tag.name, ", ") as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_read where read_by = ? and message = message.id) as archived from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id'
+_mega_message_select = 'select message.id, message.message, message.reply_chain_patriarch, parent.teaser as parent_teaser, sender.username as sender, sender.id as sender_id, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(tag.name, ", ") as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_read where read_by = ? and message = message.id) as archived from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id'
 
 async def get_message(dbc, user_id, message_id):
 	return await _fetch1(dbc, f'{_mega_message_select} {_message_tag_user_tag_join_pre} where message.id = ?', (user_id, user_id, message_id,))
 
 
-_message_tag_user_tag_join_pre = 'join message_tag on message.id = message_tag.message join tag on message_tag.tag = tag.id'
+_message_tag_user_tag_join_pre = 'left outer join message_tag on message.id = message_tag.message left outer join tag on message_tag.tag = tag.id'
 
 _message_tag_user_tag_join = _message_tag_user_tag_join_pre + ' join user_tag on tag.id = user_tag.tag join user on user_tag.user = user.id'
 
 async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = Filter.unarchived, skip = 0, limit = 15):
-	where, args = ['user.id = ?', 'message.sent is not null'], [user_id, user_id, user_id,] # first two user_ids are for sub-selects in query (below)
+	where = ['user.id = ?', ]
+	args = [user_id, user_id, user_id,] # first two user_ids are for sub-selects in query (below)
 	if not include_trashed:
 		where.append('message.deleted is null')
 	if like:
@@ -443,13 +443,12 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 			_add_like(like, ('message.message', 'tag.name'), where, args)
 		else:
 			_add_like(like, ('SUBSTR(message.message, 0, 30)', 'tag.name'), where, args)
-	archived = 'message.id in (select message from message_read where read_by = ?)'
 	match filt:
 		case Filter.unarchived:
 			where.append('message.id not in (select message from message_read where read_by = ?)')
 			args.append(user_id)
 		case Filter.archived:
-			where.append(archived)
+			where.append('message.id in (select message from message_read where read_by = ?)')
 			args.append(user_id)
 		case Filter.pinned:
 			where.append(f'message.id in (select message from message_pin where user = ?)')
@@ -463,10 +462,8 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 	where.append('message.author = ?')
 	args = args + args[1:] # the second query looks like the first, except for first and last args...
 	args.append(user_id)
-	where2 = 'where ' + " and ".join(where[1:]) # don't need the first user.id that the other select depends on
+	where2 = 'where ' + " and ".join(['message.sent is not null',] + where[1:]) # don't need the first user.id that the other select depends on; but DO need to weed out unsent messages (that are authored by others)
 	group_by = 'group by message.message' # TODO: what does this do?!?!
-	#l.debug(f'{_mega_message_select} {_message_tag_user_tag_join} {where1} {group_by} union {_mega_message_select} {_message_tag_user_tag_join_pre} {where2} {group_by} order by thread_updated desc, message.sent asc')
-	# SEE: giant_sql_laid_out.txt to show/study the above laid out for straight comprehension.
 	asc_order = f'order by thread_updated asc, sent asc'
 	query = f'{_mega_message_select} {_message_tag_user_tag_join} {where1} {group_by} union {_mega_message_select} {_message_tag_user_tag_join_pre} {where2} {group_by}'
 	if skip < 0: # usually indicating "backing up", but -1 indicates "last page" / "latest stuff"
@@ -475,7 +472,8 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 		query = f'select * from ({query} {desc_order} limit {-this_skip}, {limit}) {asc_order} limit {limit}' # subquery on desc_order to get the LIMIT right, then properly asc_order that final resultset
 	else:
 		query = f'{query} {asc_order} limit {skip}, {limit}'
-
+	#l.debug(f'get_messages query: {query}    ... args: {args}')
+	# SEE: giant_sql_laid_out.txt to show/study the above laid out for straight comprehension.
 	return await _fetchall(dbc, query, args)
 
 async def delivery_recipient(dbc, user_id, message_id):
@@ -506,10 +504,15 @@ async def get_author_tag(dbc, message_id):
 	return await _fetch1(dbc, 'select tag.* from tag join message on message.author = tag.user where message.id = ?', (message_id,))
 
 async def set_reply_message_tags(dbc, message_id):
-	r = await _fetch1(dbc, 'select reply_to from message where id = ?', (message_id,))
-	r = await _fetchall(dbc, 'select tag from message_tag where message = ?', (r['reply_to'],))
-	data = [(message_id, tag_id) for tag_id in r['tag']]
-	return await dbc.executemany('insert into message_tag (message, tag) values (?, ?)', data)
+	message = await _fetch1(dbc, 'select author, reply_to from message where message.id = ?', (message_id,))
+	tags = await _fetchall(dbc, 'select tag as tag_id from message_tag join tag on tag_id = tag.id where message_tag.message = ? and (tag.user is null or tag.user != ?)', (message['reply_to'], message['author'],)) # get all tags EXCEPT the tag that corresponds to the reply author - we don't want to inherit that tag, or we'll just be sending the reply to the reply's own author ("self")!
+	if not tags:
+		# this means the only tag on the parent message was the tag coorseponding to this very (reply) author; in this case, we want the tag to correspond to the PARENT author, not ourself! (that is, we want this to become a directy reply to the parent, even though the replier apparently selected "all", as if there were other possible recipients) TODO: even though this code should remain as a safeguard, we should only present the user with the "1" vs. "all" option when there is indeed a difference between the two!
+		return await _insert1(dbc, 'insert into message_tag (message, tag) select ?, tag.id from tag join message on message.author = tag.user where message.id = ?', (message_id, message['reply_to']))
+	else:
+		# this is the "normal" case, in which the parent has one or more tags (other than the reply's author), and we're to inherit them:
+		data = [(message_id, i['tag_id']) for i in tags]
+		return await dbc.executemany('insert into message_tag (message, tag) values (?, ?)', data)
 
 async def archive_message(dbc, message_id, user_id):
 	return await _insert1(dbc, 'insert into message_read (message, read_by) values (?, ?)', (message_id, user_id))
