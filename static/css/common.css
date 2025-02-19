@@ -81,7 +81,6 @@ span.invalid {
 
 
 hr {
-	clear: both; /* TODO: no longer necessary? */
 	height: 1px;
 	border: 0;
 	background-color: black;
@@ -96,7 +95,7 @@ hr.top {
 }
 
 hr.gray {
-	background-color: lightgray;
+	background-color: #e8e8e8;
 }
 
 
@@ -131,7 +130,18 @@ fieldset, .info, .warning, .error {
 	display: none;
 }
 
+@keyframes injection-highlight {
+	0% {
+		background-color: #c3ffba;
+	}
+	100% {
+		background-color: #ffffff;
+	}
+}
 
+.injection {
+	animation: pulse 1s;
+}
 
 /* mix-ins */
 
@@ -157,6 +167,12 @@ fieldset, .info, .warning, .error {
 
 .green_bg {
 	background-color: #2a2;
+}
+
+div.yellow_border {
+	border: 2px;
+	border-color: #ffff9a;
+	border-style: solid;
 }
 
 .midlin {
@@ -224,11 +240,12 @@ fieldset, .info, .warning, .error {
 	 display: block;
 	 filter: invert(100%);
 }
+/* most from dripicons - https://icon-icons.com/users/PHEoYFqoi7DZt6BnC1SoR/icon-sets/ */
 .i-archive {
-    background: url(ico/archive.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87541/PNG/32/ - https://icon-icons.com/icon/download-folder/87541 dripicons (https://icon-icons.com/users/PHEoYFqoi7DZt6BnC1SoR/icon-sets/) */
+    background: url(ico/archive.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87541/PNG/32/ - https://icon-icons.com/icon/download-folder/87541 */
 }
 .i-unarchive {
-    background: url(ico/unarchive.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87531/PNG/32/ - https://icon-icons.com/icon/upload-arrow/87531 dripicons (https://icon-icons.com/users/PHEoYFqoi7DZt6BnC1SoR/icon-sets/) */
+    background: url(ico/unarchive.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87531/PNG/32/ - https://icon-icons.com/icon/upload-arrow/87531 */
 }
 .i-reply {
     background: url(ico/reply.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87524/PNG/32/ */
@@ -236,6 +253,10 @@ fieldset, .info, .warning, .error {
 .i-pin {
     background: url(ico/pin.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/259178/PNG/32/ */
 }
+.i-trash {
+	background: url(ico/trash.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87481/PNG/32/ - https://icon-icons.com/icon/trash-container-side/87481 */
+}
+
 
 /* ------------------------------------------------------------------------- */
 /* TODO: FIX! */

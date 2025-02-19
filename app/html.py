@@ -92,7 +92,7 @@ def messages_filter(filt):
 		t.div('Filters:')
 		filt_button = lambda title, hint, _filt: t.button(title, title = hint, cls = 'selected' if filt == _filt else '', onclick = f'messages.filter(id, "{_filt}")')
 		filt_button(text.news, text.show_news, Filter.unarchived)
-		filt_button(text.archiveds, text.show_archiveds, Filter.archived)
+		filt_button(text.alls, text.show_alls, Filter.all)
 		filt_button(text.days, text.show_days, Filter.day)
 		filt_button(text.this_weeks, text.show_this_weeks, Filter.this_week)
 		filt_button(text.pinneds, text.show_pinneds, Filter.pinned)
@@ -304,7 +304,7 @@ def user_tags(ut_table):
 	return _x_tags(ut_table, 'user_tags_table_container')
 
 def user_tags_table(user_tags, other_tags):
-	return _x_tags_table(user_tags, other_tags, 'Subscribed', 'NOT Subscribed', 'admin', 'user_tags', 'remove_tag_from_user', 'add_tag_to_user')
+	return _x_tags_table(user_tags, other_tags, 'Subscribed', 'NOT Subscribed', 'admin', 'user_tags', 'remove_tag_from_user', 'add_tag_to_user', {}) # TODO: add user_id here!!
 
 
 def choose_message_draft(drafts):
@@ -324,44 +324,55 @@ def choose_message_draft_table(drafts):
 				t.td(f"{casual_date(draft['created'])}: {draft['teaser']}", cls = 'pointered', onclick = _send('messages', 'edit_message', message_id = draft['id'])) # note, 'teaser' is already a substring - no need to chop here
 				if not draft['deleted']: # only allow "untrashed" messages to be trashed; can't "permanently" delete anything
 					t.td(t.button('x', title = text.trash, cls = 'singleton_button red_bg', onclick = _send('messages', 'trash_message', message_id = draft['id'])))
-		t.tr(t.td(t.button(text.brand_new_message, onclick = _send('messages', 'brand_new_message')), align = 'left'))		
+		t.tr(t.td(t.button(text.brand_new_message, onclick = _send('messages', 'brand_new_message')), t.button(text.cancel, onclick = 'hide_dialog()'), align = 'left'))
 	return result
 
-def edit_message(content):
+def edit_message(message_id, content): #!!!@
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
-		#TODO: raw(content) - but seems to cause exception (at least when content is '')
-		t.div(raw(content), contenteditable = 'true', id = 'edit_message_content')
+		l.debug(f'########### {content} ')
+		t.div(raw(content) if content else '', contenteditable = 'true', id = f'edit_message_content_{message_id}', cls = 'edit_message_content') # raw(content) throws exception when content is ''
 		with t.div(cls = 'buttonbar'):
 			t.div(cls = 'spacer')
-			t.button('#', title = text.tags, onclick = 'messages.send_ws("message_tags")')
-			t.button('▼', title = text.save_draft, onclick = 'messages.save_draft()')
-			t.button('►', title = text.send_message, onclick = 'messages.send_message()')
+			t.button('#', title = text.tags, onclick = _send('messages', 'message_tags', message_id = message_id))
+			t.button('▼', title = text.save_draft, onclick = f'messages.save_draft({message_id})')
+			t.button('►', title = text.send_message, onclick = f'messages.send_message({message_id})')
 	return result
 
-def inline_reply_box(to_sender_only):
-	result = t.div(id = 'reply_container')
+def inline_reply_box(message_id, parent_mid, content = None):
+	result = t.div(cls = 'container yellow_border')
 	with result:
-		t.div(contenteditable = 'true', id = 'edit_message_content')
+		t.div(raw(content) if content else '', contenteditable = 'true', id = f"edit_message_content_{message_id}", cls = 'edit_message_content',
+		  onfocus = f'messages.start_saving(this, {message_id})', onblur = f'messages.stop_saving({message_id})')
 		with t.div(cls = 'buttonbar'):
 			t.div(cls = 'spacer')
-			t.button("1" if to_sender_only else "A", onclick = 'flip_reply_recipient()') # TODO: replace "1" and "A"
-			#TODO?!: t.button('▼', title = text.save_draft, onclick = 'messages.save_draft()')
-			t.button('►', title = text.send_message, onclick = f'messages.send_reply({to_sender_only})')
+			t.button(t.i(cls = 'i i-trash'), title = text.delete, onclick = f"messages.delete_draft({message_id})")
+			t.button('1', id = f"reply_recipient_button_{message_id}", onclick = f'messages.flip_reply_recipient({message_id})') # TODO: deport "1" (NOTE: default to "1", meaning - reply to sender only, not "All")
+			t.button('►', title = text.send_message, onclick = f'''messages.send_reply({message_id}, {parent_mid}, $('reply_recipient_button_{message_id}').textContent)''')
 	return result
 
-def messages(msgs, clean_top):
-	result = t.div(id = 'messages', cls = 'container')
-	thread_patriarch = None
+def messages(msgs, user_id, last_thread_patriarch = None, skip_first_hr = False):
+	top = t.div(id = 'messages', cls = 'container')
+	parents = {None: top}
 	for msg in msgs:
-		thread_patriarch, final_message = message(msg, thread_patriarch, clean_top)
-		result.add(final_message)
-	return result
+		if msg['sender_id'] == user_id and not msg['sent'] and msg['reply_to'] != None: # if this is a user's unsent reply (draft), then include it in editable, inline draft mode:
+			l.debug(f"!!!!!!! inline-reply, mid: {msg['id']}")
+			last_thread_patriarch = msg['reply_chain_patriarch']
+			html_message = inline_reply_box(msg['id'], msg['reply_to'], msg['message'])
+		elif msg['sent']: # this test ensures we don't try to present draft messages that aren't replies - user has to re-engage with those in a different way ("new message", then select among drafts)... note that the data (msgs) DO include (or MAY include) non-reply (top-level parent) draft messages; we don't want those messages in our message list here
+			last_thread_patriarch, html_message = message(msg, last_thread_patriarch, skip_first_hr)
+		parent = parents.get(msg['reply_to'], top)
+		parent.add(html_message)
+		parents[msg['id']] = html_message
+	return top
 
-def message(msg, thread_patriarch = None, clean_top = False):
-	result = t.div(id = f"message_{msg['id']}", cls = 'container')
+def message(msg, thread_patriarch = None, skip_first_hr = False, injection = False):
+	cls = 'container'
+	if injection:
+		cls += ' injection'
+	result = t.div(id = f"message_{msg['id']}", cls = cls)
 	with result:
-		if clean_top and thread_patriarch == None: # first time through, skip (just assign thread_patriarch):
+		if skip_first_hr and thread_patriarch == None: # first time through, skip hr (just assign thread_patriarch):
 			thread_patriarch = msg['reply_chain_patriarch']
 		else: # thereafter, prepend each (next) msg with an hr() or "gray" hr() (for replies), to separate messages:
 			if msg['reply_chain_patriarch'] == thread_patriarch:
@@ -383,15 +394,15 @@ def message(msg, thread_patriarch = None, clean_top = False):
 			else:
 				t.button(t.i(cls = 'i i-pin'), title = text.pin, onclick = _send('messages', 'pin', message_id = msg['id'])) # 'Ϯ'
 			t.div(cls = 'spacer')
-			t.div(t.span(t.b('by '), msg['sender'], t.b(' to '), msg['tags'], f' · {casual_date(msg["sent"])}'))
+			t.div(t.span(t.b('by '), msg['sender'], t.b(' to '), msg['tags'].replace(',', ', '), f' · {casual_date(msg["sent"])}'))
 	return thread_patriarch, result
 
 
 def message_tags(mt_table):
 	return _x_tags(mt_table, 'message_tags_table_container')
 	
-def message_tags_table(message_tags, other_tags):
-	return _x_tags_table(message_tags, other_tags, text.recipients, text.not_recipients, 'messages', 'message_tags', 'remove_tag_from_message', 'add_tag_to_message')
+def message_tags_table(message_tags, other_tags, mid):
+	return _x_tags_table(message_tags, other_tags, text.recipients, text.not_recipients, 'messages', 'message_tags', 'remove_tag_from_message', 'add_tag_to_message', {'message_id': mid})
 
 
 
@@ -424,7 +435,7 @@ def _x_tags(xt_table, div_id):
 		t.div(xt_table, id = div_id)
 	return result
 
-def _x_tags_table(tags, other_tags, left_title, right_title, task_app, task, remove_task, add_task):
+def _x_tags_table(tags, other_tags, left_title, right_title, task_app, task, remover_task, adder_task, task_kwargs):
 	result = t.table(cls = 'full_width')
 	with result:
 		with t.tr(cls = 'midlin'):
@@ -438,8 +449,8 @@ def _x_tags_table(tags, other_tags, left_title, right_title, task_app, task, rem
 				break # done
 			with t.tr(cls = 'midlin'):
 				t.td(tag.get('name', ''), align = 'right')
-				t.td(t.button('-', cls = 'singleton_button red_bg', onclick = _send(task_app, remove_task, tag_id = tag['id'])) if tag else '', align = 'right')
-				t.td(t.button('+', cls = 'singleton_button green_bg', onclick = _send(task_app, add_task, tag_id = otag['id'])) if otag else '', align = 'left')
+				t.td(t.button('-', cls = 'singleton_button red_bg', onclick = _send(task_app, remover_task, tag_id = tag['id'], **task_kwargs)) if tag else '', align = 'right')
+				t.td(t.button('+', cls = 'singleton_button green_bg', onclick = _send(task_app, adder_task, tag_id = otag['id'], **task_kwargs)) if otag else '', align = 'left')
 				t.td(otag.get('name', ''), align = 'left')
 	return result
 

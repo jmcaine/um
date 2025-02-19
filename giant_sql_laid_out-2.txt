@@ -1,0 +1,59 @@
+NEW (in concert with tagging every new message to the sender, so that sender's own messages always show up in this query, too (that's the only way to get around the UNION)):
+	but NO!  No need to tag every new message after all, the way the WHERE is set up....
+NEW - with example user.id = 1:
+select message.id, message.message, message.reply_chain_patriarch, parent.teaser as parent_teaser, sender.username as sender, sender.id as sender_id, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(DISTINCT tag.name) as tags, (select 1 from message_pin where user = 1 and message = message.id) as pinned, (select 1 from message_read where read_by = 1 and message = message.id) as archived from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id
+	left join message_tag on message.id = message_tag.message
+	left join tag on message_tag.tag = tag.id
+	join user_tag on tag.id = user_tag.tag
+where message.deleted is null and message.id not in (select message from message_read where read_by = 1) and
+	((message.sent is not null and user_tag.user = 1) or (message.author = 1 and (message.reply_to is not null or message.sent is not null)))
+group by message.id order by thread_updated asc, sent asc nulls last limit 10, 10
+
+TESTING whittle:
+
+select user.id, GROUP_CONCAT(distinct tag.name) as tags, message.id as msg_id, message.message from message
+    join message_tag on message_tag.message = message.id
+    join tag on message_tag.tag = tag.id
+    join user_tag on tag.id = user_tag.tag
+    join user on user_tag.user = user.id
+where message.deleted is null and message.id not in (select message from message_read where read_by = 9)
+    and ((message.sent is not null and user_tag.user = 9) or (message.author = 9 and message.reply_to is not null))
+group by message.id order by sent asc NULLS LAST
+
+NOTE that GROUP_CONCAT(DISTINCT tag.name) (above, and in final) is the only way to get singles (not multiple copies) of group names - using GROUP_CONCAT(tag.name, ', ') would be nice, since the default doesn't place a space after the comma, but providing the ', ' argument only works if you do NOT use DISTINCT, which isn't an option for us.
+
+
+
+OLD union version:
+
+select message.id, message.message, message.reply_chain_patriarch, parent.teaser as parent_teaser, sender.username as sender, sender.id as sender_id, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(tag.name, ", ") as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_read where read_by = ? and message = message.id) as archived from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id left outer join message_tag on message.id = message_tag.message left outer join tag on message_tag.tag = tag.id
+	join user_tag on tag.id = user_tag.tag join user on user_tag.user = user.id
+where message.deleted is null and message.id not in (select message from message_read where read_by = ?)
+	and user.id = ?
+group by message.message
+
+union
+
+select message.id, message.message, message.reply_chain_patriarch, parent.teaser as parent_teaser, sender.username as sender, sender.id as sender_id, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(tag.name, ", ") as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_read where read_by = ? and message = message.id) as archived from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id left outer join message_tag on message.id = message_tag.message left outer join tag on message_tag.tag = tag.id
+where message.deleted is null and message.id not in (select message from message_read where read_by = ?) and
+	message.sent is not null and
+	message.author = ?
+group by message.message
+
+order by thread_updated asc, sent asc limit 10, 10
+
+
+
+OLD non-union try, but with a bad join on OR idea...
+
+select message.id, message.message, message.reply_chain_patriarch, parent.teaser as parent_teaser, sender.username as sender, sender.id as sender_id, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(tag.name, ", ") as tags, (select 1 from message_pin where user = 9 and message = message.id) as pinned, (select 1 from message_read where read_by = 9 and message = message.id) as archived from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id left outer join message_tag on message.id = message_tag.message left outer join tag on message_tag.tag = tag.id
+	join user_tag on tag.id = user_tag.tag join user on   <---- this is the part that is no good!
+		(message.author != 9 and  user_tag.user = user.id)
+		or
+		(message.author = 9 and user.id = user.id)
+	where ((user.id = 9 and message.sent is not null) or (message.author = 9)) and
+message.deleted is null and message.id not in (select message from message_read where read_by = 9)
+group by message.message
+order by thread_updated asc, sent asc
+
+

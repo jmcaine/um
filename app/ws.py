@@ -34,6 +34,7 @@ def handler(func, auth_func = None):
 				await send_content(hd, 'banner', html.error(text.auth_required))
 				return # done
 			#else:
+			#l.debug(f'**************** hd.task: {hd.task}; *args: {args}; *kwargs: {kwargs}')
 			await func(hd, *args, **kwargs)
 		except Exception as e:
 			try: await db.rollback(hd.dbc)

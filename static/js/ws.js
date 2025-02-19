@@ -33,31 +33,34 @@ ws.onmessage = function(event) {
 			hide_dialog();
 			break;
 		case "edit_message":
-			messages.edit_message(payload.content);
+			messages.edit_message(payload.content, payload.message_id);
 			break;
 		case "messages":
 			messages.show_messages(payload.content, payload.scroll_to_bottom, payload.filt, payload.filtering_banner);
 			break;
 		case "more_old_messages":
-			messages.show_more_old_messages(payload.content)
+			messages.show_more_old_messages(payload.content);
 			break;
 		case "more_new_messages":
-			messages.show_more_new_messages(payload.content)
+			messages.show_more_new_messages(payload.content);
+			break;
+		case "no_more_new_messages":
+			messages.no_more_new_messages();
 			break;
 		case "deliver_message_teaser":
 			messages.deliver_message_teaser(payload.teaser);
 			break;
 		case "inject_deliver_new_message":
-			messages.inject_deliver_new_message(payload.content, payload.placement);
+			messages.inject_deliver_new_message(payload.content, payload.new_mid, payload.reference_mid, payload.placement);
 			break;
 		case "inline_reply_box":
-			messages.inline_reply_box(payload.content, payload.message_id);
+			messages.inline_reply_box(payload.content, payload.message_id, payload.parent_mid);
 			break;
 		case "remove_reply_container":
-			messages.remove_reply_container();
+			messages.remove_reply_container(payload.message_id);
 			break;
 		case "post_completed_reply":
-			messages.post_completed_reply(payload.content)
+			messages.post_completed_reply(payload.content, payload.message_id)
 			break;
 		default:
 			console.log("ERROR - unknown payload task: " + payload.task);

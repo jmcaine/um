@@ -155,7 +155,7 @@ async def _handle_ws_text(rq, hd, data):
 			await ws._handlers[active_module]['exit_module'](hd)
 		if 'enter_module' in ws._handlers[module]:
 			await ws._handlers[module]['enter_module'](hd)
-		rq.app['active_module'] = module
+		rq.app['active_module'] = module # may be redundant, if enter_module() did this already
 	# Now call the handler for the given task - functions decorated with @ws.handler are handlers; their (function) names are the task names
 	await ws._handlers[module][hd.payload['task']](hd)
 
@@ -206,10 +206,8 @@ async def submit_fields(hd):
 
 
 @ws.handler
-async def finish(hd):
-	hd.payload['finished'] = True
-	await hd.task.handler(hd)
-
+async def finish(hd): # usually called (via ws client) to "cancel";
+	await task.finish(hd)
 
 @ws.handler
 async def filtersearch(hd):
@@ -246,7 +244,7 @@ async def login_or_join(hd):
 
 
 @ws.handler
-async def login(hd):
+async def login(hd, reverting = False):
 	if task.just_started(hd, login):
 		await ws.send(hd, 'fieldset', fieldset = html.login(fields.LOGIN).render())
 	else:

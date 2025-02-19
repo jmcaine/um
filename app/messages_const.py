@@ -3,14 +3,16 @@ from enum import StrEnum
 
 NewMessageNotify = StrEnum('NewMessageNotify', [
 	'reload',
+	'inject',
 	'inject_replies',
-	'tease'
+	'tease',
 ])
 
 Filter = StrEnum('Filter', [
 	'unarchived',
-	'archived',
-		'pinned',
-		'day',
-		'this_week'
+	'all',
+	'pinned',
+	'day',
+	'this_week',
+	'archived', # not currently used
 ])

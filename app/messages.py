@@ -27,7 +27,8 @@ async def active(hd, user_id):
 
 @ws.handler
 async def enter_module(hd):
-	hd.state['message_notify'] = NewMessageNotify.tease # probably unnecessary, except perhaps the first time ever, such that this is just an initializer
+	hd.rq.app['active_module'] = 'app.messages'
+	hd.state['message_notify'] = NewMessageNotify.inject
 
 @ws.handler
 async def exit_module(hd):
@@ -35,6 +36,11 @@ async def exit_module(hd):
 
 @ws.handler(auth_func = active)
 async def messages(hd, reverting = False):
+	if hd.rq.app['active_module'] != 'messages': # frequently, messages() is called from elsewhere (other than user request), e.g., as a default startup.  In this case, the normal framework caller of our enter_module() doesn't get called, so we need to call it; this is the exception, and is because this method is a little special
+		await enter_module(hd)
+	if reverting and hd.state['message_notify'] != NewMessageNotify.reload:
+		return # nothing to do here - don't reload messages if reverting, unless NewMessageNotify.reload
+
 	just_started = task.just_started(hd, messages) # have to do this first, before referencing hd.task.state, below
 	filt = hd.task.state['filt'] = hd.payload.get('filt', hd.task.state.get('filt', Filter.unarchived)) # prefer filt sent in payload, then filt already recorded, and, finally, if nothing, default to viewing new ('unarchived') messages (only)
 
@@ -43,18 +49,15 @@ async def messages(hd, reverting = False):
 		await ws.send_content(hd, 'content', html.messages_container())
 		# sending the above can happen almost immediately; as message lookup might take a moment longer, we'll do it only subsequently (below), even for the very first load, so that the user at least has the framework of the page to see, and the "loading messages..." to see (or, hopefully not, if things are fast enough!)
 	await ws.send_sub_content(hd, 'filter_container', html.messages_filter(filt))
-	if filt == Filter.unarchived:
-		hd.task.state['skip'] = 0
-		scroll_to_bottom = False
-		hd.state['message_notify'] = NewMessageNotify.reload
+	if unarchiveds := filt == Filter.unarchived:
+		hd.task.state['skip'] = 0 # start at "top" (oldest (unarchived) messages), and only load new messages when user scrolls to bottom
 	else:
-		# For any fetch other than "new (unarchived) messages", we fetch the "latest":
-		hd.task.state['skip'] = -1 # start at "last page" - with most recent messages (but still in ascending order)
-		scroll_to_bottom = True
-		hd.state['message_notify'] = NewMessageNotify.tease # send alerts/teasers only, since user is looking at non-new (archived) messages
+		hd.task.state['skip'] = -1 # start at "bottom" of "last page" (newest messages), and load older messages when user scrolls to top
 	ms = await _get_messages(hd)
 	hd.task.state['skip'] += len(ms) if hd.task.state['skip'] >= 0 else -len(ms)
-	await ws.send_content(hd, 'messages', html.messages(ms, not scroll_to_bottom), scroll_to_bottom = int(scroll_to_bottom), filt = filt)
+	await ws.send_content(hd, 'messages', html.messages(ms, hd.uid, None, unarchiveds), scroll_to_bottom = 0 if unarchiveds else 1, filt = filt)
+	if len(ms) > 0:
+		hd.task.state['last_thread_patriarch'] = ms[-1]['reply_chain_patriarch'] if unarchiveds else ms[0]['reply_chain_patriarch'] # last message, if we're scrolling down; first if up
 
 @ws.handler(auth_func = active)
 async def more_new_messages_forward_only(hd): # this is only called if a screen is taller than the default # of messages can fill, so more messages are immediately needed; note that a skip of -1 canNOT result in a more_new_messages call or we'll have an infinite loop because the number of "newest" messages fits on screen, with room for more, but calling for more incessantly won't result in any change; this method is ONLY for forward (skipping-forward, from old messages) orientations
@@ -69,8 +72,12 @@ async def more_new_messages(hd): # inspired by "down-scroll" below "bottom"
 	#else:
 	assert(hd.task.state['skip'] >= 0) # true by virtue of filtering 'unarchived' messages - we're only skipping 'forward'
 	ms = await _get_messages(hd)
-	hd.task.state['skip'] += len(ms) if hd.task.state['skip'] >= 0 else -len(ms)
-	await ws.send_content(hd, 'more_new_messages', html.messages(ms, False))
+	if len(ms) > 0:
+		await ws.send_content(hd, 'more_new_messages', html.messages(ms, hd.uid, hd.task.state['last_thread_patriarch']))
+		hd.task.state['skip'] += len(ms)
+		hd.task.state['last_thread_patriarch'] = ms[-1]['reply_chain_patriarch']
+	else:
+		await ws.send(hd, 'no_more_new_messages')
 
 @ws.handler(auth_func = active)
 async def more_old_messages(hd): # inspired by "up-scroll" above "top"
@@ -79,8 +86,11 @@ async def more_old_messages(hd): # inspired by "up-scroll" above "top"
 	#else:
 	assert(hd.task.state['skip'] < 0) # true by virtue of filtering 'archived' messages - we're only skipping 'backward'
 	ms = await _get_messages(hd)
-	hd.task.state['skip'] -= len(ms)
-	await ws.send_content(hd, 'more_old_messages', html.messages(ms, False))
+	if len(ms) > 0:
+		await ws.send_content(hd, 'more_old_messages', html.messages(ms, hd.uid, hd.task.state['last_thread_patriarch']))
+		hd.task.state['skip'] -= len(ms)
+		hd.task.state['last_thread_patriarch'] = ms[0]['reply_chain_patriarch']
+	#else: nothing more to do - don't ws.send() anything or update anything!  User has scrolled to the very top of the available messages for the given filter
 
 async def _get_messages(hd):
 	return await db.get_messages(hd.dbc, hd.uid,
@@ -105,7 +115,7 @@ async def new_message(hd, reverting = False):
 	#else, we have drafts to present...
 	if first:
 		await ws.send_content(hd, 'dialog', html.choose_message_draft(drafts))
-	elif not await task.finished(hd): # dialog-box could have been "canceled"
+	elif not await task.finished(hd): # dialog-box could have been "canceled" (if so, don't do the following! Rather, just let the finish finish!)
 		# user did something like filtersearch update, and we're back here with a new set of drafts to present:
 		await _send_message_draft_table(hd, drafts)
 
@@ -115,20 +125,20 @@ async def brand_new_message(hd):
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
 async def edit_message(hd, reverting = False, message_id = None):
+	first = task.just_started(hd, edit_message)
+	message_id = hd.task.state['message_id'] = message_id or (hd.payload.get('message_id') or hd.task.state.get('message_id')) # using hd.task.state['message_id'] as a preserver - we may detour on a subtask, then revert here, and have lost arg message_id or payload message_id
 	if reverting and hd.task.state['resume_sending_on_revert']:
-		await send_message(hd) # just go straight (back) to sending the message
-		return # finished here
+		await send_message(hd, message_id) # just go straight (back) to sending the message
+		return # finished
 	#else:
-	if first := task.just_started(hd, edit_message):
-		hd.task.state['message_id'] = message_id or hd.payload.get('message_id') or hd.task.state.get('message_id')
-	elif not reverting and await task.finished(hd): # user pushed ▼, to save draft for later
+	if not reverting and await task.finished(hd): # user pushed ▼, to save draft for later
 		await ws.send_content(hd, 'banner', html.info(text.message_draft_saved)) # send banner to prior-task
 		return # finished
 	#else:
 	if first or reverting:
 		# load message: (note that send_message() handles the "send" ► action)
-		message = await db.get_message(hd.dbc, hd.uid, hd.task.state['message_id'])
-		await ws.send_content(hd, 'edit_message', html.edit_message(message["message"]))
+		message = await db.get_message(hd.dbc, hd.uid, message_id)
+		await ws.send_content(hd, 'edit_message', html.edit_message(message_id, message['message']), message_id = message_id)
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
 async def trash_message(hd):
@@ -141,14 +151,16 @@ async def trash_message(hd):
 	await ws.send_content(hd, 'detail_banner', html.info(banner))
 	await _send_message_draft_table(hd, drafts)
 
+_strip_trailing_br = lambda content: content.rstrip('<br>')
+
 @ws.handler(auth_func = active)
 async def save_wip(hd):
-	await db.save_message(hd.dbc, hd.task.state['message_id'], hd.payload['content'])
-
+	await db.save_message(hd.dbc, hd.payload['message_id'], hd.payload['content'])
+	#l.debug(f"Saved WIP for mid: {hd.payload['message_id']} -- content: {hd.payload['content']}")
 
 @ws.handler(auth_func = active)
-async def send_message(hd):
-	mid = hd.task.state['message_id']
+async def send_message(hd, message_id = None):
+	mid = message_id or hd.payload['message_id']
 	message = await db.send_message(hd.dbc, hd.uid, mid)
 	match message:
 		case db.Send_Message_Result.NoTags:
@@ -158,29 +170,33 @@ async def send_message(hd):
 			await ws.send_content(hd, 'detail_banner', html.error(text.cant_send_empty_message))
 			return # finished here
 	# otherwise it's a real message...
-	await task.finish(hd, False) # actually finishing the edit_message task, here!
+	await task.finish(hd) # actually finishing the edit_message task, here! (as send_reply is not an actual task, it's just a helper called from within the context of another)
 	for each_hd in hd.rq.app['hds']: # including delivery to self! (which will reload message list)
 		await deliver_message(each_hd, message)
 	await ws.send_content(hd, 'banner', html.info(text.message_sent)) # TODO: if this was a reply scenario, make the banner text (to the sender!) indicate that the message is now at the bottom of the chain
 
 @ws.handler(auth_func = active)
 async def send_reply(hd):
-	mid = hd.task.state['message_id']
-	if hd.payload.get('to_sender_only') == 1: # replier wishes to send only to the original (parent_mid) sender, and leave others out of it...
-		await db.add_tag_to_message(hd.dbc, mid, (await db.get_author_tag(hd.dbc, hd.task.state['parent_mid']))['id'])
+	mid = hd.payload['message_id']
+	if hd.payload.get('to_sender_only') == '1': # replier wishes to send only to the original (parent_mid) sender, and leave others out of it...
+		await db.add_tag_to_message(hd.dbc, mid, (await db.get_author_tag(hd.dbc, hd.payload['parent_mid']))['id'])
 	else: # replier wishes to send "to all original recipients", instead...
 		await db.set_reply_message_tags(hd.dbc, mid)
 	message = await db.send_message(hd.dbc, hd.uid, mid)
-	await task.finish(hd, False) # actually finishing the compose_reply task, here!
+	await task.finish(hd) # actually finishing the compose_reply task, here! (as send_reply is not an actual task, it's just a helper called from within the context of another)
 	if message == db.Send_Message_Result.EmptyMessage:
-		await ws.send(hd, 'remove_reply_container')
+		await ws.send(hd, 'remove_reply_container', message_id = mid)
 	else:
-		_, html_message = html.message(message)
-		await ws.send_content(hd, 'post_completed_reply', html_message)
+		_, html_message = html.message(message, message['reply_chain_patriarch'])
+		await ws.send_content(hd, 'post_completed_reply', html_message, message_id = mid)
 	for each_hd in hd.rq.app['hds']:
 		if each_hd != hd:
 			await deliver_message(each_hd, message)
+	#!!!@hd.state['message_notify'] = NewMessageNotify.inject # go back to normal injection TODO: what if our previous state was something else?
 
+@ws.handler(auth_func = active)
+async def delete_draft(hd):
+	await db.delete_draft(hd.dbc, hd.payload['message_id']) # TODO: make sure user is author or authorized!
 
 
 @dataclass(slots = True)
@@ -190,16 +206,15 @@ class Active_Reply:
 
 @ws.handler(auth_func = active)
 async def compose_reply(hd):
-	started = task.just_started(hd, compose_reply)
-	parent_mid = hd.task.state['parent_mid'] = hd.payload['message_id']
+	parent_mid = hd.payload['message_id']
 	patriarch_id = await db.get_patriarch_message_id(hd.dbc, parent_mid)
 	selection = hd.payload.get('selection') # TODO: (int, int) range? or actual text, or...?
 	# While replying, allow other replies to the same parent or grandparent message to be injected in real-time:
-	hd.state['message_notify'] = NewMessageNotify.inject_replies
-	hd.state['message_notify_inject'] = Active_Reply(parent_mid, patriarch_id)
-	new_mid = hd.task.state['message_id'] = await db.new_message(hd.dbc, hd.uid, parent_mid, patriarch_id)
-	# load (empty) reply-box: (note that send_message() handles the "send" ► action)
-	await ws.send_content(hd, 'inline_reply_box', html.inline_reply_box(hd.payload.get('to_sender_only', 1)), message_id = parent_mid)
+	#!!!@hd.state['message_notify'] = NewMessageNotify.inject_replies
+	#!!!@hd.state['message_notify_inject'] = Active_Reply(parent_mid, patriarch_id)
+	new_mid = await db.new_message(hd.dbc, hd.uid, parent_mid, patriarch_id)
+	# load (empty) reply-box: (note that send_reply() handles the "send" ► action)
+	await ws.send_content(hd, 'inline_reply_box', html.inline_reply_box(new_mid, parent_mid), message_id = new_mid, parent_mid = parent_mid)
 
 
 async def deliver_message(hd, message):
@@ -216,41 +231,44 @@ async def deliver_message(hd, message):
 		SO, for this scenario, we want to send the teaser only!) - next time user goes to messages screen, it'll reload properly
 	'''
 	if await db.delivery_recipient(hd.dbc, hd.uid, message['id']):
+		l.debug(f"!!!!!!!!!!! considering INJECTING into uid ({hd.uid})'s stream; message_notify = {hd.state.get('message_notify')}")
+		reference_mid = -1 # init to signal "don't inject"
 		match hd.state.get('message_notify'):
 			case NewMessageNotify.tease:
 				await ws.send(hd, 'deliver_message_teaser', teaser = message['teaser'])
 			case NewMessageNotify.reload:
 				await messages(hd)
+			case NewMessageNotify.inject:
+				l.debug(f'!!!!!!!!!!!!! INJECTING! uid: {hd.uid}')
+				reference_mid = message['reply_to']
 			case NewMessageNotify.inject_replies:
+				l.debug(f'!!!!!!!!!!!!! INJECTING REPLY! uid: {hd.uid}')
 				active_reply = hd.state['message_notify_inject']
-				# The following seem like meaningful locations in the tree to inject-show the new message now, even while the active-replier is typing
-				placement = -1 # default: don't inject at all (just let the new message show next time a reload happens)
 				if active_reply.parent_id == message['reply_to']: # message (to be delivered) shares the same parent...
-					placement = 0 # ... so inject this new delivery immediately above the active reply (that's what 0 indicates)
-				elif active_reply.patriarch_id == message['reply_to']: # (to be delivered) message's parent is active-reply's grandparent (first descendent)...
-					placement = message['id'] # ... so inject this new delivery just ABOVE active-reply's parent message
-				if placement != -1:
-					_, html_message = html.message(message)
-					await ws.send_content(hd, 'inject_deliver_new_message', html_message, placement = placement)
-				# else don't show now, just let it show next time a reload happens
+					reference_mid = 0 # ... so inject this new delivery immediately above the active reply (that's what 0 indicates)
+				else:
+					reference_mid = message['reply_to'] # just like a normal injection
+		if reference_mid == None or reference_mid >= 0:
+			_, html_message = html.message(message, message['reply_chain_patriarch'], injection = True)
+			reference_mid = -1 if reference_mid == None else reference_mid
+			await ws.send_content(hd, 'inject_deliver_new_message', html_message, new_mid = message['id'], reference_mid = reference_mid, placement = 'beforeend')
 
 @ws.handler(auth_func = active)
 async def message_tags(hd, reverting = False, resume_sending_on_revert = False):
-	mid = hd.task.state['message_id'] # possibly (intentionally) stealing from prior task (BEFORE calling task.started())!
 	hd.task.state['resume_sending_on_revert'] = resume_sending_on_revert # also setting this to PRIOR task, actually (on first entry, before just_started() call) - on purpose, to tell message-sending (e.g.) to send directly after this message-tag-selection operation is complete; no need to pause on (reverting to) that prior task for anything more
-	if started := task.just_started(hd, message_tags):
-		hd.task.state['message_id'] = mid # stolen from prior task; now a part of our task TODO: make this technique a PART of task.started(args)?!
+	started = task.just_started(hd, message_tags)
+	mid = hd.payload.get('message_id') # if 'finished' is in the payload, then this will never be used, and might not even be provided by caller
 	if started or reverting: # 'reverting' check is currently useless, but if sub-dialogs are added here, this is necessary to repaint the whole dialog
-		await ws.send_content(hd, 'dialog', html.message_tags(await message_tags_table(hd)))
+		await ws.send_content(hd, 'dialog', html.message_tags(await message_tags_table(hd, mid)))
 	elif not await task.finished(hd): # dialog-box could have been "closed"
-		await ws.send_content(hd, 'sub_content', await message_tags_table(hd), container = 'message_tags_table_container')
+		await ws.send_content(hd, 'sub_content', await message_tags_table(hd, mid), container = 'message_tags_table_container')
 
-async def message_tags_table(hd):
-	utags, otags = await db.get_message_tags(hd.dbc, hd.task.state['message_id'],
+async def message_tags_table(hd, mid):
+	utags, otags = await db.get_message_tags(hd.dbc, mid,
 													active = not hd.task.state.get('filtersearch_include_extra'),
 													like = hd.task.state.get('filtersearch_text'),
 													include_others = True)
-	return html.message_tags_table(utags, otags)
+	return html.message_tags_table(utags, otags, mid)
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
 async def remove_tag_from_message(hd):
@@ -294,8 +312,9 @@ async def _send_message_draft_table(hd, drafts):
 
 async def _remove_or_add_tag_to_message(hd, func, banner_text):
 	tid = int(hd.payload['tag_id'])
-	await func(hd.dbc, hd.task.state['message_id'], tid)
-	await ws.send_content(hd, 'sub_content', await message_tags_table(hd), container = 'message_tags_table_container')
+	mid = int(hd.payload['message_id'])
+	await func(hd.dbc, mid, tid)
+	await ws.send_content(hd, 'sub_content', await message_tags_table(hd, mid), container = 'message_tags_table_container')
 	tag = await db.get_tag(hd.dbc, tid, 'name')
 	await ws.send_content(hd, 'detail_banner', html.info(banner_text.format(name = tag['name'])))
 

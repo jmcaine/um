@@ -290,10 +290,10 @@ async def get_tags(dbc, active = True, like = None, get_subscribers = False, lim
 	count, join = '', ''
 	if get_subscribers:
 		count = ', count(user_tag.tag) as num_subscribers'
-		join = 'left outer join user_tag on tag.id = user_tag.tag'
+		join = 'left join user_tag on tag.id = user_tag.tag'
 	limit = f'limit {limit}' if limit else ''
 	result = await _fetchall(dbc, f'select tag.* {count} from tag {join} {where} group by tag.id order by name {limit}', args)
-	return result if len(result) > 0 and result[0]['id'] != None else [] # convert weird "1-empty-record" result to an empty-list, instead; this happens in the left outer join case - a single record is returned with id=None and every other field = None except 'count', which = 0; we don't care about this case, so remove it.'
+	return result if len(result) > 0 and result[0]['id'] != None else [] # convert weird "1-empty-record" result to an empty-list, instead; this happens in the left join case - a single record is returned with id=None and every other field = None except 'count', which = 0; we don't care about this case, so remove it.'
 
 async def new_tag(dbc, name, active):
 	return await _insert1(dbc, 'insert into tag (name, active) values (?, ?)', (name, active))
@@ -423,19 +423,19 @@ def test_strip_tags(self):
 	t('<div>hello</div><div>oh', 'hello...oh')
 
 
-_mega_message_select = 'select message.id, message.message, message.reply_chain_patriarch, parent.teaser as parent_teaser, sender.username as sender, sender.id as sender_id, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(tag.name, ", ") as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_read where read_by = ? and message = message.id) as archived from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id'
+_mega_message_select = 'select message.id, message.message, message.reply_chain_patriarch, message.teaser, parent.teaser as parent_teaser, sender.username as sender, sender.id as sender_id, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(DISTINCT tag.name) as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_read where read_by = ? and message = message.id) as archived from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id' # NOTE that GROUP_CONCAT(DISTINCT tag.name) is the only way to get singles (not multiple copies) of group names - using GROUP_CONCAT(tag.name, ', ') would be nice, since the default doesn't place a space after the comma, but providing the ', ' argument only works if you do NOT use DISTINCT, which isn't an option for us.
+
+
+_message_tag_join = 'left join message_tag on message.id = message_tag.message left join tag on message_tag.tag = tag.id'
+
+_user_tag_join = 'left join user_tag on tag.id = user_tag.tag'
 
 async def get_message(dbc, user_id, message_id):
-	return await _fetch1(dbc, f'{_mega_message_select} {_message_tag_user_tag_join_pre} where message.id = ?', (user_id, user_id, message_id,))
-
-
-_message_tag_user_tag_join_pre = 'left outer join message_tag on message.id = message_tag.message left outer join tag on message_tag.tag = tag.id'
-
-_message_tag_user_tag_join = _message_tag_user_tag_join_pre + ' join user_tag on tag.id = user_tag.tag join user on user_tag.user = user.id'
+	return await _fetch1(dbc, f'{_mega_message_select} {_message_tag_join} where message.id = ?', (user_id, user_id, message_id,))
 
 async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = Filter.unarchived, skip = 0, limit = 15):
-	where = ['user.id = ?', ]
-	args = [user_id, user_id, user_id,] # first two user_ids are for sub-selects in query (below)
+	where = []
+	args = [user_id, user_id,] # first two user_ids are for sub-selects in _mega_message_select; third is for our 'where user.id = ?' (see line above)
 	if not include_trashed:
 		where.append('message.deleted is null')
 	if like:
@@ -457,15 +457,12 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 			where.append(f'message.sent >= "{(datetime.utcnow() - timedelta(days=1)).isoformat()}Z"') # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!
 		case Filter.this_week: # we'll interpret as "7 days back"
 			where.append(f'message.sent >= "{(datetime.combine(datetime.utcnow().date(), datetime.min.time()) - timedelta(days=7)).isoformat()}Z"') # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!
-	where1 = 'where ' + " and ".join(where) if where else ''
-	# now set up the second query - for messages authored by the user:
-	where.append('message.author = ?')
-	args = args + args[1:] # the second query looks like the first, except for first and last args...
-	args.append(user_id)
-	where2 = 'where ' + " and ".join(['message.sent is not null',] + where[1:]) # don't need the first user.id that the other select depends on; but DO need to weed out unsent messages (that are authored by others)
-	group_by = 'group by message.message' # TODO: what does this do?!?!
-	asc_order = f'order by thread_updated asc, sent asc'
-	query = f'{_mega_message_select} {_message_tag_user_tag_join} {where1} {group_by} union {_mega_message_select} {_message_tag_user_tag_join_pre} {where2} {group_by}'
+	where.append('((message.sent is not null and user_tag.user = ?) or (message.author = ? and (message.reply_to is not null or message.sent is not null)))')
+	args += [user_id, user_id]
+	where = 'where ' + ' and '.join(where)
+	group_by = 'group by message.id' # query produces many rows for a message, one per tag for that message; this is required to consolidate to one row, but allows GROUP_CONCAT() to properly build the list of tags that match
+	asc_order = f'order by thread_updated asc, sent asc nulls last' # "nulls last" is for unsent messages, which don't yet have 'sent' set (so, it's null) - those should be "lowest" in the list
+	query = f'{_mega_message_select} {_message_tag_join} {_user_tag_join} {where} {group_by}'
 	if skip < 0: # usually indicating "backing up", but -1 indicates "last page" / "latest stuff"
 		this_skip = 0 if skip == -1 else skip # skip 0 if it's the flag "-1"; else skip `skip` (negative numbers will result proper 
 		desc_order = f'order by thread_updated desc, sent desc'
@@ -477,7 +474,7 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 	return await _fetchall(dbc, query, args)
 
 async def delivery_recipient(dbc, user_id, message_id):
-	return await _fetch1(dbc, f'select 1 from message {_message_tag_user_tag_join} where user.id = ?', (user_id,))
+	return await _fetch1(dbc, f'select 1 from message {_message_tag_join} {_user_tag_join} where (user_tag.user = ? or message.author = ?) and message.id = ?', (user_id, user_id, message_id))
 
 async def get_message_tags(dbc, message_id, active = True, like = None, limit = 15, include_others = False):
 	# TODO: this is very similar to get_user_tags - consider consolidating?
@@ -499,6 +496,10 @@ async def remove_tag_from_message(dbc, message_id, tag_id):
 
 async def add_tag_to_message(dbc, message_id, tag_id):
 	return await _insert1(dbc, 'insert into message_tag (message, tag) values (?, ?)', (message_id, tag_id))
+
+async def delete_draft(dbc, message_id):
+	return await _update1(dbc, f'update message set deleted = {k_now} where id = ?', (message_id,))
+
 
 async def get_author_tag(dbc, message_id):
 	return await _fetch1(dbc, 'select tag.* from tag join message on message.author = tag.user where message.id = ?', (message_id,))
