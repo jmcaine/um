@@ -256,6 +256,12 @@ div.yellow_border {
 .i-trash {
 	background: url(ico/trash.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87481/PNG/32/ - https://icon-icons.com/icon/trash-container-side/87481 */
 }
+.i-one {
+	background: url(ico/one.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87493/PNG/32/ - https://icon-icons.com/icon/user/87493 */
+}
+.i-all {
+	background: url(ico/group.png) center center/12px 12px no-repeat; /* https://icon-icons.com/icon/user-group/87485 */
+}
 
 
 /* ------------------------------------------------------------------------- */

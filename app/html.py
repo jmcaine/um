@@ -347,8 +347,10 @@ def inline_reply_box(message_id, parent_mid, content = None):
 		with t.div(cls = 'buttonbar'):
 			t.div(cls = 'spacer')
 			t.button(t.i(cls = 'i i-trash'), title = text.delete, onclick = f"messages.delete_draft({message_id})")
-			t.button('1', id = f"reply_recipient_button_{message_id}", onclick = f'messages.flip_reply_recipient({message_id})') # TODO: deport "1" (NOTE: default to "1", meaning - reply to sender only, not "All")
-			t.button('►', title = text.send_message, onclick = f'''messages.send_reply({message_id}, {parent_mid}, $('reply_recipient_button_{message_id}').textContent)''')
+			t.div(id = f"reply_recipient_{message_id}", cls = 'hide', data_replyrecipient = 'A')
+			t.button(t.i(cls = 'i i-all'), id = f"rr_all_{message_id}", title = text.reply_all, onclick = f'messages.reply_recipient_one({message_id})')
+			t.button(t.i(cls = 'i i-one'), id = f"rr_one_{message_id}", cls = 'hide', title = text.reply_one, onclick = f'messages.reply_recipient_all({message_id})')
+			t.button('►', title = text.send_message, onclick = f'''messages.send_reply({message_id}, {parent_mid}, $('reply_recipient_{message_id}').dataset.replyrecipient)''')
 	return result
 
 def messages(msgs, user_id, last_thread_patriarch = None, skip_first_hr = False):

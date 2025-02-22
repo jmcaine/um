@@ -84,6 +84,8 @@ pin = 'Pin this message'
 unpin = 'UNpin this message'
 view_older = 'View older messages'
 view_newer = 'View newer messages'
+reply_one = 'Reply to sender only'
+reply_all = 'Reply to entire group'
 
 # Fieldset legends:
 emails = 'Emails'

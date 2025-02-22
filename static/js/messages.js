@@ -95,7 +95,7 @@ let messages = {
 				}
 			}
 			// else reference_mid is not (yet) in our set, so there's no way to inject, but...
-			else if (g_accept_injected_messages_at_bottom) { // user has scrolled to bottom of UNARCHIVED messages, and there are no more, OR user is looking at ALL messages, and is at the bottom... so brand new bottom-injections can be injected!
+			else if (g_accept_injected_messages_at_bottom) { // user has scrolled to bottom of UNARCHIVED messages, and there are no more, OR user is looking at ALL messages, and is at the bottom... so brand new bottom-injections can be injected!  NOTE/TODO: this results in a SECOND loading of the same message later upon another scroll-down that causes a "load-more"
 				// place it at the very bottom:
 				const currently_at_bottom = g_main_pane.scrollTop + g_main_pane.clientHeight >= g_main_pane.scrollHeight; // note this first, then do the insertAdjacentHTML...
 				$('messages_container').insertAdjacentHTML("beforeend", content);
@@ -107,13 +107,26 @@ let messages = {
 		}
 	},
 
-	flip_reply_recipient: function(message_id) {
-		let b = $('reply_recipient_button_' + message_id)
-		if (b.textContent == '1') {
-			b.textContent = 'A'
-		} else {
-			b.textContent = '1'
-		}
+	reply_recipient_all: function(message_id) {
+		let d = $('reply_recipient_' + message_id);
+		d.dataset.replyrecipient = 'A';
+		let rr_all = $('rr_all_' + message_id);
+		rr_all.classList.add('show');
+		rr_all.classList.remove('hide');
+		let rr_one = $('rr_one_' + message_id);
+		rr_one.classList.add('hide');
+		rr_one.classList.remove('show');
+	},
+
+	reply_recipient_one: function(message_id) {
+		let d = $('reply_recipient_' + message_id);
+		d.dataset.replyrecipient = '1';
+		let rr_one = $('rr_one_' + message_id);
+		rr_one.classList.add('show');
+		rr_one.classList.remove('hide');
+		let rr_all = $('rr_all_' + message_id);
+		rr_all.classList.add('hide');
+		rr_all.classList.remove('show');
 	},
 
 	save_draft: function() {
