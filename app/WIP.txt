@@ -1,0 +1,74 @@
+
+use new edit_history and resend_history DB tables!
+
+password-reset EMAILing
+	FAMILY concept from ohs
+
+BUGS:
+	if user just clicks archive, archive, archive, and doesn't scroll-down explicitly, more new messages aren't loaded and screen looks empty/messageless!
+
+	filter isn't working to narrow drafts list down
+
+	reply to own reply - this creates a reply to self (only) - nobody else gets it; seems like a footgun
+		but note - you have to intentionally click to send to "sender only", rather than group, so probably not likely to happen (much)
+	auto-save doesn't save attachments that have been added (well... it just doesn't show them, right?  Upon send, I think they show up fine...?  True of an edited message, at least....)
+
+	"paste" attachments (https://www.google.com/search?client=firefox-b-1-e&channel=entpr&q=javascript+accept+image+paste+as+file+upload)
+		pasting multiple at a time doesn't work
+
+	email regexp is broken: JS Console: "Unable to check <input pattern='(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)'> because the pattern is not a valid regexp: invalid character in class in regular expression""
+	SAME with phone!
+
+SMS Texting!
+
+VOTING
+
+'selection' (in compose_reply)!
+
+audio(mp3) attachments
+
+correctly employ popover API: https://developer.mozilla.org/en-US/docs/Web/API/Popover_API
+	DID this with showing bigger images and movies embedded in messages; have NOT converted other kludgey "dialog" use yet.
+
+check TODO_main.py and others in app/
+
+
+
+just added line 417 in main.py:
+				hd.supertask = admin_users # TODO!!! (change supertask to a stack, and push/pop?!
+	* consider the comment - stack?
+	* is this even in the jurisdiction...?
+
+SCHEDULING / calendar
+
+??? (maybe not - maybe good that everybody MUST explicitly archive each....) Add "archive all", preferrably (only) to the last message in a thread, to apply archival to the whole thread, once consumed.  This will likely require a "lookahead" to know that the "next" message does not have the same thread_patriarch
+
+Consider other css animations, like "animation-name: slide-in" (https://developer.mozilla.org/en-US/play)
+
+(auto/optional) down-scaling images attached/pasted before upload
+
+
+---
+
+TEST MULTIPLE open reply drafts - does auto-saving move properly!?
+	A: YES! it does!
+
+------------
+
+Videos:
+* new message (recipient "tags")
+	* "fixing" recipient groups - adding and removing tags to a message already "sent"
+* replying (to one or to all)
+* filtering messages (NEW, ALL, ...), and stashing messages
+* TOP LEFT CORNER is "most common tasks": new message, or search for something
+* search
+	- filters as you type
+	- no need to go to "room" or know "where"
+	- YES, combines with filters, so: "This week" + search term will find search term within this week's messages
+	- "deep" looks to message's innerds; otherwise, just the "tags" and opening sentence is used
+* no "rooms"...
+	- simple mesage - tags (filter by typing)
+
+* saving drafts; finding them later via "+" (as "new" message)
+* adding attachments
+

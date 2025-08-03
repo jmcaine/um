@@ -1,0 +1,32 @@
+To create a new message, 
+just click the + button in the top left corner
+and begin typing your new message.
+<First message>
+Then, push send.
+
+You'll be asked WHO you want this message to go to.
+You can choose individual people as recipients
+	OR you can choose "groups", otherwise called "tags"
+I'm going to post this message to the "fun" tag, 
+	so that everybody subscribed to that tag will see my message.
+When I push send, the message is delivered instantly to all. 
+I can see it, too, here at the bottom of my "new" messages.
+
+Note that it's perfectly fine to create a new message, 
+then click this button to choose your audience,
+and THEN finally write your message.
+When I push send, the message is delivered.
+
+If I need to edit this message, I can push the edit button
+then modify the text, 
+<... edited>
+then push send again.
+
+If I merely want to change my audience,
+I can click this button next to the current recipients
+and select more recipients, or remove some current recipients,
+so that I get right collection of people for this message,
+and take care not to bother the people who don't care!
+
+The next video will cover "replying" to a message.
+

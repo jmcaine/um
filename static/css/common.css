@@ -63,6 +63,13 @@ body {
 	overflow-x: auto;
 }
 
+/* for new 'dialog' use ... someday, will replace dialog_screen !!! */
+::backdrop {
+	background-color: #444;
+	opacity: 0.7;
+}
+
+
 /* defaults / variations */
 
 div {
@@ -130,8 +137,11 @@ fieldset, .info, .warning, .error {
 	display: none;
 }
 
-@keyframes injection-highlight {
+@keyframes pulse {
 	0% {
+		background-color: #ffffff;
+	}
+	10% {
 		background-color: #c3ffba;
 	}
 	100% {
@@ -140,7 +150,42 @@ fieldset, .info, .warning, .error {
 }
 
 .injection {
-	animation: pulse 1s;
+	animation: pulse 4s;
+}
+
+@keyframes fadeout {
+	0% {
+		opacity: 1;
+		display: block;
+	}
+	100% {
+		opacity: 0;
+		display: none;
+	}
+}
+@keyframes fadeout_delayed {
+	0% {
+		opacity: 1;
+		display: block;
+	}
+	80% {
+		opacity: 1;
+		display: block;
+	}
+	100% {
+		opacity: 0;
+		display: none;
+	}
+}
+
+.fadeout_short {
+	animation: fadeout 2s;
+}
+.fadeout_mid {
+	animation: fadeout_delayed 10s;
+}
+.fadeout_long {
+	animation: fadeout_delayed 30s;
 }
 
 /* mix-ins */
@@ -182,6 +227,14 @@ div.yellow_border {
 	padding-right: 0.2em;
 }
 
+.changeable {
+	background-color: #babbeb;
+}
+.changeable :hover {
+	background-color: #6567a8;
+	cursor: pointer;
+}
+
 
 /* content edit area (invisible edit-box) */
 
@@ -194,14 +247,18 @@ div.yellow_border {
 
 /* ------------------------------------------------------------------------- */
 
-
-.buttonbar {
-	display: flex;
-	flex-flow: row wrap; /* should wrap only when screen is too narrow */
+.dialog {
+	padding: 0;
 }
 
-.buttonbar button {
+.media_container {
+	margin: 0;
+	padding: 0;
+}
+
+button {
 	min-width: 20px;
+	min-height: 25px;
 	margin: 1px 2px;
 	padding: 1px 5px;
 	font-size: 1em;
@@ -213,8 +270,14 @@ div.yellow_border {
 	cursor: pointer;
 	box-shadow: none;
 }
-.buttonbar button:hover {
+
+button:hover {
 	background-color: #999999;
+}
+
+.buttonbar {
+	display: flex;
+	flex-flow: row wrap; /* should wrap only when screen is too narrow */
 }
 
 .buttonbar button.selected {
@@ -230,7 +293,7 @@ div.yellow_border {
 }
 
 .buttonbar .indent { /* kludgey "indent" */
-	width: 2.3em;
+	width: 2em;
 }
 
 
@@ -241,11 +304,8 @@ div.yellow_border {
 	 filter: invert(100%);
 }
 /* most from dripicons - https://icon-icons.com/users/PHEoYFqoi7DZt6BnC1SoR/icon-sets/ */
-.i-archive {
-    background: url(ico/archive.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87541/PNG/32/ - https://icon-icons.com/icon/download-folder/87541 */
-}
-.i-unarchive {
-    background: url(ico/unarchive.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87531/PNG/32/ - https://icon-icons.com/icon/upload-arrow/87531 */
+.i-stash {
+    background: url(ico/stash.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87541/PNG/32/ - https://icon-icons.com/icon/download-folder/87541 */
 }
 .i-reply {
     background: url(ico/reply.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87524/PNG/32/ */
@@ -262,6 +322,31 @@ div.yellow_border {
 .i-all {
 	background: url(ico/group.png) center center/12px 12px no-repeat; /* https://icon-icons.com/icon/user-group/87485 */
 }
+.i-edit {
+	background: url(ico/edit.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87517/PNG/32/ - https://icon-icons.com/icon/edit-document-button/87517 */
+}
+.i-send {
+	background: url(ico/send.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87506/PNG/32/ - https://icon-icons.com/icon/mice-pointer/87506 */
+}
+.i-messages {
+	background: url(ico/messages.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87519/PNG/32/ - https://icon-icons.com/icon/conversation-bubbles/87519 */
+}
+.i-folder {
+	background: url(ico/folder.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87547/PNG/32/ - https://icon-icons.com/icon/computer-folder/87547 */
+}
+.i-attach {
+	background: url(ico/attach.png) center center/12px 12px no-repeat; /*  */
+}
+.i-downvote {
+	background: url(ico/downvote.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87539/PNG/32/ - https://icon-icons.com/icon/thumb-down/87539 */
+}
+.i-upvote {
+	background: url(ico/upvote.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87486/PNG/32/ - https://icon-icons.com/icon/thumb-up/87486 */
+}
+.i-close {
+	background: url(ico/close.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/105037/PNG/32/ https://icon-icons.com/icon/close-cross-circular-interface-button/105037 */
+}
+
 
 
 /* ------------------------------------------------------------------------- */

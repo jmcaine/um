@@ -9,6 +9,7 @@ from copy import copy
 from dataclasses import dataclass, field as dataclass_field
 from enum import Enum
 from datetime import datetime, date, timedelta, timezone
+from random import randint
 from zoneinfo import ZoneInfo
 
 from dominate import document as dominate_document
@@ -16,6 +17,7 @@ from dominate import tags as t
 from dominate.util import raw
 
 from . import text
+from .const import *
 from .settings import cache_buster
 from .messages_const import *
 
@@ -33,7 +35,7 @@ _yes_or_no = lambda value: 'yes' if value else 'no'
 _format_phone = lambda num: '(' + num[-10:-7] + ') ' + num[-7:-4] + '-' + num[-4:] # TODO: international extention prefixes [0:-11]
 _send = lambda app, task, **args: f"{app}.send_ws('{task}'" + (f', {{ {", ".join([f"{key}: {value}" for key, value in args.items()])} }})' if args else ')')
 
-_cancel_button = lambda title = text.cancel: t.button(title, onclick = 'main.send_ws("finish")')
+_cancel_button = lambda title = text.cancel: t.button(title, onclick = _send('main', 'finish'))
 
 # Document --------------------------------------------------------------------
 
@@ -51,7 +53,9 @@ def document(ws_url: str):
 			t.hr(cls = 'top')
 
 		with t.div(id = 'main_pane'):
-			with t.div(id = 'content_container', cls = 'container'):
+			t.input_(type = 'file', id = 'file_upload', multiple = 'true', hidden = 'true', accept = 'image/png, image/jpeg, video/mp4')
+			raw(f'''<dialog id="dialog" class="dialog" closedby="any" autofocus="dialog"><div style="float:right">  <button title="{text.close}" onclick="$('dialog').close()"><i class="i i-close"></i></div><div id="dialog_contents"></div></dialog>''') # there's no t.dialog!
+			with t.div(id = 'content_container', cls = 'container', style = 'clear:both'):
 				t.div("Loading...")
 
 		with t.div(id = 'scripts', cls = 'container'):
@@ -67,22 +71,22 @@ def document(ws_url: str):
 def login_or_join():
 	return t.div(
 		t.div(text.welcome),
-		t.div(t.button(text.login, onclick = 'main.send_ws("login")'), cls = 'center'),
-		t.div(t.button(text.join, onclick = 'main.send_ws("join")'), cls = 'center'),
+		t.div(t.button(text.login, onclick = _send('main', 'login')), cls = 'center'),
+		t.div(t.button(text.join, onclick = _send('main', 'join')), cls = 'center'),
 	)
 
 def messages_topbar(admin):
 	result = t.div(cls = 'buttonbar')
 	with result:
 		# button symbols:    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦ ►
-		t.button('+', title = 'new message', onclick = 'messages.send_ws("new_message")')
-		t.div(filterbox())
+		t.button('+', title = 'new message', onclick = _send('messages', 'new_message'))
+		t.div(filterbox('deep_search'))
 		t.div(filterbox_checkbox(text.deep_search, 'deep_search'))
 		t.div(cls = 'spacer')
-		t.button('...', title = text.change_settings, onclick = 'main.send_ws("settings")')
+		#TODO: t.button('...', title = text.change_settings, onclick = _send('main', 'settings'))
 		if admin:
-			t.button('Ѫ', title = text.admin, onclick = 'admin.send_ws("users")')
-		t.button('Θ', title = text.logout, onclick = 'main.send_ws("logout")')
+			t.button('Ѫ', title = text.admin, onclick = _send('admin', 'users'))
+		t.button('Θ', title = text.logout, onclick = _send('main', 'logout'))
 	return result
 
 def messages_filter(filt):
@@ -91,7 +95,7 @@ def messages_filter(filt):
 		t.div(cls = 'indent')
 		t.div('Filters:')
 		filt_button = lambda title, hint, _filt: t.button(title, title = hint, cls = 'selected' if filt == _filt else '', onclick = f'messages.filter(id, "{_filt}")')
-		filt_button(text.news, text.show_news, Filter.unarchived)
+		filt_button(text.news, text.show_news, Filter.new)
 		filt_button(text.alls, text.show_alls, Filter.all)
 		filt_button(text.days, text.show_days, Filter.day)
 		filt_button(text.this_weeks, text.show_this_weeks, Filter.this_week)
@@ -106,7 +110,7 @@ def users_page(users):
 	result = t.div(admin_button_band())
 	with result:
 		t.hr()
-		admin_menu_button_band((t.button('+', title = text.invite_new_user, onclick = 'main.send_ws("invite")'),))
+		admin_menu_button_band((t.button('+', title = text.invite_new_user, onclick = _send('main', 'invite')),))
 		t.div(user_table(users), id = 'user_table_container')
 	return result
 
@@ -115,7 +119,7 @@ def tags_page(tags):
 	result = t.div(admin_button_band())
 	with result:
 		t.hr()
-		admin_menu_button_band((t.button('+', title = text.create_new_tag, onclick = 'admin.send_ws("new_tag")'),))
+		admin_menu_button_band((t.button('+', title = text.create_new_tag, onclick = _send('admin', 'new_tag')),))
 		t.div(tag_table(tags), id = 'tag_table_container')
 	return result
 
@@ -124,13 +128,13 @@ def tags_page(tags):
 
 
 def info(msg: str):
-	return t.div(msg, cls = 'info')
+	return t.div(msg, id = 'banner_content', cls = 'info fadeout_mid')
 
 def error(msg: str):
-	return t.div(msg, cls = 'error')
+	return t.div(msg, id = 'banner_content', cls = 'error fadeout_long')
 
 def warning(msg: str):
-	return t.div(msg, cls = 'warning')
+	return t.div(msg, id = 'banner_content', cls = 'warning fadeout_long')
 
 def test1(msg: str):
 	return t.div(msg)
@@ -142,7 +146,7 @@ def build_fields(fields, data = None, label_prefix = None, invalids = None):
 
 def login(fields):
 	button = _ws_submit_button(text.login, fields.keys())
-	forgot = t.button(text.forgot_password, onclick = 'main.send_ws("forgot_password")')
+	forgot = t.button(text.forgot_password, onclick = _send('main', 'forgot_password'))
 	result = fieldset(text.login, build_fields(fields), button, forgot)
 	return result
 
@@ -158,21 +162,23 @@ def admin_button_band():
 		filterbox()
 		filterbox_checkbox(text.show_inactives, 'show_inactives')
 		t.div(cls = 'spacer')
-		t.button('...', title = text.change_settings, onclick = 'main.send_ws("settings")')
-		t.button('Ξ', title = text.messages, onclick = 'messages.send_ws("messages")')
-		t.button('Θ', title = text.logout, onclick = 'main.send_ws("logout")')
+		t.button('...', title = text.change_settings, onclick = _send('main', 'settings'))
+		t.button(t.i(cls = 'i i-messages'), title = text.messages, onclick = _send('messages', 'messages')) # Ξ
+		t.button('Θ', title = text.logout, onclick = _send('main', 'logout'))
 	return result
 
 def admin_menu_button_band(left_buttons):
 	result = t.div(*left_buttons, cls = 'buttonbar')
 	with result:
 		t.div(cls = 'spacer')
-		t.button('☺', title = text.users, onclick = 'admin.send_ws("users")')
-		t.button('#', title = text.tags, onclick = 'admin.send_ws("tags")')
+		t.button(t.i(cls = 'i i-all'), title = text.users, onclick = _send('admin', 'users')) # ☺
+		t.button('#', title = text.tags, onclick = _send('admin', 'tags'))
 	return result
 
 
-def filterbox(extra = '$("show_inactives").checked'): # set extra = 'false' to remove extra
+def filterbox(extra = 'show_inactives'):
+	if extra:
+		extra = f'$("{extra}").checked'
 	return Input(text.filtersearch, type_ = 'search', autofocus = True, attrs = { # NOTE: autofocus = True is the supposed cause of Firefox FOUC https://bugzilla.mozilla.org/show_bug.cgi?id=1404468 - but it does NOT cause the warning in FF console to go away AND we don't see any visual blink evidence, so we're leaving autofocus=True, but an alternative would be to set autofocus in the JS that loads the header content
 		'autocomplete': 'off',
 		'oninput': _send('main', 'filtersearch', searchtext = 'this.value', include_extra = extra),
@@ -279,23 +285,24 @@ def tag_users_and_nonusers(tun_table):
 	return result
 
 def tag_users_and_nonusers_table(tag_name, users, nonusers):
+	# TODO: why not use _x_tags_table?  lots of repeat principle below....
 	un_name = lambda user: f"{user['username']} ({user['first_name']} {user['last_name']})" if user else ''
 	result = t.table(cls = 'full_width')
 	with result:
 		with t.tr(cls = 'midlin'):
-			t.th(f'Subscribed to {tag_name}', align = 'right')
+			t.th('NOT Subscribers:', align = 'right')
 			t.th(t.button(text.done, onclick = _send('admin', 'tag_users', finished = 'true')), colspan = 2)
-			t.th('NOT Subscribed', align = 'left')
+			t.th(f'Subscribers (to {tag_name}):', align = 'left')
 		for count in range(15): # TODO: 15 is hardcode equivalent to db/sql 'limit'; that is, the active "list size" - 'nonusers', here, COULD actually be bigger than 15, so... limiting here, as well
 			user = users.pop(0) if len(users) > 0 else {}
 			nonuser = nonusers.pop(0) if len(nonusers) > 0 else {}
 			if not user and not nonuser:
 				break # done
 			with t.tr(cls = 'midlin'):
-				t.td(un_name(user), align = 'right')
-				t.td(t.button('-', cls = 'singleton_button red_bg', onclick = _send('admin', 'remove_user_from_tag', user_id = user['id'])) if user else '', align = 'right')
-				t.td(t.button('+', cls = 'singleton_button green_bg', onclick = _send('admin', 'add_user_to_tag', user_id = nonuser['id'])) if nonuser else '', align = 'left')
-				t.td(un_name(nonuser), align = 'left')
+				t.td(un_name(nonuser), align = 'right')
+				t.td(t.button('+', cls = 'green_bg', onclick = _send('admin', 'add_user_to_tag', user_id = nonuser['id'])) if nonuser else '', align = 'left')
+				t.td(t.button('-', cls = 'red_bg', onclick = _send('admin', 'remove_user_from_tag', user_id = user['id'])) if user else '', align = 'right')
+				t.td(un_name(user), align = 'left')
 	return result
 
 
@@ -303,8 +310,8 @@ def tag_users_and_nonusers_table(tag_name, users, nonusers):
 def user_tags(ut_table):
 	return _x_tags(ut_table, 'user_tags_table_container')
 
-def user_tags_table(user_tags, other_tags):
-	return _x_tags_table(user_tags, other_tags, 'Subscribed', 'NOT Subscribed', 'admin', 'user_tags', 'remove_tag_from_user', 'add_tag_to_user', {}) # TODO: add user_id here!!
+def user_tags_table(user_tags, available_tags):
+	return _x_tags_table(available_tags, user_tags, 'NOT Subscribed to:', 'Subscribed to:', 'admin', 'user_tags', 'add_tag_to_user', 'remove_tag_from_user', {}) # TODO: add user_id here!! (see other _x_tags_table() calls!)
 
 
 def choose_message_draft(drafts):
@@ -323,52 +330,56 @@ def choose_message_draft_table(drafts):
 			with t.tr(cls = 'midlin'):
 				t.td(f"{casual_date(draft['created'])}: {draft['teaser']}", cls = 'pointered', onclick = _send('messages', 'edit_message', message_id = draft['id'])) # note, 'teaser' is already a substring - no need to chop here
 				if not draft['deleted']: # only allow "untrashed" messages to be trashed; can't "permanently" delete anything
-					t.td(t.button('x', title = text.trash, cls = 'singleton_button red_bg', onclick = _send('messages', 'trash_message', message_id = draft['id'])))
-		t.tr(t.td(t.button(text.brand_new_message, onclick = _send('messages', 'brand_new_message')), t.button(text.cancel, onclick = 'hide_dialog()'), align = 'left'))
+					t.td(t.button(t.i(cls = 'i i-trash'), title = text.trash_draft, cls = 'red_bg', onclick = _send('messages', 'delete_draft', message_id = draft['id'])))
+		t.tr(t.td(t.button(text.brand_new_message, onclick = _send('messages', 'brand_new_message')), _cancel_button(), align = 'left'))
 	return result
 
-def edit_message(message_id, content): #!!!@
+def edit_message(message_id, content):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
-		l.debug(f'########### {content} ')
 		t.div(raw(content) if content else '', contenteditable = 'true', id = f'edit_message_content_{message_id}', cls = 'edit_message_content') # raw(content) throws exception when content is ''
+		t.div(id = f'attachments_for_message_{message_id}')
 		with t.div(cls = 'buttonbar'):
+			t.button(t.i(cls = 'i i-attach'), title = text.attach, onclick = f"messages.attach_upload({message_id})")
+			t.button(t.i(cls = 'i i-all'), title = text.recipients, onclick = _send('messages', 'message_tags', message_id = message_id)),
+			t.button(t.i(cls = 'i i-folder'), title = text.save_draft, onclick = f'messages.save_draft({message_id})') # ▼
+			t.button(t.i(cls = 'i i-send'), title = text.send_message, onclick = f"messages.send_message({message_id})") # ►
 			t.div(cls = 'spacer')
-			t.button('#', title = text.tags, onclick = _send('messages', 'message_tags', message_id = message_id))
-			t.button('▼', title = text.save_draft, onclick = f'messages.save_draft({message_id})')
-			t.button('►', title = text.send_message, onclick = f'messages.send_message({message_id})')
+			t.button(t.i(cls = 'i i-trash'), title = text.delete_message, onclick = f"messages.delete_message({message_id}, true)")
 	return result
 
 def inline_reply_box(message_id, parent_mid, content = None):
-	result = t.div(cls = 'container yellow_border')
+	result = t.div(id = f"message_{message_id}", cls = 'container yellow_border')
 	with result:
 		t.div(raw(content) if content else '', contenteditable = 'true', id = f"edit_message_content_{message_id}", cls = 'edit_message_content',
-		  onfocus = f'messages.start_saving(this, {message_id})', onblur = f'messages.stop_saving({message_id})')
+		  onfocus = f'messages.start_saving(this, {message_id})', onblur = f'messages.stop_saving({message_id})') # raw(content) throws exception when content is ''
+		t.div(id = f'attachments_for_message_{message_id}')
 		with t.div(cls = 'buttonbar'):
+			t.button(t.i(cls = 'i i-attach'), title = text.attach, onclick = f"messages.attach_upload({message_id})")
+			t.button(t.i(cls = 'i i-all'), id = f"rr_all_{message_id}", title = text.reply_all, onclick = f'messages.reply_recipient_one({message_id})')
+			t.button(t.i(cls = 'i i-one'), id = f"rr_one_{message_id}", cls = 'hide', title = text.reply_one, onclick = f'messages.reply_recipient_all({message_id})')
+			t.button(t.i(cls = 'i i-send'), title = text.send_message,
+				onclick = f'''messages.send_reply({message_id}, {parent_mid}, $('reply_recipient_{message_id}').dataset.replyrecipient)''') # ►
 			t.div(cls = 'spacer')
 			t.button(t.i(cls = 'i i-trash'), title = text.delete, onclick = f"messages.delete_draft({message_id})")
 			t.div(id = f"reply_recipient_{message_id}", cls = 'hide', data_replyrecipient = 'A')
-			t.button(t.i(cls = 'i i-all'), id = f"rr_all_{message_id}", title = text.reply_all, onclick = f'messages.reply_recipient_one({message_id})')
-			t.button(t.i(cls = 'i i-one'), id = f"rr_one_{message_id}", cls = 'hide', title = text.reply_one, onclick = f'messages.reply_recipient_all({message_id})')
-			t.button('►', title = text.send_message, onclick = f'''messages.send_reply({message_id}, {parent_mid}, $('reply_recipient_{message_id}').dataset.replyrecipient)''')
 	return result
 
-def messages(msgs, user_id, last_thread_patriarch = None, skip_first_hr = False):
+def messages(msgs, user_id, stashable, last_thread_patriarch = None, skip_first_hr = False):
 	top = t.div(id = 'messages', cls = 'container')
 	parents = {None: top}
 	for msg in msgs:
 		if msg['sender_id'] == user_id and not msg['sent'] and msg['reply_to'] != None: # if this is a user's unsent reply (draft), then include it in editable, inline draft mode:
-			l.debug(f"!!!!!!! inline-reply, mid: {msg['id']}")
 			last_thread_patriarch = msg['reply_chain_patriarch']
 			html_message = inline_reply_box(msg['id'], msg['reply_to'], msg['message'])
 		elif msg['sent']: # this test ensures we don't try to present draft messages that aren't replies - user has to re-engage with those in a different way ("new message", then select among drafts)... note that the data (msgs) DO include (or MAY include) non-reply (top-level parent) draft messages; we don't want those messages in our message list here
-			last_thread_patriarch, html_message = message(msg, last_thread_patriarch, skip_first_hr)
+			last_thread_patriarch, html_message = message(msg, user_id, stashable, last_thread_patriarch, skip_first_hr)
 		parent = parents.get(msg['reply_to'], top)
 		parent.add(html_message)
 		parents[msg['id']] = html_message
 	return top
 
-def message(msg, thread_patriarch = None, skip_first_hr = False, injection = False):
+def message(msg, user_id, stashable, thread_patriarch = None, skip_first_hr = False, injection = False):
 	cls = 'container'
 	if injection:
 		cls += ' injection'
@@ -382,30 +393,58 @@ def message(msg, thread_patriarch = None, skip_first_hr = False, injection = Fal
 			else:
 				t.hr() # new thread (or clean_top is False, so we never set thread_patriarch; but this is fine, as we would never want a 'gray' line in that case; the oddity is that the following reply-prefix is likely to be set, if this is a reply, and it's possible that the parent is just above, but was simply sitting there from the last load (last call to messages(), so we lost track of that old thread_patriarch)... this is fine.  It might be nice, actually, for really long reply-chains, to occasionally have the "reminder" when the user keeps scrolling down to see more....)
 				thread_patriarch = msg['reply_chain_patriarch']
-				if msg['id'] != thread_patriarch: # then this msg is actually a reply, but the patriarch is elsewhere (e.g., archived), so we need to provide the reply-prefix teaser:
+				if msg['id'] != thread_patriarch: # then this msg is actually a reply, but the patriarch is elsewhere (e.g., stashed), so we need to provide the reply-prefix teaser:
 					t.div(f'''Reply to "{msg['parent_teaser']}...":''', cls = 'italic')
 		t.div(raw(msg['message']))
+
+		if msg['attachments']:
+			with t.div(id = f"attachments_for_message_{msg['id']}"):
+				thumbnail_strip(msg['attachments'].split(','))
+
 		with t.div(cls = 'buttonbar'):
-			if msg['archived']:
-				t.button(t.i(cls = 'i i-unarchive'), title = text.unarchive, cls = 'selected', onclick = _send('messages', 'unarchive', message_id = msg['id'])) # '▲'
-			else:
-				t.button(t.i(cls = 'i i-archive'), title = text.archive, onclick = _send('messages', 'archive', message_id = msg['id'])) # '▼'
+			if stashable:
+				assert not msg['stashed'], 'message should not be already stashed, in this case!'
+				t.button(t.i(cls = 'i i-stash'), title = text.stash, onclick = f"messages.stash({msg['id']})") # '▼'
 			t.button(t.i(cls = 'i i-reply'), title = text.reply, onclick = _send('messages', 'compose_reply', message_id = msg['id'])) # '◄'
 			if msg['pinned']:
-				t.button(t.i(cls = 'i i-pin'), title = text.unpin, cls = 'selected', onclick = _send('messages', 'unpin', message_id = msg['id'])) # 'Ϯ'
+				t.button(t.i(cls = 'i i-pin'), title = text.unpin, cls = 'selected', onclick = f"messages.unpin({msg['id']}, this)") # 'Ϯ'
 			else:
-				t.button(t.i(cls = 'i i-pin'), title = text.pin, onclick = _send('messages', 'pin', message_id = msg['id'])) # 'Ϯ'
+				t.button(t.i(cls = 'i i-pin'), title = text.pin, onclick = f"messages.pin({msg['id']}, this)") # 'Ϯ'
+			if msg['sender_id'] == user_id:
+				t.button(t.i(cls = 'i i-edit'), title = text.edit_message, onclick = _send('messages', 'edit_message', message_id = msg['id']))
 			t.div(cls = 'spacer')
-			t.div(t.span(t.b('by '), msg['sender'], t.b(' to '), msg['tags'].replace(',', ', '), f' · {casual_date(msg["sent"])}'))
+			isodate = local_date_iso(msg["sent"]).isoformat()[:-6] # [:-6] to trim offset from end, as javascript code will expect a naive iso variant, and will interpret as "local"
+			max_recipients = 3
+			all_recipients = '' if not msg['tags'] else msg['tags'].split(',')
+			recipients = ', '.join(all_recipients[0:max_recipients]) # NOTE: would be nice if, in db.py, we could use GROUP_CONCAT(DISTINCT tag.name, ', '), to avoid this replace(',', ', '), but DISTINCT requires one arg only - can't provide a delimiter in that case, unfortunately
+			if len(all_recipients) > max_recipients:
+				recipients += ', ...'
+			with t.div():
+				t.span(t.b('by '), msg['sender'],
+					t.button(t.i(cls = 'i i-all'), title = text.recipients, onclick = f"messages.change_recipients({msg['id']})"),
+					recipients, ' ·'),
+				t.span(text.just_now if injection else '...', cls = 'time_updater', data_isodate = isodate) # 'sent' date/time
+			if msg['sender_id'] == user_id:
+				t.button(t.i(cls = 'i i-trash'), title = text.delete_message, onclick = f"messages.delete_message({msg['id']})")
 	return thread_patriarch, result
 
 
 def message_tags(mt_table):
 	return _x_tags(mt_table, 'message_tags_table_container')
 	
-def message_tags_table(message_tags, other_tags, mid):
-	return _x_tags_table(message_tags, other_tags, text.recipients, text.not_recipients, 'messages', 'message_tags', 'remove_tag_from_message', 'add_tag_to_message', {'message_id': mid})
+def message_tags_table(message_tags, available_tags, mid):
+	return _x_tags_table(available_tags, message_tags, text.not_recipients, text.recipients, 'messages', 'message_tags', 'add_tag_to_message', 'remove_tag_from_message', {'message_id': mid})
 
+def thumbnail_strip(filenames):
+	result = t.div(cls = 'thumbnail_strip')
+	cache_bust = randint(1000, 9999)
+	with result:
+		for name in filenames:
+			path = f'/{k_upload_path}{name}'
+			poster_path = path + k_thumb_appendix
+			onclick = f'messages.play_video("{path}", "{poster_path}")' if name.lower().endswith(k_video_formats) else f'messages.play_image("{path}")'
+			t.span(t.img(src = f'/{k_upload_path}{name}{k_thumb_appendix}?cache_bust={cache_bust}', alt = name), onclick = onclick)
+	return result
 
 
 # Utils -----------------------------------------------------------------------
@@ -437,31 +476,34 @@ def _x_tags(xt_table, div_id):
 		t.div(xt_table, id = div_id)
 	return result
 
-def _x_tags_table(tags, other_tags, left_title, right_title, task_app, task, remover_task, adder_task, task_kwargs):
+def _x_tags_table(available_tags, tags, left_title, right_title, task_app, task, adder_task, remover_task, task_kwargs):
 	result = t.table(cls = 'full_width')
 	with result:
 		with t.tr(cls = 'midlin'):
 			t.th(left_title, align = 'right')
-			t.th(t.button(text.done, onclick = _send(task_app, task, finished = 'true')), colspan = 2)
+			t.th(t.button(text.done, onclick = _send(task_app, task, finished = 'true', **task_kwargs)), colspan = 2)
 			t.th(right_title, align = 'left')
-		for count in range(15): # TODO: 15 is hardcode equivalent to db/sql 'limit'; that is, the active "list size" - 'other_tags', here, COULD actually be bigger than 15, so... limiting here, as well
+		for count in range(15): # TODO: 15 is hardcode equivalent to db/sql 'limit'; that is, the active "list size" - 'available_tags', here, COULD actually be bigger than 15, so... limiting here, as well
+			atag = available_tags.pop(0) if len(available_tags) > 0 else {}
 			tag = tags.pop(0) if len(tags) > 0 else {}
-			otag = other_tags.pop(0) if len(other_tags) > 0 else {}
-			if not tag and not otag:
+			if not tag and not atag:
 				break # done
 			with t.tr(cls = 'midlin'):
-				t.td(tag.get('name', ''), align = 'right')
-				t.td(t.button('-', cls = 'singleton_button red_bg', onclick = _send(task_app, remover_task, tag_id = tag['id'], **task_kwargs)) if tag else '', align = 'right')
-				t.td(t.button('+', cls = 'singleton_button green_bg', onclick = _send(task_app, adder_task, tag_id = otag['id'], **task_kwargs)) if otag else '', align = 'left')
-				t.td(otag.get('name', ''), align = 'left')
+				t.td(atag.get('name', ''), align = 'right')
+				t.td(t.button('+', cls = 'green_bg', onclick = _send(task_app, adder_task, tag_id = atag['id'], **task_kwargs)) if atag else '', align = 'left')
+				t.td(t.button('-', cls = 'red_bg', onclick = _send(task_app, remover_task, tag_id = tag['id'], **task_kwargs)) if tag else '', align = 'right')
+				t.td(tag.get('name', ''), align = 'left')
 	return result
 
 k_fake_localtz = 'America/Los_Angeles' # TODO - implement user-local timezones (this will be a per-user field in db)!
-def casual_date(raw_date):
-	if not raw_date:
-		return '<No date!>'
-	zi = ZoneInfo(k_fake_localtz) # manage all datetimes wrt/ user's local tz, so that "yesterday" means that from the local user's perspective, not from UTC or server-local
-	dt = datetime.fromisoformat(raw_date).astimezone(zi) # no need to .replace(tzinfo = timezone.utc) on fromisoformat result because we put the trailing 'Z' on dates in the db, so this fromisoformat() will interpret the datetime not as naive, but at explicitly UTC
+def local_date_iso(raw_date, zone_info = None):
+	assert raw_date != None
+	zi = zone_info or ZoneInfo(k_fake_localtz) # manage all datetimes wrt/ user's local tz, so that "yesterday" means that from the local user's perspective, not from UTC or server-local
+	return datetime.fromisoformat(raw_date).astimezone(zi).astimezone(None) # no need to .replace(tzinfo = timezone.utc) on fromisoformat result because we put the trailing 'Z' on dates in the db, so this fromisoformat() will interpret the datetime not as naive, but at explicitly UTC
+
+def casual_date(raw_date): # NOTE: we have an equivalent version of this in Javascript, client-side, in order to update periodically.
+	zi = ZoneInfo(k_fake_localtz)
+	dt = local_date_iso(raw_date, zi)
 	now = datetime.now(timezone.utc).astimezone(zi)
 	today = datetime.combine(now.date(), datetime.min.time(), now.tzinfo)
 	if now - dt < timedelta(hours = 1): # within the last hour

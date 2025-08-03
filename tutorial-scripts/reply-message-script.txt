@@ -1,0 +1,19 @@
+To reply to a given message, 
+just click the reply button under the message,
+and begin typing your reply.
+<Sounds great>
+Then, push send.
+
+Your reply will go to ALL of the recipients of the original message
+unless you change that.
+I'll start another reply to this message from Gandalf.
+<personal reply>
+This time, I want my reply to go to Gandalf ONLY, not to the whole group
+so I'll click this button to turn the "group" into "just one",
+I can toggle this back and forth, but, when I'm done, if it shows "just one",
+then the reply will go to Gandalf alone.
+
+This solves a common problem: wanting to respond directly to somebody
+but not wanting to make extra effort to do so.
+
+The next video will cover "filtering" and "stashing" messages.

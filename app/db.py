@@ -4,7 +4,9 @@ __version__ = '0.1'
 __license__ = 'MIT'
 
 import logging
+import random
 import re
+import string
 import unittest
 
 from copy import copy
@@ -376,6 +378,7 @@ async def trash_message(dbc, message_id):
 async def save_message(dbc, message_id, content):
 	args = [content, make_teaser(content), message_id]
 	more = ''
+	#TODO: NOT LIKE THIS!  don't mark it as 'deleted', but merely as a draft....  Actually, this may be already done, these days!
 	if not content: # save the message, but as trashed ('deleted'), until content actually has something in it
 		more = f'deleted = {k_now}, '
 	else: # otherwise, even if it used to be deleted, if we're 'saving' it now, then untrash it!
@@ -384,11 +387,11 @@ async def save_message(dbc, message_id, content):
 
 Send_Message_Result = Enum('SMR', ('EmptyMessage', 'NoTags', 'Success'))
 async def send_message(dbc, user_id, message_id) -> Send_Message_Result | dict:
-	if not await _fetch1(dbc, f'select 1 from message_tag where message_tag.message = ?', (message_id,)):
+	if not await has_tags(dbc, message_id):
 		return Send_Message_Result.NoTags # can't send a message without tags (recipients)
 	message = await get_message(dbc, user_id, message_id)
 	content = message['message']
-	if not content or content == '<div></div>':
+	if not content or content == '<div></div>' or content == '<br>':
 		return Send_Message_Result.EmptyMessage # can't send empty message
 
 	more = ''
@@ -398,7 +401,7 @@ async def send_message(dbc, user_id, message_id) -> Send_Message_Result | dict:
 		more += 'message = ?, '
 		args.insert(-1, content) # message_id has to stay "last" in arg list
 	if message['deleted']:
-		more += 'deleted = null, ' # un-trash the message if it's now being sent
+		more += 'deleted = null, ' # un-delete the message if it's now being sent
 	await _update1(dbc, f'update message set {more} sent = {k_now} where id = ?', args)
 	message['sent'] = datetime.utcnow().strftime(k_now_) # kludge - parties using the return from this function (message) sometimes need that 'sent' field, but it's not actually set upon update, in the message object itself, and it seems needless to do a fetch; so, just set the date the same as it is in the DB... (NOTE: # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!)
 	if message['reply_chain_patriarch'] != message['id']:
@@ -406,8 +409,12 @@ async def send_message(dbc, user_id, message_id) -> Send_Message_Result | dict:
 		await _update1(dbc, f'update message set thread_updated = {k_now} where id = ?', (message['reply_chain_patriarch'],))
 	return message
 
+async def has_tags(dbc, message_id):
+	result = await _fetch1(dbc, f'select 1 from message_tag where message_tag.message = ?', (message_id,))
+	return True if await _fetch1(dbc, f'select 1 from message_tag where message_tag.message = ?', (message_id,)) else False
+
 def make_teaser(content):
-	return strip_tags(content[:50])[:20] # [:50] to just operate on opening portion of content, but then, once stripped of tags, whittle down to [:20]; if only one of these was used, "taggy" content would be rather over-shrunk or under-taggy content would be rather under-shrunk
+	return strip_tags(content[:100])[:50] # [:50] to just operate on opening portion of content, but then, once stripped of tags, whittle down to [:20]; if only one of these was used, "taggy" content would be rather over-shrunk or under-taggy content would be rather under-shrunk
 
 def strip_tags(content):
 	return re.sub('<.*', '', re.sub('<[^<]+?>', '', re.sub('</[^<]+?>', '...', content)))
@@ -422,8 +429,7 @@ def test_strip_tags(self):
 	t('<div>hello</div><div>', 'hello...')
 	t('<div>hello</div><div>oh', 'hello...oh')
 
-
-_mega_message_select = 'select message.id, message.message, message.reply_chain_patriarch, message.teaser, parent.teaser as parent_teaser, sender.username as sender, sender.id as sender_id, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(DISTINCT tag.name) as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_read where read_by = ? and message = message.id) as archived from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id' # NOTE that GROUP_CONCAT(DISTINCT tag.name) is the only way to get singles (not multiple copies) of group names - using GROUP_CONCAT(tag.name, ', ') would be nice, since the default doesn't place a space after the comma, but providing the ', ' argument only works if you do NOT use DISTINCT, which isn't an option for us.
+_mega_message_select = "select message.id, message.message, message.deleted, GROUP_CONCAT(DISTINCT attachment.filename) as attachments, message.reply_chain_patriarch, message.teaser, parent.teaser as parent_teaser, sender.username as sender, sender.id as sender_id, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(DISTINCT tag.name) as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_stashed where stashed_by = ? and message = message.id) as stashed from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id left join message_attachment on message.id = message_attachment.message left join attachment on attachment.id = message_attachment.attachment" # NOTE that GROUP_CONCAT(DISTINCT tag.name) is the only way to get singles (not multiple copies) of group names - using GROUP_CONCAT(tag.name, ', ') would be nice, since the default doesn't place a space after the comma, but providing the ', ' argument only works if you do NOT use DISTINCT, which isn't an option for us.  Similar goes for attachment.filename
 
 
 _message_tag_join = 'left join message_tag on message.id = message_tag.message left join tag on message_tag.tag = tag.id'
@@ -433,7 +439,7 @@ _user_tag_join = 'left join user_tag on tag.id = user_tag.tag'
 async def get_message(dbc, user_id, message_id):
 	return await _fetch1(dbc, f'{_mega_message_select} {_message_tag_join} where message.id = ?', (user_id, user_id, message_id,))
 
-async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = Filter.unarchived, skip = 0, limit = 15):
+async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = Filter.new, skip = 0, ignore = None, limit = 15):
 	where = []
 	args = [user_id, user_id,] # first two user_ids are for sub-selects in _mega_message_select; third is for our 'where user.id = ?' (see line above)
 	if not include_trashed:
@@ -442,13 +448,10 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 		if deep:
 			_add_like(like, ('message.message', 'tag.name'), where, args)
 		else:
-			_add_like(like, ('SUBSTR(message.message, 0, 30)', 'tag.name'), where, args)
+			_add_like(like, ('message.teaser', 'tag.name'), where, args) # SUBSTR(message.message, 0, 30) would get us arbitrarily deep, rather than relying on teaser, but would be more computationally expensive
 	match filt:
-		case Filter.unarchived:
-			where.append('message.id not in (select message from message_read where read_by = ?)')
-			args.append(user_id)
-		case Filter.archived:
-			where.append('message.id in (select message from message_read where read_by = ?)')
+		case Filter.new:
+			where.append('message.id not in (select message from message_stashed where stashed_by = ?)')
 			args.append(user_id)
 		case Filter.pinned:
 			where.append(f'message.id in (select message from message_pin where user = ?)')
@@ -457,6 +460,10 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 			where.append(f'message.sent >= "{(datetime.utcnow() - timedelta(days=1)).isoformat()}Z"') # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!
 		case Filter.this_week: # we'll interpret as "7 days back"
 			where.append(f'message.sent >= "{(datetime.combine(datetime.utcnow().date(), datetime.min.time()) - timedelta(days=7)).isoformat()}Z"') # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!
+	if ignore:
+		where.append('message.id not in ({seq})'.format(seq = ','.join(['?']*len(ignore))))
+		args.extend(ignore)
+
 	where.append('((message.sent is not null and user_tag.user = ?) or (message.author = ? and (message.reply_to is not null or message.sent is not null)))')
 	args += [user_id, user_id]
 	where = 'where ' + ' and '.join(where)
@@ -476,7 +483,7 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 async def delivery_recipient(dbc, user_id, message_id):
 	return await _fetch1(dbc, f'select 1 from message {_message_tag_join} {_user_tag_join} where (user_tag.user = ? or message.author = ?) and message.id = ?', (user_id, user_id, message_id))
 
-async def get_message_tags(dbc, message_id, active = True, like = None, limit = 15, include_others = False):
+async def get_message_tags(dbc, message_id, user_id, active = True, like = None, limit = 15, include_others = False):
 	# TODO: this is very similar to get_user_tags - consider consolidating?
 	where, args = ['message_tag.message = ?',], [message_id,]
 	if active:
@@ -488,8 +495,9 @@ async def get_message_tags(dbc, message_id, active = True, like = None, limit = 
 	if not include_others:
 		return message_tags
 	#else:
-	all_tags = await get_tags(dbc, active = active, like = like, get_subscribers = False, limit = None) # NOTE: must NOT 'limit' this fetch, as many of these may be weeded out in selection, below, and we have to have plenty to make a full rhs list!
-	return message_tags, [r for r in all_tags if r not in message_tags]
+	available_tags = await get_user_tags(dbc, user_id, active = active, like = like, limit = None, include_unsubscribed = False) # NOTE: must NOT 'limit' this fetch, as many of these may be weeded out in selection, below, and we have to have plenty to make a full rhs list!
+
+	return message_tags, [r for r in available_tags if r not in message_tags]
 
 async def remove_tag_from_message(dbc, message_id, tag_id):
 	return await dbc.execute(f'delete from message_tag where message = ? and tag = ?', (message_id, tag_id))
@@ -497,9 +505,8 @@ async def remove_tag_from_message(dbc, message_id, tag_id):
 async def add_tag_to_message(dbc, message_id, tag_id):
 	return await _insert1(dbc, 'insert into message_tag (message, tag) values (?, ?)', (message_id, tag_id))
 
-async def delete_draft(dbc, message_id):
+async def delete_message(dbc, message_id):
 	return await _update1(dbc, f'update message set deleted = {k_now} where id = ?', (message_id,))
-
 
 async def get_author_tag(dbc, message_id):
 	return await _fetch1(dbc, 'select tag.* from tag join message on message.author = tag.user where message.id = ?', (message_id,))
@@ -515,11 +522,8 @@ async def set_reply_message_tags(dbc, message_id):
 		data = [(message_id, i['tag_id']) for i in tags]
 		return await dbc.executemany('insert into message_tag (message, tag) values (?, ?)', data)
 
-async def archive_message(dbc, message_id, user_id):
-	return await _insert1(dbc, 'insert into message_read (message, read_by) values (?, ?)', (message_id, user_id))
-
-async def unarchive_message(dbc, message_id, user_id):
-	return await dbc.execute('delete from message_read where message = ? and read_by = ?', (message_id, user_id))
+async def stash_message(dbc, message_id, user_id):
+	return await _insert1(dbc, 'insert into message_stashed (message, stashed_by) values (?, ?)', (message_id, user_id))
 
 async def pin_message(dbc, message_id, user_id):
 	return await _insert1(dbc, 'insert into message_pin (message, user) values (?, ?)', (message_id, user_id))
@@ -533,7 +537,15 @@ async def get_parent_message(dbc, message_id):
 async def get_patriarch_message_id(dbc, message_id):
 	r = await _fetch1(dbc, 'select patriarch.id from message as patriarch join message as child on patriarch.id = child.reply_chain_patriarch where child.id = ?', (message_id,))
 	return r['id'] if r else None
-	
+
+async def add_message_attachments(dbc, message_id, filenames):
+	# TODO make this all an atomic transaction!
+	await _update1(dbc, 'update message set attachments = 1 where id = ?', (message_id,))
+	upload = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(4))
+	await dbc.executemany('insert into attachment (filename, upload) values (?, ?)', [(fn, upload) for fn in filenames])
+	await dbc.execute(f'insert into message_attachment (message, attachment) select {message_id}, id from attachment where upload = ?', (upload,))
+
+
 
 # Utils -----------------------------------------------------------------------
 

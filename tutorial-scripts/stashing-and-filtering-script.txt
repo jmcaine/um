@@ -1,0 +1,86 @@
+You'll notice a number of preset "filters"
+which allow you to see specific messages.
+
+The "New" button will show you only messages you haven't yet stashed away.
+These should be the messages you haven't yet read and offered replies to.
+We'll cover the other buttons, like "All", in a moment.
+
+First, let's stash these messages that are new to us.
+It's a good habit to stash messages as you read them.
+Do NOT leave a message here just because you want to deal with it later
+For that, click this "pin" button, to pin the message for later treatment.
+
+...
+
+Once you've read through the new posts and have stashed them away,
+	your "New" filter won't show any messages until a new one comes in.
+
+Let's click "All"
+Here we see ALL messages ever sent.
+The list starts at the BOTTOM - you see, I can't scroll down any more
+These are the newest messages, down here.
+If I scroll up, I'll see older messages.
+This is the one-stop shop for all messages.  
+Usually, when you're looking for a message, you have some hint
+For instance, perhaps you're looking for something recently 
+	posted to the "fun" tag
+Just type "fun" and you'll see all messages tagged "fun"
+	(AND all messages that have "fun" as one of the first words in the message)
+
+You may have another hint that is more specific.
+For instance, you remember a message about fireworks,
+	so you type fireworks
+There are the only two messages about fireworks
+These came up because the word fireworks is so close to the 
+	beginning of the message.
+If the word was deeper in a longer message, you may have to
+	click "Search deep", so that the search looks
+	deeper into the messages to find the one you're looking for
+
+Let's go back to the top-level filters.
+"24 Hours" will show you only the messages from the last 24 hours
+I still have "fireworks" in the filter box
+	so this is showing me the messages about "fireworks" from the last 24 hours
+Let's get rid of this filter - there are all of the messages ever written, again
+
+"This Week" will show you this past week's messages
+If I saw 100 messages about fireworks, in my earlier search,
+	but I knew that the message I was looking for was recent, just this week,
+	I could perhaps have clicked "This Week" with "fireworks" typed in the filter
+	to see just this week's messages about fireworks.
+I never have to "remember" the tag a message was posted to,
+	but if I remember the tag, because it's a good reminder word,
+	then it can be helpful for quickly filtering and finding the message I want.
+	
+Finally, "Pinned" messages are those I've pinned to deal with later.
+This is like an automatic "to-do" list, if I just want to flag
+	something to remind myself to handle it later, I pin it.
+
+...
+
+When finished dealing with a pinned message, 
+	just un-pin it
+Pinned messages always show up in "all" 
+	and under other appropriate filters
+And the next time you load the "Pinned" list, if you've
+	unpinned everything, it will be blank,
+	even though the message is still around.
+
+The thing to remember is that the top-left corner
+	has the most commonly used functions -
+	the plus button to add a brand new message
+	and the filter box to start typing some search term
+
+There is no need to go to a "room" or know "where" to find messages
+Combine the top-level filters like "24 Hours" and "This Week"
+	with typing in the filter box,
+	and possibly pushing the "deep" button to search
+		deeper within message contents,
+	and you should be a few clicks and strokes away from whatever you need
+
+Note that NEWEST messages are always at the bottom, but the
+	"New" filter starts you at the oldest unread messages
+	the other top-level filters start you scrolled all the way "down",
+	to see the newest, and you have to scroll up to see older messages
+	
+The next video will be about saving draft messages and adding attachments

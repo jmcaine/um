@@ -30,6 +30,9 @@ from . import admin
 
 from . import exception as ex
 
+from .const import *
+
+
 
 # Logging ---------------------------------------------------------------------
 
@@ -121,7 +124,7 @@ async def main(rq):
 
 @rt.get('/_ws')
 async def _ws(rq):
-	wsr = web.WebSocketResponse()
+	wsr = web.WebSocketResponse(max_msg_size = 0)
 	try:
 		await wsr.prepare(rq)
 		hd = Hd(rq, wsr, await dbc(rq))
@@ -133,7 +136,7 @@ async def _ws(rq):
 				case WSMsgType.TEXT:
 					await _handle_ws_text(rq, hd, msg.data)
 				case WSMsgType.BINARY:
-					pass #TODO: await _handle_ws_binary(hd, msg.data)
+					await _handle_ws_binary(hd, msg.data)
 				case _:
 					l.error('Unexpected/invalid WebSocketResponse message type; ignoring... anxiously')
 	except Exception as e:
@@ -158,6 +161,16 @@ async def _handle_ws_text(rq, hd, data):
 		rq.app['active_module'] = module # may be redundant, if enter_module() did this already
 	# Now call the handler for the given task - functions decorated with @ws.handler are handlers; their (function) names are the task names
 	await ws._handlers[module][hd.payload['task']](hd)
+
+
+async def _handle_ws_binary(hd, data):
+	assert data[0] == ord('!'), '"magic byte" ! needed to indicate this is a file upload (by convention)'
+	delimiter = b'\r\n\r\n'
+	idx = data.find(delimiter)
+	meta = json.loads(data[1:idx]) # '1' to get past the "magic byte" ('!')
+	meta['files'] = json.loads(meta['files'])
+	payload = data[idx+len(delimiter):]
+	await ws._handlers[hd.payload.get('module', 'app.messages')][meta['task']](hd, meta, payload)
 
 
 # -----------------------------------------------------------------------------
@@ -250,7 +263,7 @@ async def login(hd, reverting = False):
 	else:
 		data = hd.payload
 		if await valid.invalids(hd, data, fields.LOGIN, handle_invalid, 'banner'):
-			return # if there WERE invalids, bannar was already sent within
+			return # if there WERE invalids, banner was already sent within
 		#else all good, move on!
 		uid = await db.login(hd.dbc, hd.idid, data['username'], data['password'])
 		if uid:
@@ -389,7 +402,7 @@ async def continue_join_or_invite(hd, send_username_fieldset):
 			hd.uid = hd.task.state['user_id']
 			await db.force_login(hd.dbc, hd.idid, hd.uid)
 			task.clear_all(hd) # a "join" results in a clean slate - no prior tasks (note that, above, the end of invite, after the db-commit, we DO finish() to revert to prior task, which may be administrative user-list management.....
-			await ws.send(hd, 'hide_dialog')
+			await ws.send(hd, 'hide_dialog') # safe; no need to finish() task - we just logged in (force_login) and have a clean slate
 			await messages.messages(hd) # show main messages page
 
 
