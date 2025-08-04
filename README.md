@@ -12,13 +12,22 @@
 	$ pip install --upgrade pip
 	$ git clone git@github.com:jmcaine/um.git
 
+System level needs:
+
+	$ apt install libgl1-mesa-glx sqlite3
+
+(Note, the pip installs below may rely on other apt-installs like build-essential, libffi-dev, python3-dev, ..., but the most recent install from scratch seemed to call out libgl and sqlite3 only)
+
 Install Requirements.
-(If adev is wanted, install aiohttp-devtools -- see below, also)
 
 	$ cd um
-	$ pip install -r requirements.txt
+	$ pip install aiohttp aiohttp-session aiosqlite cryptography dominate pillow bcrypt opencv-python
 
-(Note, the pip install may rely on apt-installs like build-essential, libffi-dev, python3-dev, ...)
+OR consider pip-installing from requirements.txt, but this adds dependencies and specifies versions... not sure if that's wanted, as it can get out of date...
+
+	$ (?!) pip install -r requirements.txt
+
+(If adev is wanted, install aiohttp-devtools -- see below, also)
 
 Create the database ('apt install sqlite3' will be required for this, of course):
 

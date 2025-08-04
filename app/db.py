@@ -19,6 +19,7 @@ from uuid import uuid4
 
 import aiosqlite
 import bcrypt # cf https://security.stackexchange.com/questions/133239/what-is-the-specific-reason-to-prefer-bcrypt-or-pbkdf2-over-sha256-crypt-in-pass
+	# pip install bcrypt
 from sqlite3 import PARSE_DECLTYPES, IntegrityError
 
 from . import exception as ex
