@@ -4,10 +4,13 @@ use new edit_history and resend_history DB tables!
 password-reset EMAILing
 	FAMILY concept from ohs
 
-BUGS:
-	if user just clicks archive, archive, archive, and doesn't scroll-down explicitly, more new messages aren't loaded and screen looks empty/messageless!
+links (internal and external) in messages
 
+
+BUGS:
 	filter isn't working to narrow drafts list down
+
+	going to admin screen puts admin screen within content area, rather than replacing whole doc main content area
 
 	reply to own reply - this creates a reply to self (only) - nobody else gets it; seems like a footgun
 		but note - you have to intentionally click to send to "sender only", rather than group, so probably not likely to happen (much)
@@ -22,6 +25,8 @@ BUGS:
 SMS Texting!
 
 VOTING
+
+emojis
 
 'selection' (in compose_reply)!
 

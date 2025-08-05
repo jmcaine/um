@@ -49,7 +49,6 @@ l = logging.getLogger(__name__)
 hr = lambda text: web.Response(text = text, content_type = 'text/html')
 gurl = lambda rq, name, **kwargs: str(rq.app.router[name].url_for(**kwargs))
 dbc = lambda rq: db.cursor(rq.app['db_connection'])
-ws_url = lambda rq: URL.build(scheme = 'wss', host = rq.host, path = '/_ws')
 
 
 # Init / Shutdown -------------------------------------------------------------
@@ -120,7 +119,7 @@ if settings.debug:
 
 @rt.get('/')
 async def main(rq):
-	return hr(html.document(ws_url(rq)))
+	return hr(html.document(_ws_url(rq)))
 
 @rt.get('/_ws')
 async def _ws(rq):
@@ -424,3 +423,7 @@ def _not_yet(hd, required_action):
 	hd.task.state['action'] = required_action
 	return True # "true, NOT YET ready to move on!"
 
+def _ws_url(rq):
+	host = rq.host.split(':')
+	port = int(host[1]) if len(host) > 1 else None
+	return URL.build(scheme = 'wss' if rq.secure else 'ws', host = host[0], port = port, path = '/_ws')
