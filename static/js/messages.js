@@ -352,12 +352,12 @@ let messages = {
 			return minutes == 1 ? "1 minute ago" : minutes.toString() + " minutes ago";
 		} else {
 			if (reference_date.getFullYear() === now.getFullYear() && reference_date.getMonth() === now.getMonth() && reference_date.getDate() === now.getDate()) { // today!
-				return hours.toString() + ":" + reference_date.getMinutes().toString().padStart(2, '0'); + " " + ampm;
+				return hours.toString() + ":" + reference_date.getMinutes().toString().padStart(2, '0') + " " + ampm;
 			} //else:
 			let yesterday = new Date(); // wait for it...
 			yesterday.setDate(yesterday.getDate() - 1);
 			if (reference_date.getFullYear() === yesterday.getFullYear() && yesterday.getMonth() === now.getMonth() && yesterday.getDate() === now.getDate()) { // yesterday!
-				return "yesterday @ " + hours.toString() + ":" + reference_date.getMinutes().toString().padStart(2, '0'); + " " + ampm;
+				return "yesterday @ " + hours.toString() + ":" + reference_date.getMinutes().toString().padStart(2, '0') + " " + ampm;
 			} // else:
 			const days_ago = Math.floor(diff / 1000 / 60 / 60 / 24 ) + 1;
 			if (days_ago <= 4) {

@@ -49,7 +49,7 @@ l = logging.getLogger(__name__)
 hr = lambda text: web.Response(text = text, content_type = 'text/html')
 gurl = lambda rq, name, **kwargs: str(rq.app.router[name].url_for(**kwargs))
 dbc = lambda rq: db.cursor(rq.app['db_connection'])
-ws_url = lambda rq: URL.build(scheme = 'ws', host = rq.host, path = '/_ws')
+ws_url = lambda rq: URL.build(scheme = 'wss', host = rq.host, path = '/_ws')
 
 
 # Init / Shutdown -------------------------------------------------------------

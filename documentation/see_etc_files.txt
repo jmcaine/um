@@ -1,2 +1,7 @@
 See files in etc/ - they're sanitized files for /etc/nginx/sites-available/ and /etc/supervisor/conf.d/
 
+Note also, for deployment, that it's critical to have EVERY directory on the way to static/ files with +x access ... normally missing is /home/user .. all directories below and above have +x by default on group.  To fix:
+
+	chmod g+x /home/user
+
+where user is your designated user for deployment (if you do it that way)
