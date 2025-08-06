@@ -71,7 +71,6 @@ async def _shutdown(app):
 		except IndexError:
 			break # done
 	l.info('...shutdown complete')
-	raise Exception() # to break out; otherwise python threading hangs in a lock() until a second Ctl+C is manually issued; for supervisor to shutdown, a single TERM signal has to work, so we must break out intentionally here
 
 async def _init_db(app):
 	l.info('...initializing database...')
@@ -427,7 +426,6 @@ def _not_yet(hd, required_action):
 def _ws_url(rq):
 	host = rq.host.split(':')
 	port = int(host[1]) if len(host) > 1 else None
-	l.debug(f'!!!! scheme: {rq.scheme}  secure: {rq.secure}  host: {rq.host}')
 	#return URL.build(scheme = 'wss' if rq.secure else 'ws', host = host[0], port = port, path = '/_ws')
 	#TODO: the above line, elegantly building 'wss' or 'ws', does not work because https requests are translated in nginx to http requests over unix socket, so rq.secure is False and rq.scheme is http (not https)!
 	return URL.build(scheme = 'wss', host = host[0], port = port, path = '/_ws')
