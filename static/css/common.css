@@ -18,14 +18,14 @@ body {
 #footer_pane {
 	flex: 0 0 auto;
 	margin: 0 auto;
-	width: 70vw;
+	width: 85vw;
 }
 
 #main_pane {
 	flex: 1 1 auto; /* shrink:1 is necessary to cause .foot to stick to the floor, and for the overflow-scroll (below) to work as expected... */
 	overflow-y: auto; /* ... causing an overflow to result in a .content-contained vertical scrollbar */
 	margin: 0 auto;
-	width: 70vw;
+	width: 85vw;
 }
 
 /* special screens */
