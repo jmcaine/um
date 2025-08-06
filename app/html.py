@@ -92,7 +92,6 @@ def messages_topbar(admin):
 def messages_filter(filt):
 	result = t.div(cls = 'buttonbar')
 	with result:
-		t.div('Filters:')
 		filt_button = lambda title, hint, _filt: t.button(title, title = hint, cls = 'selected' if filt == _filt else '', onclick = f'messages.filter(id, "{_filt}")')
 		filt_button(text.news, text.show_news, Filter.new)
 		filt_button(text.alls, text.show_alls, Filter.all)
