@@ -8,9 +8,13 @@ links (internal and external) in messages
 
 
 BUGS:
+	show ONLY tags to which you're subscribed, when showing tags to "send" a message to; but ALSO include all "individual" tags (really?  someday, when multiple campuses are in, will want to constrain individuals to campus, too!)
+
 	filter isn't working to narrow drafts list down
 
 	going to admin screen puts admin screen within content area, rather than replacing whole doc main content area
+
+	alphabetize user and group lists (admin)
 
 	reply to own reply - this creates a reply to self (only) - nobody else gets it; seems like a footgun
 		but note - you have to intentionally click to send to "sender only", rather than group, so probably not likely to happen (much)

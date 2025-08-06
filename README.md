@@ -10,7 +10,9 @@
 	$ python3 -m venv ve
 	$ . ve/bin/activate
 	$ pip install --upgrade pip
-	$ git clone git@github.com:jmcaine/um.git
+	$ git clone https://github.com/jmcaine/um.git
+		OR???
+		$ git clone git@github.com:jmcaine/um.git
 
 System level needs:
 

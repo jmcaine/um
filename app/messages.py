@@ -289,7 +289,7 @@ async def delete_message(hd):
 async def message_tags(hd, reverting = False, send_after = False):
 	just_started = task.just_started(hd, message_tags)
 	send_after = hd.task.state['send_after'] = hd.payload.get('send_after', hd.task.state.get('send_after', send_after)) # prefer payload arg, then state already recorded, and, finally, if nothing, default to direct function arg; this preference order IS quite significant
-	mid = hd.payload.get('message_id')
+	mid = hd.task.state['message_id'] = hd.payload.get('message_id', hd.task.state.get('message_id')) # ...similarly
 	finished = hd.payload.get('finished') # just test first -- may need to post error to detail_banner, and not finish() yet, even if requested...
 	if finished and send_after: # tricky: before task.finish(), we want to make sure that there are tags if send_after; in that case, or in the case of !send_after, we can finish(), but otherwise, need to post error - can't move on to sending the message if it has no tags!
 		if not await db.has_tags(hd.dbc, mid):
@@ -305,11 +305,13 @@ async def message_tags(hd, reverting = False, send_after = False):
 		await ws.send_content(hd, 'sub_content', await message_tags_table(hd, mid), container = 'message_tags_table_container') # just reload the tags_table
 
 async def message_tags_table(hd, mid):
+	limit = 10
 	utags, otags = await db.get_message_tags(hd.dbc, mid, hd.uid,
+													limit = limit,
 													active = not hd.task.state.get('filtersearch_include_extra'),
 													like = hd.task.state.get('filtersearch_text'),
 													include_others = True)
-	return html.message_tags_table(utags, otags, mid)
+	return html.message_tags_table(utags, otags, mid, limit)
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
 async def remove_tag_from_message(hd):

@@ -284,34 +284,20 @@ def tag_users_and_nonusers(tun_table):
 		t.div(tun_table, id = 'users_and_nonusers_table_container')
 	return result
 
-def tag_users_and_nonusers_table(tag_name, users, nonusers):
-	# TODO: why not use _x_tags_table?  lots of repeat principle below....
-	un_name = lambda user: f"{user['username']} ({user['first_name']} {user['last_name']})" if user else ''
-	result = t.table(cls = 'full_width')
-	with result:
-		with t.tr(cls = 'midlin'):
-			t.th('NOT Subscribers:', align = 'right')
-			t.th(t.button(text.done, onclick = _send('admin', 'tag_users', finished = 'true')), colspan = 2)
-			t.th(f'Subscribers (to {tag_name}):', align = 'left')
-		for count in range(15): # TODO: 15 is hardcode equivalent to db/sql 'limit'; that is, the active "list size" - 'nonusers', here, COULD actually be bigger than 15, so... limiting here, as well
-			user = users.pop(0) if len(users) > 0 else {}
-			nonuser = nonusers.pop(0) if len(nonusers) > 0 else {}
-			if not user and not nonuser:
-				break # done
-			with t.tr(cls = 'midlin'):
-				t.td(un_name(nonuser), align = 'right')
-				t.td(t.button('+', cls = 'green_bg', onclick = _send('admin', 'add_user_to_tag', user_id = nonuser['id'])) if nonuser else '', align = 'left')
-				t.td(t.button('-', cls = 'red_bg', onclick = _send('admin', 'remove_user_from_tag', user_id = user['id'])) if user else '', align = 'right')
-				t.td(un_name(user), align = 'left')
-	return result
-
+def tag_users_table(tag_name, users, nonusers, count):
+	un_name = lambda user: user['username'] # ({user['first_name']} {user['last_name']})
+	adder = lambda id: _send('admin', 'add_user_to_tag', user_id = id)
+	remover = lambda id: _send('admin', 'remove_user_from_tag', user_id = id)
+	return _xaa_table(nonusers, users, un_name, 'NOT Subscribers:', f'Subscribers (to {tag_name}):', 'admin', 'tag_users', adder, remover, count)
 
 
 def user_tags(ut_table):
 	return _x_tags(ut_table, 'user_tags_table_container')
 
-def user_tags_table(user_tags, available_tags):
-	return _x_tags_table(available_tags, user_tags, 'NOT Subscribed to:', 'Subscribed to:', 'admin', 'user_tags', 'add_tag_to_user', 'remove_tag_from_user', {}) # TODO: add user_id here!! (see other _x_tags_table() calls!)
+def user_tags_table(user_tags, available_tags, count):
+	adder = lambda id: _send('admin', 'add_tag_to_user', user_id = id)
+	remover = lambda id: _send('admin', 'remove_tag_from_user', user_id = id)
+	return _xaa_table(available_tags, user_tags, lambda tag: tag['name'], 'NOT Subscribed to:', 'Subscribed to:', 'admin', 'user_tags', adder, remover, count)
 
 
 def choose_message_draft(drafts):
@@ -432,8 +418,10 @@ def message(msg, user_id, stashable, thread_patriarch = None, skip_first_hr = Fa
 def message_tags(mt_table):
 	return _x_tags(mt_table, 'message_tags_table_container')
 	
-def message_tags_table(message_tags, available_tags, mid):
-	return _x_tags_table(available_tags, message_tags, text.not_recipients, text.recipients, 'messages', 'message_tags', 'add_tag_to_message', 'remove_tag_from_message', {'message_id': mid})
+def message_tags_table(message_tags, available_tags, mid, count):
+	adder = lambda id: _send('messages', 'add_tag_to_message', message_id = mid, tag_id = id)
+	remover = lambda id: _send('messages', 'remove_tag_from_message', message_id = mid, tag_id = id)
+	return _xaa_table(available_tags, message_tags, lambda tag: tag['name'],  text.not_recipients, text.recipients, 'messages', 'message_tags', adder, remover, count)
 
 def thumbnail_strip(filenames):
 	result = t.div(cls = 'thumbnail_strip')
@@ -476,24 +464,42 @@ def _x_tags(xt_table, div_id):
 		t.div(xt_table, id = div_id)
 	return result
 
-def _x_tags_table(available_tags, tags, left_title, right_title, task_app, task, adder_task, remover_task, task_kwargs):
+name_fetcher = lambda a: a.get('name', '')
+def _xaa_table(availables, assigneds, name_fetcher, left_title, right_title, task_app, task, adder, remover, count):
 	result = t.table(cls = 'full_width')
 	with result:
 		with t.tr(cls = 'midlin'):
 			t.th(left_title, align = 'right')
-			t.th(t.button(text.done, onclick = _send(task_app, task, finished = 'true', **task_kwargs)), colspan = 2)
+			t.th(t.button(text.done, onclick = _send(task_app, task, finished = 'true')), colspan = 2)
 			t.th(right_title, align = 'left')
-		for count in range(15): # TODO: 15 is hardcode equivalent to db/sql 'limit'; that is, the active "list size" - 'available_tags', here, COULD actually be bigger than 15, so... limiting here, as well
-			atag = available_tags.pop(0) if len(available_tags) > 0 else {}
-			tag = tags.pop(0) if len(tags) > 0 else {}
-			if not tag and not atag:
+		left_elide, right_elide = False, False
+		for line in range(count):
+			available = availables.pop(0) if len(availables) > 0 else {}
+			assigned = assigneds.pop(0) if len(assigneds) > 0 else {}
+			if not assigned and not available:
 				break # done
 			with t.tr(cls = 'midlin'):
-				t.td(atag.get('name', ''), align = 'right')
-				t.td(t.button('+', cls = 'green_bg', onclick = _send(task_app, adder_task, tag_id = atag['id'], **task_kwargs)) if atag else '', align = 'left')
-				t.td(t.button('-', cls = 'red_bg', onclick = _send(task_app, remover_task, tag_id = tag['id'], **task_kwargs)) if tag else '', align = 'right')
-				t.td(tag.get('name', ''), align = 'left')
+				c1, c2 = '', ''
+				if available:
+					c1 = name_fetcher(available)
+					c2 = t.button('+', cls = 'green_bg', onclick = adder(available['id']))
+					if line == count - 1:
+						left_elide = True
+				t.td(c1, align = 'right')
+				t.td(c2, align = 'left')
+				c1, c2 = '', ''
+				if assigned:
+					c1 = t.button('-', cls = 'red_bg', onclick = remover(assigned['id']))
+					c2 = name_fetcher(assigned)
+					if line == count - 1:
+						right_elide = True
+				t.td(c1, align = 'right')
+				t.td(c2, align = 'left')
+		if left_elide or right_elide:
+			t.tr(t.td(text.filter_for_more if left_elide else ''), t.td(''),  t.td(''),  t.td(text.filter_for_more if right_elide else ''), cls = 'midlin')
+
 	return result
+
 
 k_fake_localtz = 'America/Los_Angeles' # TODO - implement user-local timezones (this will be a per-user field in db)!
 def local_date_iso(raw_date, zone_info = None):

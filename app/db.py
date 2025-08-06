@@ -310,21 +310,20 @@ async def set_tag(dbc, id, name, active):
 	return await _update1(dbc, 'update tag set name = ?, active = ? where id = ?', (name, active, id))
 
 
-async def get_tag_users(dbc, tag_id, active = True, like = None, limit = 15, include_unsubscribed = False):
-	where, args = ['user_tag.tag = ?',], [tag_id,]
-	if active:
-		where.append('active = 1')
-	_add_like(like, ('username', 'first_name', 'last_name'), where, args)
-	where1 = 'where ' + " and ".join(where) if where else ''
-	fields = 'user.id, username, first_name, last_name'
-	order = 'order by username'
-	tag_users = await _fetchall(dbc, f'select {fields} from user join user_tag on user.id = user_tag.user join person on user.person = person.id {where1} {order} limit {limit}', args)
-	if not include_unsubscribed:
-		return tag_users
-	#else:
-	where2 = 'where ' + " and ".join(where[1:]) if where[1:] else ''
-	all_users = await _fetchall(dbc, f'select {fields} from user join person on user.person = person.id {where2} {order}', args[1:]) # NOTE: must NOT 'limit' this fetch, as many of these may be weeded out in selection, below, and we have to have plenty to make a full rhs list!
-	return tag_users, [r for r in all_users if r not in tag_users]
+async def get_tag_users(dbc, tag_id, limit, active = True, like = None, include_unsubscribed = False):
+	return await _get_xaa(dbc,
+		select = 'user.id, user.username from user', # , person.first_name, person.last_name (before 'from user')
+		where = 'user_tag.tag = ?',
+		where_arg = tag_id,
+		active = active,
+		like = like,
+		likes = ('username', ), # 'first_name', 'last_name'
+		join = 'user_tag on user.id = user_tag.user', # join person on user.person = person.id
+		order = 'username',
+		limit = limit,
+		include_others = include_unsubscribed,
+		non_join = 'user_tag where user.id = user_tag.user and user_tag.tag = ?',
+	)
 
 
 async def remove_user_from_tag(dbc, user_id, tag_id):
@@ -333,19 +332,20 @@ async def remove_user_from_tag(dbc, user_id, tag_id):
 async def add_user_to_tag(dbc, user_id, tag_id):
 	return await _insert1(dbc, 'insert into user_tag (user, tag) values (?, ?)', (user_id, tag_id))
 
-async def get_user_tags(dbc, user_id, active = True, like = None, limit = 15, include_unsubscribed = False):
-	where, args = ['user_tag.user = ?',], [user_id,]
-	if active:
-		where.append('active = 1')
-	_add_like(like, ('name',), where, args)
-	where = 'where ' + " and ".join(where) if where else ''
-	limit = f'limit {limit}' if limit else ''
-	user_tags = await _fetchall(dbc, f'select tag.* from tag join user_tag on tag.id = user_tag.tag {where} order by name {limit}', args)
-	if not include_unsubscribed:
-		return user_tags
-	#else:
-	all_tags = await get_tags(dbc, active = active, like = like, get_subscribers = False, limit = None) # NOTE: must NOT 'limit' this fetch, as many of these may be weeded out in selection, below, and we have to have plenty to make a full rhs list!
-	return user_tags, [r for r in all_tags if r not in user_tags]
+async def get_user_tags(dbc, user_id, limit, active = True, like = None, include_unsubscribed = False):
+	return await _get_xaa(dbc,
+		select = 'tag.* from tag',
+		where = 'user_tag.user = ?',
+		where_arg = user_id,
+		active = active,
+		like = like,
+		likes = ('name',),
+		join = 'user_tag on tag.id = user_tag.tag',
+		order = 'name',
+		limit = limit,
+		include_others = include_unsubscribed,
+		non_join = 'user_tag where tag.id = user_tag.tag and user_tag.user = ?',
+	)
 
 async def new_message(dbc, user_id, reply_to = None, reply_chain_patriarch = None):
 	fields = ['message', 'author', 'created',]
@@ -484,21 +484,41 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 async def delivery_recipient(dbc, user_id, message_id):
 	return await _fetch1(dbc, f'select 1 from message {_message_tag_join} {_user_tag_join} where (user_tag.user = ? or message.author = ?) and message.id = ?', (user_id, user_id, message_id))
 
-async def get_message_tags(dbc, message_id, user_id, active = True, like = None, limit = 15, include_others = False):
-	# TODO: this is very similar to get_user_tags - consider consolidating?
-	where, args = ['message_tag.message = ?',], [message_id,]
+async def get_message_tags(dbc, message_id, user_id, limit, active = True, like = None, include_others = False):
+	return await _get_xaa(dbc,
+		select = 'tag.* from tag',
+		where = 'message_tag.message = ?',
+		where_arg = message_id,
+		active = active,
+		like = like,
+		likes = ('name',),
+		join = 'message_tag on tag.id = message_tag.tag',
+		order = 'name',
+		limit = limit,
+		include_others = include_others,
+		non_join = 'message_tag where tag.id = message_tag.tag and message_tag.message = ?'
+	)
+
+
+async def _get_xaa(dbc, select, where, where_arg, active, like, likes, join, order, limit, include_others, non_join):
+	where, args = [where,], [where_arg,]
 	if active:
 		where.append('active = 1')
-	_add_like(like, ('name',), where, args)
-	where = 'where ' + " and ".join(where) if where else ''
+	_add_like(like, likes, where, args)
+	select = f'select {select}'
+	join = f'join {join}'
+	order = f'order by {order}'
+	where = " and ".join(where) if where else ''
 	limit = f'limit {limit}' if limit else ''
-	message_tags = await _fetchall(dbc, f'select tag.* from tag join message_tag on tag.id = message_tag.tag {where} order by name {limit}', args)
+	result = await _fetchall(dbc, f'{select} {join} where {where} {order} {limit}', args)
 	if not include_others:
-		return message_tags
-	#else:
-	available_tags = await get_user_tags(dbc, user_id, active = active, like = like, limit = None, include_unsubscribed = False) # NOTE: must NOT 'limit' this fetch, as many of these may be weeded out in selection, below, and we have to have plenty to make a full rhs list!
+		return result
+	where2, args2 = [f'not exists (select 1 from {non_join})',], [where_arg,]
+	_add_like(like, likes, where2, args2)
+	where2 = " and ".join(where2)
+	others = await _fetchall(dbc, f'{select} where {where2} {order} {limit}', args2)
+	return result, others
 
-	return message_tags, [r for r in available_tags if r not in message_tags]
 
 async def remove_tag_from_message(dbc, message_id, tag_id):
 	return await dbc.execute(f'delete from message_tag where message = ? and tag = ?', (message_id, tag_id))

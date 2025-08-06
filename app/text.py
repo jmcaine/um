@@ -117,6 +117,7 @@ no_more_drafts = f'No more draft messages! Click "{brand_new_message}", below, t
 cant_send_empty_message = 'Cannot send an empty message - type some text first!'
 cant_send_message_without_recipients = 'Cannot send a message with no recipients - add some tags to designate some recipients first!'
 message_sent = 'Message sent!'
+filter_for_more = '... (filter to see more...)'
 
 # Hover / validation "title" hints:
 class Title:

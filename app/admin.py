@@ -145,11 +145,13 @@ async def user_tags(hd, reverting = False):
 		await ws.send_content(hd, 'sub_content', await user_tags_table(hd), container = 'user_tags_table_container')
 
 async def user_tags_table(hd):
+	limit =10
 	utags, otags = await db.get_user_tags(hd.dbc, hd.task.state['uid'],
+													limit = limit,
 													active = not hd.task.state.get('filtersearch_include_extra'),
 													like = hd.task.state.get('filtersearch_text'),
 													include_unsubscribed = True)
-	return html.user_tags_table(utags, otags)
+	return html.user_tags_table(utags, otags, limit)
 
 async def _remove_or_add_tag_to_user(hd, func, message):
 	tid = int(hd.payload['tag_id'])
@@ -220,11 +222,13 @@ async def tag_users(hd, reverting = False):
 		await ws.send_content(hd, 'sub_content', await tag_users_table(hd), container = 'users_and_nonusers_table_container')
 
 async def tag_users_table(hd):
+	limit = 10
 	users, nonusers = await db.get_tag_users(hd.dbc, hd.task.state['tag']['id'],
+															limit = limit,
 															active = not hd.task.state.get('filtersearch_include_extra'),
 															like = hd.task.state.get('filtersearch_text'),
 															include_unsubscribed = True)
-	return html.tag_users_and_nonusers_table(hd.task.state['tag']['name'], users, nonusers)
+	return html.tag_users_table(hd.task.state['tag']['name'], users, nonusers, limit)
 
 async def _remove_or_add_user_to_tag(hd, func, message):
 	uid = int(hd.payload['user_id'])
