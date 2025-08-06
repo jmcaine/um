@@ -119,7 +119,7 @@ if settings.debug:
 
 @rt.get('/')
 async def main(rq):
-	return hr(html.document(_ws_url(rq)))
+	return hr(html.document(_ws_url(rq)).render())
 
 @rt.get('/_ws')
 async def _ws(rq):
@@ -183,6 +183,7 @@ class Hd: # handler data class; for grouping stuff more convenient to pass aroun
 	dbc: aiosqlite.Connection
 	idid: str | None = None
 	uid: int | None = None
+	admin: bool = False
 	state: dict = dataclass_field(default_factory = dict)
 	payload: dict | None = None
 	task: Task | None = None
@@ -244,6 +245,7 @@ async def identify(hd):
 		user_id = await db.get_user_by_id_key(hd.dbc, idid, hd.payload['pub'], hd.payload['hsh'])
 		if user_id: # "persistent session" all in order, "auto log-in"... go straight to it:
 			hd.uid = user_id
+			hd.admin = await admin.authorize(hd, user_id)
 			await messages.messages(hd) # show main messages page
 		else:
 			await ws.send(hd, 'new_key')
@@ -267,6 +269,7 @@ async def login(hd, reverting = False):
 		uid = await db.login(hd.dbc, hd.idid, data['username'], data['password'])
 		if uid:
 			hd.uid = uid
+			hd.admin = await admin.authorize(hd, uid)
 			await messages.messages(hd)
 		else:
 			await ws.send_content(hd, 'banner', html.error(text.invalid_login))
@@ -277,6 +280,8 @@ async def logout(hd):
 	await db.logout(hd.dbc, hd.uid)
 	task.clear_all(hd)
 	hd.state = {}
+	#TODO: would prefer to re-create hd from scratch - Hd(rq, wsr, await dbc(rq)) ... but don't know if websocket needs recreate... optionally, logout() could figure out how to cause a page reload...?
+	await ws.send_content(hd, 'page', html.document(_ws_url(hd.rq)))
 	await login_or_join(hd)
 
 
@@ -399,6 +404,7 @@ async def continue_join_or_invite(hd, send_username_fieldset):
 			await db.reset_user_password(hd.dbc, hd.task.state['user_id'], data['password'])
 			await db.commit(hd.dbc) # finally, commit it all
 			hd.uid = hd.task.state['user_id']
+			hd.admin = await admin.authorize(hd, hd.uid)
 			await db.force_login(hd.dbc, hd.idid, hd.uid)
 			task.clear_all(hd) # a "join" results in a clean slate - no prior tasks (note that, above, the end of invite, after the db-commit, we DO finish() to revert to prior task, which may be administrative user-list management.....
 			await ws.send(hd, 'hide_dialog') # safe; no need to finish() task - we just logged in (force_login) and have a clean slate

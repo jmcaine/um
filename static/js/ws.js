@@ -23,8 +23,11 @@ ws.onmessage = function(event) {
 			}
 			focus_top_input();
 			break;
+		case "page":
+			set_page(payload.content);
+			break;
 		case "content":
-			set_content(payload.content, true);
+			set_content(payload.content, true); // TODO: rename set_content to set_main_content() or something, to keep it separate from the concept of payload.content; set_content really means: set the contents of 'content_container'
 			break;
 		case "sub_content":
 			set_sub_content(payload.container, payload.content);

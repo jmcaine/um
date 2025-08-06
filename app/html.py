@@ -63,7 +63,7 @@ def document(ws_url: str):
 			for script in ('basic.js', 'ws.js', 'persistence.js', 'main.js', 'admin.js', 'submit.js', 'messages.js'): # TODO: only load admin.js if user is an admin (somehow? - dom-manipulate with $('scripts').insertAdjacentHTML("beforeend", ...) after login!)!
 				t.script(src = f'/static/js/{script}')
 
-	return d.render()
+	return d
 
 
 # Main-content "Pages" --------------------------------------------------------
@@ -92,7 +92,6 @@ def messages_topbar(admin):
 def messages_filter(filt):
 	result = t.div(cls = 'buttonbar')
 	with result:
-		t.div(cls = 'indent')
 		t.div('Filters:')
 		filt_button = lambda title, hint, _filt: t.button(title, title = hint, cls = 'selected' if filt == _filt else '', onclick = f'messages.filter(id, "{_filt}")')
 		filt_button(text.news, text.show_news, Filter.new)
@@ -146,7 +145,7 @@ def build_fields(fields, data = None, label_prefix = None, invalids = None):
 
 def login(fields):
 	button = _ws_submit_button(text.login, fields.keys())
-	forgot = t.button(text.forgot_password, onclick = _send('main', 'forgot_password'))
+	forgot = None #TODO: t.button(text.forgot_password, onclick = _send('main', 'forgot_password'))
 	result = fieldset(text.login, build_fields(fields), button, forgot)
 	return result
 
@@ -351,7 +350,7 @@ def inline_reply_box(message_id, parent_mid, content = None):
 			t.div(id = f"reply_recipient_{message_id}", cls = 'hide', data_replyrecipient = 'A')
 	return result
 
-def messages(msgs, user_id, stashable, last_thread_patriarch = None, skip_first_hr = False):
+def messages(msgs, user_id, is_admin, stashable, last_thread_patriarch = None, skip_first_hr = False):
 	top = t.div(id = 'messages', cls = 'container')
 	parents = {None: top}
 	for msg in msgs:
@@ -359,13 +358,14 @@ def messages(msgs, user_id, stashable, last_thread_patriarch = None, skip_first_
 			last_thread_patriarch = msg['reply_chain_patriarch']
 			html_message = inline_reply_box(msg['id'], msg['reply_to'], msg['message'])
 		elif msg['sent']: # this test ensures we don't try to present draft messages that aren't replies - user has to re-engage with those in a different way ("new message", then select among drafts)... note that the data (msgs) DO include (or MAY include) non-reply (top-level parent) draft messages; we don't want those messages in our message list here
-			last_thread_patriarch, html_message = message(msg, user_id, stashable, last_thread_patriarch, skip_first_hr)
+			last_thread_patriarch, html_message = message(msg, user_id, is_admin, stashable, last_thread_patriarch, skip_first_hr)
 		parent = parents.get(msg['reply_to'], top)
 		parent.add(html_message)
 		parents[msg['id']] = html_message
 	return top
 
-def message(msg, user_id, stashable, thread_patriarch = None, skip_first_hr = False, injection = False):
+def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_first_hr = False, injection = False):
+	editable = msg['sender_id'] == user_id or is_admin
 	cls = 'container'
 	if injection:
 		cls += ' injection'
@@ -396,7 +396,7 @@ def message(msg, user_id, stashable, thread_patriarch = None, skip_first_hr = Fa
 				t.button(t.i(cls = 'i i-pin'), title = text.unpin, cls = 'selected', onclick = f"messages.unpin({msg['id']}, this)") # 'Ϯ'
 			else:
 				t.button(t.i(cls = 'i i-pin'), title = text.pin, onclick = f"messages.pin({msg['id']}, this)") # 'Ϯ'
-			if msg['sender_id'] == user_id:
+			if editable:
 				t.button(t.i(cls = 'i i-edit'), title = text.edit_message, onclick = _send('messages', 'edit_message', message_id = msg['id']))
 			t.div(cls = 'spacer')
 			isodate = local_date_iso(msg["sent"]).isoformat()[:-6] # [:-6] to trim offset from end, as javascript code will expect a naive iso variant, and will interpret as "local"
@@ -406,11 +406,10 @@ def message(msg, user_id, stashable, thread_patriarch = None, skip_first_hr = Fa
 			if len(all_recipients) > max_recipients:
 				recipients += ', ...'
 			with t.div():
-				t.span(t.b('by '), msg['sender'],
-					t.button(t.i(cls = 'i i-all'), title = text.recipients, onclick = f"messages.change_recipients({msg['id']})"),
-					recipients, ' ·'),
+				edit_button = t.button(t.i(cls = 'i i-all'), title = text.recipients, onclick = f"messages.change_recipients({msg['id']})") if editable else ''
+				t.span(t.b('by '), msg['sender'], t.b(' to '), edit_button, recipients, ' ·'),
 				t.span(text.just_now if injection else '...', cls = 'time_updater', data_isodate = isodate) # 'sent' date/time
-			if msg['sender_id'] == user_id:
+			if editable:
 				t.button(t.i(cls = 'i i-trash'), title = text.delete_message, onclick = f"messages.delete_message({msg['id']})")
 	return thread_patriarch, result
 

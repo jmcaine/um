@@ -65,7 +65,7 @@ async def messages(hd, reverting = False):
 		hd.task.state['skip'] = -1 # start at "bottom" of "last page" (newest messages), and load older messages when user scrolls to top
 	ms = await _get_messages(hd)
 	hd.task.state['skip'] += len(ms) if hd.task.state['skip'] >= 0 else -len(ms)
-	await ws.send_content(hd, 'messages', html.messages(ms, hd.uid, news, None, news), scroll_to_bottom = 0 if news else 1, filt = filt)
+	await ws.send_content(hd, 'messages', html.messages(ms, hd.uid, hd.admin, news, None, news), scroll_to_bottom = 0 if news else 1, filt = filt)
 	if len(ms) > 0:
 		hd.task.state['last_thread_patriarch'] = ms[-1]['reply_chain_patriarch'] if news else ms[0]['reply_chain_patriarch'] # last message, if we're scrolling down; first if up
 
@@ -83,7 +83,7 @@ async def more_new_messages(hd): # inspired by "down-scroll" below "bottom", or 
 	assert(hd.task.state['skip'] >= 0) # true by virtue of filtering new messages - we're only skipping 'forward'
 	ms = await _get_messages(hd)
 	if len(ms) > 0:
-		await ws.send_content(hd, 'more_new_messages', html.messages(ms, hd.uid, True, hd.task.state['last_thread_patriarch']))
+		await ws.send_content(hd, 'more_new_messages', html.messages(ms, hd.uid, hd.admin, True, hd.task.state['last_thread_patriarch']))
 		hd.task.state['skip'] += len(ms)
 		hd.task.state['last_thread_patriarch'] = ms[-1]['reply_chain_patriarch']
 	else:
@@ -97,7 +97,7 @@ async def more_old_messages(hd): # inspired by "up-scroll" above "top"
 	assert(hd.task.state['skip'] < 0) # true by virtue of filtering 'new' messages - we're only skipping 'backward'
 	ms = await _get_messages(hd)
 	if len(ms) > 0:
-		await ws.send_content(hd, 'more_old_messages', html.messages(ms, hd.uid, False, hd.task.state['last_thread_patriarch']))
+		await ws.send_content(hd, 'more_old_messages', html.messages(ms, hd.uid, hd.admin, False, hd.task.state['last_thread_patriarch']))
 		hd.task.state['skip'] -= len(ms)
 		hd.task.state['last_thread_patriarch'] = ms[0]['reply_chain_patriarch']
 	#else: nothing more to do - don't ws.send() anything or update anything!  User has scrolled to the very top of the available messages for the given filter
@@ -197,7 +197,7 @@ async def send_reply(hd):
 		await ws.send(hd, 'remove_reply_container', message_id = mid)
 	else:
 		stashable = hd.task.state.get('filt') == Filter.new
-		_, html_message = html.message(message, hd.uid, stashable, message['reply_chain_patriarch'], injection = True)
+		_, html_message = html.message(message, hd.uid, hd.admin, stashable, message['reply_chain_patriarch'], injection = True)
 		await ws.send_content(hd, 'post_completed_reply', html_message, message_id = mid)
 		hd.state['active_reply'] = None # reset; no longer in active reply (until user starts or resumes another reply)
 		for each_hd in hd.rq.app['hds']:
@@ -267,7 +267,7 @@ async def deliver_message(hd, message):
 				#NOTE: we DON'T add(mid) to state['injects'] here, prematurely - within inject_deliver_new_message, client-side, decision may be made to NOT add the message to the DOM! (see injected_message() signal)
 				stashable = hd.task.state.get('filt') == Filter.new
 				patriarch = None if reference_mid == None else message['reply_chain_patriarch'] # `None` means the message has no parent (is not a reply, so it will be "injected" at the bottom)
-				_, html_message = html.message(message, hd.uid, stashable, patriarch, injection = True) # when `patriarch` is not None, `message`'s own reply_chain_patriarch has to be the patriarch
+				_, html_message = html.message(message, hd.uid, hd.admin, stashable, patriarch, injection = True) # when `patriarch` is not None, `message`'s own reply_chain_patriarch has to be the patriarch
 				await ws.send_content(hd, 'inject_deliver_new_message', html_message, new_mid = mid, reference_mid = reference_mid or 0, placement = placement)
 
 @ws.handler(auth_func = active)

@@ -395,16 +395,22 @@ async def send_message(dbc, user_id, message_id) -> Send_Message_Result | dict:
 	if not content or content == '<div></div>' or content == '<br>':
 		return Send_Message_Result.EmptyMessage # can't send empty message
 
-	more = ''
+	sets = []
 	args = [message_id,]
 	if not content.startswith('<div>'):
 		message['message'] = content = '<div>' + content + '</div>' # make sure all messages are div-bracketed (one-liner messages don't come to us this way by default)
-		more += 'message = ?, '
+		sets.append('message = ?')
 		args.insert(-1, content) # message_id has to stay "last" in arg list
 	if message['deleted']:
-		more += 'deleted = null, ' # un-delete the message if it's now being sent
-	await _update1(dbc, f'update message set {more} sent = {k_now} where id = ?', args)
-	message['sent'] = datetime.utcnow().strftime(k_now_) # kludge - parties using the return from this function (message) sometimes need that 'sent' field, but it's not actually set upon update, in the message object itself, and it seems needless to do a fetch; so, just set the date the same as it is in the DB... (NOTE: # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!)
+		sets.append('deleted = null') # un-delete the message if it's now being sent
+	if not message['sent']: # don't mess with an already set 'sent' value (i.e., message being edited, after sent)
+		sets.append(f'sent = {k_now}')
+		message['sent'] = datetime.utcnow().strftime(k_now_) # kludge - parties using the return from this function (message) sometimes need that 'sent' field, but it's not actually set upon update, in the message object itself, and it seems needless to do a fetch; so, just set the date the same as it is in the DB... (NOTE: # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!)
+	if message['reply_chain_patriarch'] == message['id']: # if this is the patriarch of the thread, update its thread_updated
+		sets.append(f'thread_updated = {k_now}')
+	if sets: # only continue if there's actually something to set(); else no-op
+		sets = 'set ' + ', '.join(sets)
+		await _update1(dbc, f'update message {sets} where id = ?', args)
 	if message['reply_chain_patriarch'] != message['id']:
 		# Need to update reply_chain_patriarch's thread_updated field, too:
 		await _update1(dbc, f'update message set thread_updated = {k_now} where id = ?', (message['reply_chain_patriarch'],))

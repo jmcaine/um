@@ -6,6 +6,10 @@ let main = {
 }
 
 
+function set_page(content) {
+	document.documentElement.innerHTML = content;
+}
+
 function set_content(content, clear_banner = true, focus_top_inp = true) {
 	_set_content($('content_container'), content, clear_banner, focus_top_inp);
 }

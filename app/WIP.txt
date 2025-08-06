@@ -8,6 +8,10 @@ links (internal and external) in messages
 
 
 BUGS:
+	STOP video playback when "close" ("X") clicked!  (audio keeps playing!)
+
+	since messages save periodically while being edited, if another user loads/views a message mid-edit, they see the message before it's finished and sent!
+
 	show ONLY tags to which you're subscribed, when showing tags to "send" a message to; but ALSO include all "individual" tags (really?  someday, when multiple campuses are in, will want to constrain individuals to campus, too!)
 
 	filter isn't working to narrow drafts list down

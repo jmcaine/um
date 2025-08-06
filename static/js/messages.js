@@ -95,8 +95,17 @@ let messages = {
 		// First, see if new_mid is actually already in our DOM (meaning the message was simply edited):
 		let existing = $('message_' + new_mid); // (in which case it's not really a "new" message (id), after all....)
 		if (existing) {
+			// Lift out replies, before removing `existing`:
+			let replies = document.querySelectorAll('#message_' + new_mid + ' > div.container');
+			if (replies) {
+				replies.forEach(function(reply) {
+					existing.insertAdjacentElement("afterend", reply);
+				});
+			}
+			// Then set the new replacement content just above the existing, then remove the old existing:
 			existing.insertAdjacentHTML("beforebegin", content);
 			existing.remove();
+			// Note that this does "break" the normal format of replies being contained "within" parents, but this should be fine....
 		} else { // all other cases are true injections (of new_mid, heretofore unseen)
 			let div = $('message_' + reference_mid); // if reference_mid == 0 (new message), this processes as expected - the div is (properly) not found
 			let injected = false;
