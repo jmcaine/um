@@ -144,7 +144,7 @@ def build_fields(fields, data = None, label_prefix = None, invalids = None):
 
 def login(fields):
 	button = _ws_submit_button(text.login, fields.keys())
-	forgot = None #TODO: t.button(text.forgot_password, onclick = _send('main', 'forgot_password'))
+	forgot = t.button(text.forgot_password, onclick = _send('main', 'forgot_password'))
 	result = fieldset(text.login, build_fields(fields), button, forgot)
 	return result
 
@@ -153,6 +153,15 @@ def forgot_password(fields):
 	result = fieldset(text.password_reset, build_fields(fields), button)
 	return result
 
+def password_reset_code(fields):
+	button = _ws_submit_button(text.submit, fields.keys())
+	result = fieldset(text.reset_code, build_fields(fields), button)
+	return result
+
+def new_password(fields):
+	button = _ws_submit_button(text.submit, fields.keys())
+	result = fieldset(text.new_password, build_fields(fields), button)
+	return result
 
 def admin_button_band():
 	result = t.div(cls = 'buttonbar')

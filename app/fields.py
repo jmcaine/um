@@ -71,6 +71,13 @@ USER = {
 	'active': Field(None, html.Input(type_ = 'checkbox')),
 }
 
+RESET_CODE = {
+	'code': Field(
+		Validator(True, valid.CODE, 3, 20, text.Valid.code),
+		html.Input(	autofocus = True, attrs = {'title': text.Title.code, 'autocomplete': 'off'}),
+	),
+}
+
 NEW_PASSWORD = {
 	'password': Field(
 		PASSWORD_VALIDATOR,

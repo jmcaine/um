@@ -36,7 +36,7 @@ save_draft = 'Save draft'
 finish = 'Finish!'
 more_detail = 'More detail...'
 close = 'Close'
-forgot_password = 'Forgot Password...'
+forgot_password = 'Reset Password...'
 tag = 'Tag'
 done = 'Done'
 brand_new_message = 'Brand New Message...'
@@ -94,6 +94,7 @@ just_now = 'just now'
 emails = 'Emails'
 phones = 'Phones'
 password_reset = 'Reset Password'
+reset_code = 'Reset Code'
 
 # Banners:
 welcome = 'Welcome!  "Log in" or "Join" to get started... '
@@ -101,6 +102,11 @@ change_detail_success = 'Successfully changed {change}'
 detail_for = 'detail for'
 invalid_login = 'Invalid username/login; please try again or click "forgot password" below.'
 forgot_password_prelude = "What's your email address?  We'll send a password reset link!"
+unknown_email = "That email address is not on record; please try another, or contact an administrator."
+reset_email_subject = 'Reset...'
+password_reset_code_email_body = "You requested a password reset code for um.openhome.school. Here it is: {code} <-- type or paste that code into your browser, where it's requested."
+enter_reset_code = "Paste or type the code you received over email..."
+enter_reset_code_retry = "That didn't work; retry entering your reset code carefully..."
 auth_required = "You aren't authorized to access this function.  If you have a different login with authorization for this function, log out from your current session and log back in as an authorized user to access this function."
 deletion_succeeded = 'Deletion succeeded.'
 invite_succeeded = 'Successfully invited {name}. (User will be "inactive" until invitation is accepted.)'
@@ -127,6 +133,7 @@ class Title:
 	username = 'Enter a username'
 	password = 'Enter a password, six characters or longer'
 	password_confirmation = 'Enter the password again, to confirm'
+	code = 'Code'
 
 # Validation:
 class Valid:
@@ -138,3 +145,4 @@ class Valid:
 	password = 'Password must be six characters or longer'
 	password_match = 'Password and confirmation must match'
 	tag_name = 'Tag name must be provided, and must be 2-32 characters in length'
+	code = 'Code must be copied or reproduced exactly as shown in the email.'

@@ -15,7 +15,9 @@ import asyncio
 
 from aiohttp import web, WSMsgType, WSCloseCode
 
+from . import admin
 from . import db
+from . import emailer
 from . import fields
 from . import html
 from . import messages
@@ -25,8 +27,6 @@ from .task import Task
 from . import text
 from . import valid
 from . import ws
-
-from . import admin
 
 from . import exception as ex
 
@@ -287,8 +287,44 @@ async def logout(hd):
 
 @ws.handler
 async def forgot_password(hd):
-	await ws.send(hd, 'fieldset', fieldset = html.forgot_password(fields.EMAIL))
-	await ws.send_content(hd, 'banner', html.info(text.forgot_password_prelude))
+	if task.just_started(hd, forgot_password):
+		await ws.send(hd, 'fieldset', fieldset = html.forgot_password(fields.EMAIL).render())
+		await ws.send_content(hd, 'banner', html.info(text.forgot_password_prelude))
+	else:
+		data = hd.payload
+		hd.task.state['email'] = email = data.get('email', hd.task.state.get('email')).strip() # stage 1
+		hd.task.state['code'] = code = data.get('code', hd.task.state.get('code', '')).strip() # stage 2
+		hd.task.state['password'] = password = data.get('password', hd.task.state.get('password')) # stage 3
+		if not code:
+			# Still at stage 1 - get address and send email:
+			if await valid.invalids(hd, data, fields.EMAIL, handle_invalid, 'banner'):
+				return # if there WERE invalids, banner was already sent within
+			#else all good, move on!
+			hd.task.state['user_id'] = user_id = await db.get_user_id_by_email(hd.dbc, email)
+			if not user_id:
+				await ws.send_content(hd, 'banner', html.info(text.unknown_email))
+				return # finished
+			# else:
+			new_code = await db.generate_password_reset_code(hd.dbc, user_id)
+			emailer.send_email(email, text.reset_email_subject, text.password_reset_code_email_body.format(code = new_code))
+			await ws.send(hd, 'fieldset', fieldset = html.password_reset_code(fields.RESET_CODE).render())
+			await ws.send_content(hd, 'banner', html.info(text.enter_reset_code))
+		elif not password:
+			# Still at stage 2 - get/validate code:
+			if await db.validate_reset_password_code(hd.dbc, code, hd.task.state['user_id']):
+				await ws.send(hd, 'fieldset', fieldset = html.new_password(fields.NEW_PASSWORD).render())
+			else:
+				await ws.send_content(hd, 'banner', html.error(text.enter_reset_code_retry))
+		else:
+			# Stage 3 - get/process new password:
+			if password != data.get('password_confirmation'):
+				await ws.send_content(hd, 'banner', html.error(text.Valid.password_match))
+			else:
+				await db.reset_user_password(hd.dbc, hd.task.state['user_id'], password)
+				hd.uid = hd.task.state['user_id']
+				hd.admin = await admin.authorize(hd, hd.uid)
+				await db.force_login(hd.dbc, hd.idid, hd.uid)
+				await messages.messages(hd)
 
 @ws.handler
 async def join(hd):
@@ -434,4 +470,4 @@ def _ws_url(rq):
 	port = int(host[1]) if len(host) > 1 else None
 	#return URL.build(scheme = 'wss' if rq.secure else 'ws', host = host[0], port = port, path = '/_ws')
 	#TODO: the above line, elegantly building 'wss' or 'ws', does not work because https requests are translated in nginx to http requests over unix socket, so rq.secure is False and rq.scheme is http (not https)!
-	return URL.build(scheme = 'wss', host = host[0], port = port, path = '/_ws')
+	return URL.build(scheme = 'ws', host = host[0], port = port, path = '/_ws')

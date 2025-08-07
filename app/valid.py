@@ -26,6 +26,7 @@ EMAIL = Rex(r'(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)')
 PHONE = Rex(r'^(\(?\+?\d{1,3}\)?)?[-.\s]?(\d{3}[-.\s]?){2}\d{4}$') # matches all forms of "+18 123 456 7890" with or without "+", using dashes, spaces, or dots between groups of numbers, with or without country code at all
 SLUG = Rex(r'^[\w\-_]{2,32}$')
 INVITATION = Rex(r'^.{24,24}$')
+CODE = Rex(r'^[\w ]{1,10}$')
 
 @dataclass(slots = True)
 class Validator:

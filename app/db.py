@@ -189,7 +189,7 @@ async def verify_new_user(dbc, username):
 
 async def login(dbc, idid, username, password):
 	if password: # password is required!
-		r = await _fetch1(dbc, 'select id, password from user where username = ? and active = 1', (username,))
+		r = await _fetch1(dbc, 'select id, password from user where username = ? COLLATE NOCASE and active = 1', (username,))
 		if r and bcrypt.checkpw(password.encode(), r['password']):
 			if await _login(dbc, idid, r['id']):
 				return r['id']
@@ -232,7 +232,7 @@ async def get_user_id(dbc, username):
 	return r['id'] if r else None
 
 async def get_user_id_by_email(dbc, email):
-	r = await _fetch1(dbc, 'select id from user join person on user.person = person.id join email on person.id = email.person where email.email = ?', (email,))
+	r = await _fetch1(dbc, 'select user.id from user join person on user.person = person.id join email on person.id = email.person where email.email = ?', (email,))
 	return r['id'] if r else None
 
 async def get_user_emails(dbc, user_id):
