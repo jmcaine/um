@@ -50,9 +50,10 @@ body {
 	left: 0;
 	right: 0;
 
-	height: auto; /* TODO: max-height: 80vh or something?!!! */
-	min-width: 400px; /* TODO: make in terms of vw instead?!!! */
-	max-width: 600px;
+	height: auto;
+	max-height: 80vh;
+	min-width: 50vw;
+	max-width: 80vw;
 
 	margin: 2% auto auto;
 	padding: 10px;
