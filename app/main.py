@@ -239,7 +239,8 @@ async def identify(hd):
 		# new identity:
 		await db.add_idid_key(hd.dbc, idid, key)
 		# New persistence, with this client (previous one expired or this is a brand new login or...); send the login-or-join choice:
-		await login_or_join(hd)
+		#await login_or_join(hd)
+		await login(hd)
 	else: # it's one or the other (idid and key were sent, or else idid and pub and hsh were sent)
 		# existing identity
 		user_id = await db.get_user_by_id_key(hd.dbc, idid, hd.payload['pub'], hd.payload['hsh'])
@@ -282,7 +283,8 @@ async def logout(hd):
 	hd.state = {}
 	#TODO: would prefer to re-create hd from scratch - Hd(rq, wsr, await dbc(rq)) ... but don't know if websocket needs recreate... optionally, logout() could figure out how to cause a page reload...?
 	await ws.send_content(hd, 'page', html.document(_ws_url(hd.rq)))
-	await login_or_join(hd)
+	#await login_or_join(hd)
+	await login(hd)
 
 
 @ws.handler
