@@ -190,9 +190,14 @@ async def verify_new_user(dbc, username):
 async def login(dbc, idid, username, password):
 	if password: # password is required!
 		r = await _fetch1(dbc, 'select id, password from user where username = ? COLLATE NOCASE and active = 1', (username,))
+		id = r['id'] if r else None
+		if not id:
+			# Try email:
+			id = await get_user_id_by_email(dbc, username)
+			r = await _fetch1(dbc, 'select password from user where id = ? and active = 1', (id,))
 		if r and bcrypt.checkpw(password.encode(), r['password']):
-			if await _login(dbc, idid, r['id']):
-				return r['id']
+			if await _login(dbc, idid, id):
+				return id
 	#else...
 	return None
 
@@ -598,7 +603,8 @@ def _hashpw(password):
 	return bcrypt.hashpw(password.encode(), bcrypt.gensalt())
 
 async def _login(dbc, idid, user_id):
-	return await _update1(dbc, 'update id_key set user = ? where idid = ?', (user_id, idid))
+	r = await _update1(dbc, 'update id_key set user = ? where idid = ?', (user_id, idid))
+	return r
 
 def _add_like(like, fields, where, args):
 	if like:

@@ -279,12 +279,7 @@ async def login(hd, reverting = False):
 @ws.handler
 async def logout(hd):
 	await db.logout(hd.dbc, hd.uid)
-	task.clear_all(hd)
-	hd.state = {}
-	#TODO: would prefer to re-create hd from scratch - Hd(rq, wsr, await dbc(rq)) ... but don't know if websocket needs recreate... optionally, logout() could figure out how to cause a page reload...?
-	await ws.send_content(hd, 'page', html.document(_ws_url(hd.rq)))
-	#await login_or_join(hd)
-	await login(hd)
+	await ws.send(hd, 'reload')
 
 
 @ws.handler

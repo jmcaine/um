@@ -47,7 +47,6 @@ PHONE = {
 }
 
 USERNAME_VALIDATOR = Validator(True, valid.USERNAME, 3, 20, text.Valid.username)
-
 NEW_USERNAME = {
 	'username': Field(
 		USERNAME_VALIDATOR,
@@ -60,8 +59,9 @@ NEW_USERNAME = {
 		
 PASSWORD_VALIDATOR = Validator(True, valid.STRING32, 6, 32, text.Valid.password)
 
+LOOSE_USERNAME_OR_EMAIL_VALIDATOR = Validator(True, valid.LOOSE_USERNAME_OR_EMAIL, 3, 128, text.Valid.username_or_email)
 LOGIN = {
-	'username': Field(USERNAME_VALIDATOR, html.Input(text.username)),
+	'username': Field(LOOSE_USERNAME_OR_EMAIL_VALIDATOR, html.Input(text.username)),
 	'password': Field(PASSWORD_VALIDATOR, html.Input(type_ = 'password')),
 }
 

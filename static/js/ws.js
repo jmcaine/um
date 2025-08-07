@@ -74,6 +74,8 @@ ws.onmessage = function(event) {
 		case "files_uploaded":
 			messages.files_uploaded(payload.content, payload.message_id);
 			break;
+		case "reload":
+			window.location.href = '/';
 		default:
 			console.log("ERROR - unknown payload task: " + payload.task);
 	}

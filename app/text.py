@@ -141,6 +141,7 @@ class Valid:
 	email = 'Email must be provided, and must follow the format: name@site.com'
 	phone = 'Phone must be provided, and must be a valid phone number (with or without country-code prefix)'
 	username = 'Username must be provided, and must be 3-20 characters in length'
+	username_or_email = 'A username or email address must be provided'
 	username_exists = 'Sorry, that username is already in use.  Please try another.'
 	password = 'Password must be six characters or longer'
 	password_match = 'Password and confirmation must match'

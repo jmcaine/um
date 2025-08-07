@@ -1,3 +1,6 @@
+allow email address for username
+
+finish implementation of invite email sending
 
 use new edit_history and resend_history DB tables!
 
