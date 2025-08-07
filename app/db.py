@@ -289,14 +289,14 @@ async def add_role_ids(dbc, role_ids, user_id = None):
 	await dbc.executemany('insert into user_role (user, role) values (?, ?)', role_ids)
 
 
-async def get_tags(dbc, active = True, like = None, get_subscribers = False, limit = 15):
-	where, args = [], []
+async def get_tags(dbc, active = True, like = None, get_subscriber_count = False, limit = 15):
+	where, args = ['tag.user is null'], [] # 'user is null' to weed out the pseudo-groups connected to every user
 	if active:
 		where.append('active = 1')
 	_add_like(like, ('name',), where, args)
 	where = 'where ' + ' and '.join(where) if where else ''
 	count, join = '', ''
-	if get_subscribers:
+	if get_subscriber_count:
 		count = ', count(user_tag.tag) as num_subscribers'
 		join = 'left join user_tag on tag.id = user_tag.tag'
 	limit = f'limit {limit}' if limit else ''

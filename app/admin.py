@@ -173,13 +173,13 @@ async def add_tag_to_user(hd):
 @ws.handler(auth_func = authorize)
 async def tags(hd, reverting = False):
 	if task.just_started(hd, tags):
-		t = await db.get_tags(hd.dbc, get_subscribers = True)
+		t = await db.get_tags(hd.dbc, get_subscriber_count = True)
 		await ws.send_content(hd, 'content', html.tags_page(t))
 	else:
 		t = await db.get_tags(hd.dbc,
 								active = not hd.task.state.get('filtersearch_include_extra', False),
 								like = hd.task.state.get('filtersearch_text', ''),
-								get_subscribers = True)
+								get_subscriber_count = True)
 		await ws.send_content(hd, 'sub_content', html.tag_table(t), container = 'tag_table_container')
 
 
