@@ -1,4 +1,14 @@
 
+if ("virtualKeyboard" in navigator) {
+	navigator.virtualKeyboard.overlaysContent = true;
+
+	navigator.virtualKeyboard.addEventListener("geometrychange", (event) => {
+		const { x, y, width, height } = event.target.boundingRect;
+		document.documentElement.style.marginBottom = height;
+	});
+}
+
+
 let main = {
 	send_ws: function(task, fields) {
 		ws_send_task('app.main', task, fields);
