@@ -41,7 +41,7 @@ _cancel_button = lambda title = text.cancel: t.button(title, onclick = _send('ma
 
 # Note that there's really only one "document"
 
-def document(ws_url: str):
+def document(ws_url: str, initial = ''):
 	d = _doc(('common.css',))
 	with d:
 		t.div(id = 'gray_screen', cls = 'hide') # invisible at first; for dialog_screen, later
@@ -60,6 +60,7 @@ def document(ws_url: str):
 
 		with t.div(id = 'scripts', cls = 'container'):
 			t.script(raw(f'var ws = new WebSocket("{ws_url}");'))
+			t.script(raw(f'const initial = "{initial}";'))
 			for script in ('basic.js', 'ws.js', 'persistence.js', 'main.js', 'admin.js', 'submit.js', 'messages.js'): # TODO: only load admin.js if user is an admin (somehow? - dom-manipulate with $('scripts').insertAdjacentHTML("beforeend", ...) after login!)!
 				t.script(src = f'/static/js/{script}')
 

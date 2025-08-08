@@ -5,22 +5,25 @@ ws.onopen = function(event) {
 }
 
 function identify(force = false) {
-	let idid = localStorage.getItem("idid");
-	let key = localStorage.getItem("key");
-	if (idid && key && !force) {
+	let task = {
+		task: "identify",
+		idid: localStorage.getItem("idid")
+	};
+	const key = localStorage.getItem("key");
+	if (task.idid && key && !force && initial == '') { // `initial` is a global const assigned at top, with ws itself; normally '' (empty string)
 		// existing identity:
-		let pub = crypto.randomUUID();
-		let hsh = sha256(key + pub);
-		ws_send({task: "identify", idid: idid, pub: pub, hsh: hsh});
+		task.pub = crypto.randomUUID();
+		task.hsh = sha256(key + task.pub);
 	}
 	else {
 		// new identity:
-		let idid = crypto.randomUUID();
-		localStorage.setItem("idid", idid);
-		let key = crypto.randomUUID();
-		localStorage.setItem("key", key);
-		ws_send({task: "identify", idid: idid, key: key});
+		task.initial = initial; // usually '', but may contain an initial detail, such as an invitation redemption code
+		task.idid = crypto.randomUUID();
+		localStorage.setItem("idid", task.idid);
+		task.key = crypto.randomUUID();
+		localStorage.setItem("key", task.key);
 	}
+	ws_send(task);
 }
 
 

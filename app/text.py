@@ -103,8 +103,6 @@ detail_for = 'detail for'
 invalid_login = 'Invalid username/login; please try again or click "reset password" below.'
 forgot_password_prelude = "What's your email address?  We'll send a password reset link!"
 unknown_email = "That email address is not on record; please try another, or contact an administrator."
-reset_email_subject = 'Reset...'
-password_reset_code_email_body = "You requested a password reset code for um.openhome.school. Here it is: {code} <-- type or paste that code into your browser, where it's requested."
 enter_reset_code = "Paste or type the code you received over email..."
 enter_reset_code_retry = "That didn't work; retry entering your reset code carefully..."
 auth_required = "You aren't authorized to access this function.  If you have a different login with authorization for this function, log out from your current session and log back in as an authorized user to access this function."
@@ -124,6 +122,13 @@ cant_send_empty_message = 'Cannot send an empty message - type some text first!'
 cant_send_message_without_recipients = 'Cannot send a message with no recipients - add some tags to designate some recipients first!'
 message_sent = 'Message sent!'
 filter_for_more = '... (filter to see more...)'
+no_such_invitation_code = 'Uh oh!  No such invitation code can be found on record!  Please contact an admin.'
+
+reset_email_subject = 'Reset...'
+password_reset_code_email_body = "You requested a password reset code for um.openhome.school. Here it is: {code} <-- type or paste that code into your browser, where it's requested."
+email_invite_subject = 'Invitation link - openhome.school messenger'
+email_invite_body = "This is your invite email to um.openhome.school - go to https://um.openhome.school/invite/{code} to accept...."
+email_invite_body_html = """<html><body>This is your invite email to um.openhome.school - click on <a href="https://um.openhome.school/invite/{code}">this link to accept....</a></body></html>"""
 
 # Hover / validation "title" hints:
 class Title:

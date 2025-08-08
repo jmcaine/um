@@ -121,6 +121,12 @@ if settings.debug:
 async def main(rq):
 	return hr(html.document(_ws_url(rq)).render())
 
+@rt.get('/invite/{code}')
+async def redeem_invite(rq):
+	code = rq.match_info['code'][:db.k_reset_code_length].replace('"', '') # simple sanitation; sufficient
+	return hr(html.document(_ws_url(rq), f'code:{code}').render())
+
+
 @rt.get('/_ws')
 async def _ws(rq):
 	wsr = web.WebSocketResponse(max_msg_size = 0)
@@ -238,11 +244,16 @@ async def identify(hd):
 	if key := hd.payload.get('key'):
 		# new identity:
 		await db.add_idid_key(hd.dbc, idid, key)
-		# New persistence, with this client (previous one expired or this is a brand new login or...); send the login-or-join choice:
-		#await login_or_join(hd)
-		await login(hd)
+		# new persistence for this client (previous one expired or this is a brand new login or...)
+		initial = hd.payload.get('initial')
+		if initial.startswith('code:'):
+			# invite code provided in url; process now:
+			await redeem_invite(hd, initial.split(':')[1])
+		else:
+			# normal login:
+			await login(hd) #await login_or_join(hd)
 	else: # it's one or the other (idid and key were sent, or else idid and pub and hsh were sent)
-		# existing identity
+		# existing identity; resume:
 		user_id = await db.get_user_by_id_key(hd.dbc, idid, hd.payload['pub'], hd.payload['hsh'])
 		if user_id: # "persistent session" all in order, "auto log-in"... go straight to it:
 			hd.uid = user_id
@@ -274,6 +285,26 @@ async def login(hd, reverting = False):
 			await messages.messages(hd)
 		else:
 			await ws.send_content(hd, 'banner', html.error(text.invalid_login))
+
+@ws.handler
+async def redeem_invite(hd, code = None):
+	if task.just_started(hd, redeem_invite):
+		if uid := await db.get_user_id_by_reset_code(hd.dbc, code):
+			hd.uid = hd.task.state['user_id'] = uid
+			hd.task.state['code'] = code
+			await ws.send(hd, 'fieldset', fieldset = html.new_password(fields.NEW_PASSWORD).render())
+		else:
+			await ws.send_content(hd, 'banner', html.error(text.no_such_invitation_code))
+	else:
+		data = hd.payload
+		password = data.get('password')
+		if password != data.get('password_confirmation'):
+			await ws.send_content(hd, 'banner', html.error(text.Valid.password_match))
+		else:
+			await db.reset_user_password(hd.dbc, hd.task.state['user_id'], password)
+			hd.admin = await admin.authorize(hd, hd.uid)
+			await db.force_login(hd.dbc, hd.idid, hd.uid)
+			await messages.messages(hd)
 
 
 @ws.handler
@@ -400,8 +431,10 @@ async def continue_join_or_invite(hd, send_username_fieldset):
 				# send a password-reset code via email, to the user's email:
 				code = await db.generate_password_reset_code(hd.dbc, user_id)
 				emails = await db.get_user_emails(hd.dbc, user_id)
-				l.debug(f'inviting new user ({hd.task.state["name"]}) via email: {emails[0]["email"]}')
-				# TODO!
+				emailer.send_email(emails[0]["email"], text.email_invite_subject,
+							  text.email_invite_body.format(code = code),
+							  text.email_invite_body_html.format(code = code))
+				l.info(f'inviting new user ({hd.task.state["name"]}) via email: {emails[0]["email"]} ... code = {code}')
 				# notify inviter of success:
 				person = hd.task.state['name']
 				await task.finish(hd)

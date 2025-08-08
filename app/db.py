@@ -243,8 +243,9 @@ async def get_user_id_by_email(dbc, email):
 async def get_user_emails(dbc, user_id):
 	return await _fetchall(dbc, 'select email from email join person on email.person = person.id join user on person.id = user.person where user.id = ?', (user_id,))
 
+k_reset_code_length = 6
 async def generate_password_reset_code(dbc, user_id):
-	code = ''.join(random_choices(ascii_uppercase, k=6))
+	code = ''.join(random_choices(ascii_uppercase, k = k_reset_code_length))
 	await dbc.execute(f'insert into reset_code (code, user, timestamp) values (?, ?, {k_now})', (code, user_id))
 	return code
 
@@ -254,6 +255,12 @@ async def validate_reset_password_code(dbc, code, user_id):
 		await dbc.execute('delete from reset_code where id = ?', (r['id'],)) # done with it!
 		return True
 	return False
+
+async def get_user_id_by_reset_code(dbc, code):
+	r = await _fetch1(dbc, 'select user from reset_code where code = ?', (code,))
+	if r:
+		return r['user']
+	return None
 
 async def reset_user_password(dbc, uid, new_password):
 	# note that this re-activates a de-activated user (see deactivate_user())
