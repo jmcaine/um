@@ -334,7 +334,7 @@ let messages = {
 	},
 
 	play_video: function(path, poster_path) {
-		$('dialog_contents').innerHTML = '<video controls class="media_container" poster="' + poster_path + '" width="' + Math.floor(parent.innerWidth*8/9) + '"><source src="' + path + '" type="video/mp4" /></video>';
+		$('dialog_contents').innerHTML = '<video controls id="dialog_video" class="media_container" poster="' + poster_path + '" width="' + Math.floor(parent.innerWidth*8/9) + '"><source src="' + path + '" type="video/mp4" /></video>';
 		$('dialog').showModal();
 	},
 

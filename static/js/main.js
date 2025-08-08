@@ -8,6 +8,14 @@ if ("virtualKeyboard" in navigator) {
 	});
 }
 
+$('dialog').addEventListener('close', () => {
+	console.log('Dialog closed!');
+	const video = $('dialog_video');
+	if (video) {
+		video.pause();
+	}
+});
+
 
 let main = {
 	send_ws: function(task, fields) {
