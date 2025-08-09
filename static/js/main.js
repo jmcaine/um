@@ -1,15 +1,14 @@
 
 if ("virtualKeyboard" in navigator) {
 	navigator.virtualKeyboard.overlaysContent = true;
-
 	navigator.virtualKeyboard.addEventListener("geometrychange", (event) => {
 		const { x, y, width, height } = event.target.boundingRect;
 		document.documentElement.style.marginBottom = height;
 	});
 }
 
+
 $('dialog').addEventListener('close', () => {
-	console.log('Dialog closed!');
 	const video = $('dialog_video');
 	if (video) {
 		video.pause();

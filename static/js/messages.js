@@ -223,19 +223,44 @@ let messages = {
 		$('message_' + parent_mid).insertAdjacentHTML("beforeend", content);
 		let new_reply_box = $('edit_message_content_' + message_id); // could use message_<message_id>, but for the call to focus(), below - need to do that on the editable-content area
 		new_reply_box.addEventListener('paste', (e) => {
-			$('attachments_for_message_' + message_id).insertAdjacentHTML("beforeend", "Uploading your files... loading thumbnails...");
 			const items = (e.clipboardData || e.originalEvent.clipboardData).items; // note that just using e.clipboardData.files is ONLY sufficient for actual files, not BLOBs normally copied when user copies image itself from some gallary app or something; this re-casting (below) is necessary
 			let files = [];
 			for (const item of items) {
 				if (item.kind === 'file') {
 					e.preventDefault();
 					files.push(item.getAsFile());
+				} else if (item.kind === 'string') {
+					e.preventDefault();
+					item.getAsString((s) => { messages._paste(new_reply_box, s); });
 				}
 			}
-			ws_send_files(files, 'messages', message_id);
+			if (files.length > 0) {
+				$('attachments_for_message_' + message_id).insertAdjacentHTML("beforeend", "Uploading your files... loading thumbnails..."); // TODO: replace this with a spinner (that doesn't allow user to interact until finished!!)
+				//NO! Can't just do: set_dialog("<div>Uploading your files... loading thumbnails... please wait....</div>");
+				// because our dialog may be in use already (message edit!)
+				// SO: use html dialog, instead, or make another layer dialog (z-level)....
+				ws_send_files(files, 'messages', message_id);
+			}
 		});
 		messages._scroll_into_view_if_needed(new_reply_box.parentElement);
 		new_reply_box.focus();
+	},
+
+	_paste: function(element, text) {
+		const text2 = text.startsWith("http") ? "[the link (click here)](" + text + ") " : text;
+		element.focus(); // apparently important, though should be impossible for it not to have focus
+		const selection = window.getSelection();
+		if (selection.rangeCount > 0) {
+			const range = selection.getRangeAt(0);
+			range.deleteContents();
+			const node = document.createTextNode(text2);
+			range.insertNode(node);
+			// collapse range and move cursor to end of new node
+			range.setStartAfter(node);
+			range.collapse(true);
+			selection.removeAllRanges();
+			selection.addRange(range);
+		}
 	},
 
 	remove_reply_container: function(message_id) {

@@ -1,6 +1,4 @@
-allow email address for username
-
-finish implementation of invite email sending
+invite new Hurley family...
 
 use new edit_history and resend_history DB tables!
 
@@ -9,9 +7,13 @@ password-reset EMAILing
 
 links (internal and external) in messages
 
+downsize videos and images
 
 BUGS:
-	STOP video playback when "close" ("X") clicked!  (audio keeps playing!)
+
+	Keyboard covers contenteditable at bottom of screen!
+		one browser works (perhaps on its own) and one doesn't!?
+		g: android keyboard web page viewport bottom javascript
 
 	since messages save periodically while being edited, if another user loads/views a message mid-edit, they see the message before it's finished and sent!
 
@@ -19,13 +21,14 @@ BUGS:
 
 	filter isn't working to narrow drafts list down
 
-	going to admin screen puts admin screen within content area, rather than replacing whole doc main content area
+	new_reply_box.addEventListener('paste', (e) does NOT "run" for a re-loaded page, where the reply box is just re-presented, rather than created afresh.  (This is understandable, but not desirable)
 
-	alphabetize user and group lists (admin)
+	going to admin screen puts admin screen within content area, rather than replacing whole doc main content area
 
 	reply to own reply - this creates a reply to self (only) - nobody else gets it; seems like a footgun
 		but note - you have to intentionally click to send to "sender only", rather than group, so probably not likely to happen (much)
 	auto-save doesn't save attachments that have been added (well... it just doesn't show them, right?  Upon send, I think they show up fine...?  True of an edited message, at least....)
+	*** MAYBE just color a message that is "to self" grey text or something, to alert
 
 	"paste" attachments (https://www.google.com/search?client=firefox-b-1-e&channel=entpr&q=javascript+accept+image+paste+as+file+upload)
 		pasting multiple at a time doesn't work
