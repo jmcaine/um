@@ -148,19 +148,7 @@ async def edit_message(hd, reverting = False, message_id = None):
 		await ws.send_content(hd, 'edit_message', html.edit_message(message_id, message['message']), message_id = message_id)
 
 
-@ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
-async def delete_draft(hd):
-	# NOTE: not an independent task; processing expected from within 'new_message' task, during choose_message_draft processing
-	await db.delete_message(hd.dbc, hd.payload['message_id'])
-	banner = text.draft_trashed
-	drafts = await _get_message_drafts(hd)
-	if not drafts:
-		banner += '  ' + text.no_more_drafts
-	await ws.send_content(hd, 'detail_banner', html.info(banner))
-	await _send_message_draft_table(hd, drafts)
-
-
-_strip_trailing_br = lambda content: content.rstrip('<br>')
+_strip_trailing_br = lambda content: content.rstrip('<br>') # TODO: make use of this!
 
 @ws.handler(auth_func = active)
 async def save_wip(hd):
@@ -273,6 +261,23 @@ async def deliver_message(hd, message):
 @ws.handler(auth_func = active)
 async def injected_message(hd):
 	hd.task.state['injects'].add(hd.payload['message_id'])
+
+@ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
+async def delete_draft_in_list(hd):
+	# NOTE: not an independent task; processing expected from within 'new_message' task, during choose_message_draft processing
+	await db.delete_message(hd.dbc, hd.payload['message_id'])
+	banner = text.draft_trashed
+	drafts = await _get_message_drafts(hd)
+	if not drafts:
+		banner += '  ' + text.no_more_drafts
+	await ws.send_content(hd, 'detail_banner', html.info(banner))
+	await _send_message_draft_table(hd, drafts)
+
+@ws.handler(auth_func = active)
+async def delete_draft(hd):
+	mid = hd.payload['message_id']
+	await db.delete_message(hd.dbc, mid)
+	await ws.send_content(hd, 'banner', html.info(text.message_deleted))
 
 @ws.handler(auth_func = active)
 async def delete_message(hd):

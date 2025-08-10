@@ -385,9 +385,6 @@ async def get_message_drafts(dbc, user_id, include_trashed = False, like = None,
 	limit = f'limit {limit}' if limit else ''
 	return await _fetchall(dbc, f'select id, teaser, created, deleted from message {where} order by created desc {limit}', args)
 
-async def trash_message(dbc, message_id):
-	return await _update1(dbc, f'update message set deleted = {k_now} where id = ?', (message_id,))
-
 async def save_message(dbc, message_id, content):
 	args = [content, make_teaser(content), message_id]
 	more = ''

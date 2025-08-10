@@ -324,7 +324,7 @@ def choose_message_draft_table(drafts):
 			with t.tr(cls = 'midlin'):
 				t.td(f"{casual_date(draft['created'])}: {draft['teaser']}", cls = 'pointered', onclick = _send('messages', 'edit_message', message_id = draft['id'])) # note, 'teaser' is already a substring - no need to chop here
 				if not draft['deleted']: # only allow "untrashed" messages to be trashed; can't "permanently" delete anything
-					t.td(t.button(t.i(cls = 'i i-trash'), title = text.trash_draft, cls = 'red_bg', onclick = _send('messages', 'delete_draft', message_id = draft['id'])))
+					t.td(t.button(t.i(cls = 'i i-trash'), title = text.trash_draft, cls = 'red_bg', onclick = _send('messages', 'delete_draft_in_list', message_id = draft['id'])))
 		t.tr(t.td(t.button(text.brand_new_message, onclick = _send('messages', 'brand_new_message')), _cancel_button(), align = 'left'))
 	return result
 
@@ -355,7 +355,7 @@ def inline_reply_box(message_id, parent_mid, content = None):
 			t.button(t.i(cls = 'i i-send'), title = text.send_message,
 				onclick = f'''messages.send_reply({message_id}, {parent_mid}, $('reply_recipient_{message_id}').dataset.replyrecipient)''') # ►
 			t.div(cls = 'spacer')
-			t.button(t.i(cls = 'i i-trash'), title = text.delete, onclick = f"messages.delete_draft({message_id})")
+			t.button(t.i(cls = 'i i-trash'), title = text.delete, onclick = f"messages.delete_unsent_reply_draft({message_id})")
 			t.div(id = f"reply_recipient_{message_id}", cls = 'hide', data_replyrecipient = 'A')
 	return result
 
@@ -419,7 +419,7 @@ def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_fir
 				t.span(t.b('by '), msg['sender'], t.b(' to '), edit_button, recipients, ' ·'),
 				t.span(text.just_now if injection else '...', cls = 'time_updater', data_isodate = isodate) # 'sent' date/time
 			if editable:
-				t.button(t.i(cls = 'i i-trash'), title = text.delete_message, onclick = f"messages.delete_message({msg['id']})")
+				t.button(t.i(cls = 'i i-trash'), title = text.delete_message, onclick = f"messages.delete_message({msg['id']}, false)")
 	return thread_patriarch, result
 
 

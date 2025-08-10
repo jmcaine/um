@@ -138,15 +138,6 @@ let messages = {
 		}
 	},
 
-	delete_message: function(message_id, finish = false) {
-		if (window.confirm("Are you sure you want to delete this message?")) {
-			messages.send_ws('delete_message', {message_id: message_id});
-			if (finish) {
-				main.send_ws('finish'); // closes task and dialog box
-			}
-		}
-	},
-
 	reply_recipient_all: function(message_id) {
 		let d = $('reply_recipient_' + message_id);
 		d.dataset.replyrecipient = 'A';
@@ -283,12 +274,30 @@ let messages = {
 		messages.send_ws("send_reply", {message_id: message_id, parent_mid: parent_mid, to_sender_only: to_sender_only});
 	},
 
-	delete_draft: function(message_id) {
-		messages.send_ws('delete_draft', {message_id: message_id});
-		let edit_div = $('edit_message_content_' + message_id).parentElement; // parent is always the message_id outer container; could have grabbed that div (message_<message_id>), instead, but this ensures that the message within is actually edit_message_content, and not (somehow) a completed (sent) message.
-		// TODO: put a temporary (timeout) "undo" button in place (insertAdjacentHTML()), to allow undo within a few seconds
-		edit_div.remove();
+	delete_draft_in_list: function(message_id) {
+		if (window.confirm("Are you sure you want to delete that draft?")) {
+			messages.send_ws('delete_draft_in_list', {message_id: message_id});
+		}
 	},
+
+	delete_unsent_reply_draft: function(message_id) {
+		if (window.confirm("Are you sure you want to delete that draft?")) {
+			messages.send_ws('delete_draft', {message_id: message_id});
+			let edit_div = $('edit_message_content_' + message_id).parentElement; // parent is always the message_id outer container; could have grabbed that div (message_<message_id>), instead, but this ensures that the message within is actually edit_message_content, and not (somehow) a completed (sent) message.
+			// TODO: put a temporary (timeout) "undo" button in place (insertAdjacentHTML()), to allow undo within a few seconds
+			edit_div.remove();
+		}
+	},
+
+	delete_message: function(message_id, finish = false) {
+		if (window.confirm("Are you sure you want to delete this message?")) {
+			messages.send_ws('delete_message', {message_id: message_id});
+			if (finish) {
+				main.send_ws('finish'); // closes task and dialog box
+			}
+		}
+	},
+
 
 	change_recipients: function(message_id) {
 		messages.send_ws('message_tags', {message_id: message_id, send_after: true});
