@@ -467,8 +467,10 @@ def _x_tags(xt_table, div_id):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
 		with t.div(cls = 'buttonbar'):
-			t.div(filterbox())
-			filterbox_checkbox(text.show_inactives, 'show_inactives')
+			t.div(filterbox(0))
+			#TODO!!!! "tags" / "people" / "both" selector here!!!
+			#TODO!!!! "show all" checkbox!
+			#filterbox_checkbox(text.show_inactives, 'show_inactives')
 		t.div(xt_table, id = div_id)
 	return result
 
