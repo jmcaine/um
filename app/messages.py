@@ -313,11 +313,11 @@ async def message_tags(hd, reverting = False, send_after = False):
 async def message_tags_table(hd, mid):
 	fs = hd.task.state.get('filtersearch', {})
 	limit = None if fs.get('dont_limit', False) else db.k_default_resultset_limit
-	utags, otags = await db.get_message_tags(hd.dbc, mid, hd.uid,
+	utags, otags = await db.get_message_tags(hd.dbc, mid,
 													limit = limit,
 													active = not fs.get('show_inactives', False),
 													like = fs.get('searchtext', ''),
-													include_others = True)
+													include_others = hd.uid)
 	return html.message_tags_table(utags, otags, mid, limit)
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!

@@ -502,7 +502,12 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 async def delivery_recipient(dbc, user_id, message_id):
 	return await _fetch1(dbc, f'select 1 from message {_message_tag_join} {_user_tag_join} where (user_tag.user = ? or message.author = ?) and message.id = ?', (user_id, user_id, message_id))
 
-async def get_message_tags(dbc, message_id, user_id, limit, active = True, like = None, include_others = False):
+async def get_message_tags(dbc, message_id, limit, active = True, like = None, include_others = False):
+	'''
+	include_others can simply be True or False, or it can be a user-id.  If False, then only the message-tags for `message_id` will be returned; if True, then a 2-tuple will be returned (message-tags, other-tags), where other-tags is a list of tags that are NOT associated with the message; if user-id, then the same 2-tuple will be returned, but the second element will only contained other-tags to which the user belongs.
+	'''
+	if isinstance(include_others, int):
+		include_others = ('join user_tag on tag.id = user_tag.tag', 'user_tag.user = ?', include_others)
 	return await _get_xaa(dbc,
 		select = 'tag.* from tag',
 		where = 'message_tag.message = ?',
@@ -511,7 +516,7 @@ async def get_message_tags(dbc, message_id, user_id, limit, active = True, like 
 		like = like,
 		likes = ('name',),
 		join = 'message_tag on tag.id = message_tag.tag',
-		order = 'CASE WHEN user IS NULL THEN 0 ELSE 1 END ASC, name ASC',
+		order = 'CASE WHEN tag.user IS NULL THEN 0 ELSE 1 END ASC, name ASC',
 		limit = limit,
 		include_others = include_others,
 		non_join = 'message_tag where tag.id = message_tag.tag and message_tag.message = ?'
@@ -519,6 +524,9 @@ async def get_message_tags(dbc, message_id, user_id, limit, active = True, like 
 
 
 async def _get_xaa(dbc, select, where, where_arg, active, like, likes, join, order, limit, include_others, non_join):
+	'''
+	include_others can simply be True or False, to include the "nons", or it can be a (where, where, args) triplet, such as ('join user_tag on tag.id = user_tag.tag', 'user_tag.user = ?', 5) in which case the "nons" will only present if that join/where succeeds.
+	'''
 	where, args = [where,], [where_arg,]
 	if active:
 		where.append('active = 1')
@@ -532,9 +540,17 @@ async def _get_xaa(dbc, select, where, where_arg, active, like, likes, join, ord
 	if not include_others:
 		return result
 	where2, args2 = [f'not exists (select 1 from {non_join})',], [where_arg,]
+	if active:
+		where2.append('active = 1')
+	join2 = ''
+	if isinstance(include_others, (list, tuple)) and len(include_others) == 3:
+		join2 = include_others[0]
+		where2.append(include_others[1])
+		args2.append(include_others[2])
 	_add_like(like, likes, where2, args2)
 	where2 = " and ".join(where2)
-	others = await _fetchall(dbc, f'{select} where {where2} {order} {limit}', args2)
+	#l.debug(f'_get_xaa sql: {select} {join2} where {where2} {order} {limit} ... args: {args2}')
+	others = await _fetchall(dbc, f'{select} {join2} where {where2} {order} {limit}', args2)
 	return result, others
 
 
