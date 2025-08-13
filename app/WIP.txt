@@ -12,6 +12,8 @@ downsize videos and images
 
 BUGS:
 
+	When scrolled all the way down, after stashing a message, a duplicate single message pops up at bottom -- it does not belong, it's a ghost, and if you try to stash it, you'll get an "internal error".
+
 	Keyboard covers contenteditable at bottom of screen!
 		one browser works (perhaps on its own) and one doesn't!?
 		g: android keyboard web page viewport bottom javascript

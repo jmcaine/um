@@ -46,6 +46,8 @@ def unittests():
 k_now_ = '%Y-%m-%d %H:%M:%SZ'
 k_now = f"strftime('{k_now_}')" # could use datetime('now'), but that produces a result in UTC (what we want) but WITHOUT the 'Z' at the end; the problem with this is that using python datetime.fromisoformat() then interprets the datetime to be naive, rather than explicitly UTC, which results in the need to do a .replace(tzinfo = timezone.utc) in order to proceed with timezone shifts.  This use of sqlite's strftime(), where we explicitly append the Z, results in python calls to fromisoformat() returning UTC-specific datetime objects automatically.
 
+k_default_resultset_limit = 3
+
 async def connect(filename):
 	result = await aiosqlite.connect(filename, isolation_level = None, detect_types = PARSE_DECLTYPES) # "isolation_level = None disables the Python wrapper's automatic handling of issuing BEGIN etc. for you. What's left is the underlying C library, which does do "autocommit" by default. That autocommit, however, is disabled when you do a BEGIN (b/c you're signaling a transaction with that statement" - from https://stackoverflow.com/questions/15856976/transactions-with-python-sqlite3 - thanks Thanatos
 	def dict_factory(cursor, row):
@@ -163,7 +165,7 @@ async def update_user(dbc, id, fields, data):
 	return await _update1(dbc, f"update user set {', '.join([f'{name} = ?' for name in fields])} where id = ?",
 							  [data[name] for name in fields] + [id,])
 
-async def get_users(dbc, active = True, persons = True, like = None, limit = 15):
+async def get_users(dbc, active = True, persons = True, like = None, limit = k_default_resultset_limit):
 	where = []
 	args = ()
 	join = ''
@@ -182,7 +184,8 @@ async def get_users(dbc, active = True, persons = True, like = None, limit = 15)
 		join = 'join person on person.id = user.person' 
 		join_fields = ', person.id as person_id, first_name, last_name'
 	where = 'where ' + " and ".join(where) if where else ''
-	return await _fetchall(dbc, f'select user.id as user_id, username, created, verified, active {join_fields} from user {join} {where} order by username limit {limit}', args)
+	limit = f'limit {limit}' if limit else ''
+	return await _fetchall(dbc, f'select user.id as user_id, username, created, verified, active {join_fields} from user {join} {where} order by username {limit}', args)
 
 async def verify_new_user(dbc, username):
 	return await _update1(dbc, f'update user set verified = {k_now} where username = ? and active = 1', (username,))
@@ -296,7 +299,7 @@ async def add_role_ids(dbc, role_ids, user_id = None):
 	await dbc.executemany('insert into user_role (user, role) values (?, ?)', role_ids)
 
 
-async def get_tags(dbc, active = True, like = None, get_subscriber_count = False, limit = 15):
+async def get_tags(dbc, active = True, like = None, get_subscriber_count = False, limit = k_default_resultset_limit):
 	where, args = ['tag.user is null'], [] # 'user is null' to weed out the pseudo-groups connected to every user
 	if active:
 		where.append('active = 1')
@@ -376,7 +379,7 @@ async def new_message(dbc, user_id, reply_to = None, reply_chain_patriarch = Non
 		values += f', {k_now}'
 	return await _insert1(dbc, f'insert into message ({", ".join(fields)}) values ({values})', args)
 
-async def get_message_drafts(dbc, user_id, include_trashed = False, like = None,  limit = 15):
+async def get_message_drafts(dbc, user_id, include_trashed = False, like = None,  limit = k_default_resultset_limit):
 	where, args = ['sent is null and author = ?',], [user_id,]
 	if not include_trashed:
 		where.append('deleted is null')
@@ -455,7 +458,7 @@ _user_tag_join = 'left join user_tag on tag.id = user_tag.tag'
 async def get_message(dbc, user_id, message_id):
 	return await _fetch1(dbc, f'{_mega_message_select} {_message_tag_join} where message.id = ?', (user_id, user_id, message_id,))
 
-async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = Filter.new, skip = 0, ignore = None, limit = 15):
+async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = Filter.new, skip = 0, ignore = None, limit = k_default_resultset_limit):
 	where = []
 	args = [user_id, user_id,] # first two user_ids are for sub-selects in _mega_message_select; third is for our 'where user.id = ?' (see line above)
 	if not include_trashed:

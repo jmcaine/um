@@ -274,14 +274,14 @@ let messages = {
 		messages.send_ws("send_reply", {message_id: message_id, parent_mid: parent_mid, to_sender_only: to_sender_only});
 	},
 
-	delete_draft_in_list: function(message_id) {
-		if (window.confirm("Are you sure you want to delete that draft?")) {
+	delete_draft_in_list: function(message_id, delete_confirmation) {
+		if (window.confirm(delete_confirmation)) {
 			messages.send_ws('delete_draft_in_list', {message_id: message_id});
 		}
 	},
 
-	delete_unsent_reply_draft: function(message_id) {
-		if (window.confirm("Are you sure you want to delete that draft?")) {
+	delete_unsent_reply_draft: function(message_id, delete_confirmation) {
+		if (window.confirm(delete_confirmation)) {
 			messages.send_ws('delete_draft', {message_id: message_id});
 			let edit_div = $('edit_message_content_' + message_id).parentElement; // parent is always the message_id outer container; could have grabbed that div (message_<message_id>), instead, but this ensures that the message within is actually edit_message_content, and not (somehow) a completed (sent) message.
 			// TODO: put a temporary (timeout) "undo" button in place (insertAdjacentHTML()), to allow undo within a few seconds

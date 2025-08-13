@@ -103,9 +103,10 @@ async def more_old_messages(hd): # inspired by "up-scroll" above "top"
 	#else: nothing more to do - don't ws.send() anything or update anything!  User has scrolled to the very top of the available messages for the given filter
 
 async def _get_messages(hd):
+	fs = hd.task.state.get('filtersearch', {})
 	return await db.get_messages(hd.dbc, hd.uid,
-													deep = hd.task.state.get('filtersearch_include_extra'),
-													like = hd.task.state.get('filtersearch_text'),
+													deep = fs.get('deep_search', False),
+													like = fs.get('searchtext', ''),
 													filt = hd.task.state['filt'],
 													skip = hd.task.state['skip'],
 													ignore = hd.task.state['injects'],
@@ -310,11 +311,12 @@ async def message_tags(hd, reverting = False, send_after = False):
 		await ws.send_content(hd, 'sub_content', await message_tags_table(hd, mid), container = 'message_tags_table_container') # just reload the tags_table
 
 async def message_tags_table(hd, mid):
-	limit = 10
+	fs = hd.task.state.get('filtersearch', {})
+	limit = None if fs.get('dont_limit', False) else db.k_default_resultset_limit
 	utags, otags = await db.get_message_tags(hd.dbc, mid, hd.uid,
 													limit = limit,
-													active = not hd.task.state.get('filtersearch_include_extra'),
-													like = hd.task.state.get('filtersearch_text'),
+													active = not fs.get('show_inactives', False),
+													like = fs.get('searchtext', ''),
 													include_others = True)
 	return html.message_tags_table(utags, otags, mid, limit)
 
@@ -392,9 +394,10 @@ async def upload_files(hd, meta, payload):
 # -----------------------------------------------------------------------------
 
 async def _get_message_drafts(hd):
+	fs = hd.task.state.get('filtersearch', {})
 	return await db.get_message_drafts(hd.dbc, hd.uid,
-										include_trashed = hd.task.state.get('filtersearch_include_extra'),
-										like = hd.task.state.get('filtersearch_text'))
+										include_trashed = fs.get('show_trashed', False),
+										like = fs.get('searchtext', ''))
 
 async def _send_message_draft_table(hd, drafts):
 	await ws.send_content(hd, 'sub_content', html.choose_message_draft_table(drafts), container = 'choose_message_draft_table_container')

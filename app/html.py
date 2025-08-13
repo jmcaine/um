@@ -67,7 +67,7 @@ def document(ws_url: str, initial = ''):
 	return d
 
 
-# Main-content "Pages" --------------------------------------------------------
+# Main-content "Pages" (and main page parts) ----------------------------------
 
 def login_or_join():
 	return t.div(
@@ -76,19 +76,49 @@ def login_or_join():
 		t.div(t.button(text.join, onclick = _send('main', 'join')), cls = 'center'),
 	)
 
+# button symbols:    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦ ►
 def messages_topbar(admin):
-	result = t.div(cls = 'buttonbar')
+	result = t.div(t.button('+', title = 'new message', onclick = _send('messages', 'new_message')), cls = 'buttonbar')
+	filterbox(result, {'deep_search': text.deep_search})
 	with result:
-		# button symbols:    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦ ►
-		t.button('+', title = 'new message', onclick = _send('messages', 'new_message'))
-		t.div(filterbox('deep_search'))
-		t.div(filterbox_checkbox(text.deep_search, 'deep_search'))
 		t.div(cls = 'spacer')
 		#TODO: t.button('...', title = text.change_settings, onclick = _send('main', 'settings'))
 		if admin:
 			t.button('Ѫ', title = text.admin, onclick = _send('admin', 'users'))
 		t.button('Θ', title = text.logout, onclick = _send('main', 'logout'))
 	return result
+
+def users_tags_topbar():
+	result = t.div(cls = 'buttonbar')
+	with result:
+		t.div(cls = 'spacer')
+		#TODO: t.button('...', title = text.change_settings, onclick = _send('main', 'settings'))
+		t.button(t.i(cls = 'i i-messages'), title = text.messages, onclick = _send('messages', 'messages')) # Ξ
+		t.button('Θ', title = text.logout, onclick = _send('main', 'logout'))
+	return result
+
+def _users_tags_mainbar(title, add_onclick):
+	result = t.div(t.button('+', title = title, onclick = add_onclick), cls = 'buttonbar')
+	filterbox(result, {'show_inactives': text.show_inactives, 'dont_limit': text.dont_limit})
+	with result:
+		t.div(cls = 'spacer')
+		t.button(t.i(cls = 'i i-all'), title = text.users, onclick = _send('admin', 'users')) # ☺
+		t.button('#', title = text.tags, onclick = _send('admin', 'tags'))
+	return result
+
+def users_mainbar():
+	return _users_tags_mainbar(text.invite_new_user, _send('main', 'invite'))
+
+def tags_mainbar():
+	return _users_tags_mainbar(text.create_new_tag, _send('admin', 'new_tag'))
+
+
+def users_page(users):
+	return t.div(user_table(users), id = 'user_table_container')
+
+def tags_page(tags):
+	return t.div(tag_table(tags), id = 'tag_table_container')
+
 
 def messages_filter(filt):
 	result = t.div(cls = 'buttonbar')
@@ -105,22 +135,6 @@ def messages_container():
 	return t.div(text.loading_messages, cls = 'container', id = 'messages_container')
 
 
-def users_page(users):
-	result = t.div(admin_button_band())
-	with result:
-		t.hr()
-		admin_menu_button_band((t.button('+', title = text.invite_new_user, onclick = _send('main', 'invite')),))
-		t.div(user_table(users), id = 'user_table_container')
-	return result
-
-
-def tags_page(tags):
-	result = t.div(admin_button_band())
-	with result:
-		t.hr()
-		admin_menu_button_band((t.button('+', title = text.create_new_tag, onclick = _send('admin', 'new_tag')),))
-		t.div(tag_table(tags), id = 'tag_table_container')
-	return result
 
 
 # Divs/fieldsets/partials -----------------------------------------------------
@@ -164,39 +178,16 @@ def new_password(fields):
 	result = fieldset(text.new_password, build_fields(fields), button)
 	return result
 
-def admin_button_band():
-	result = t.div(cls = 'buttonbar')
-	with result:
-		filterbox()
-		filterbox_checkbox(text.show_inactives, 'show_inactives')
-		t.div(cls = 'spacer')
-		t.button('...', title = text.change_settings, onclick = _send('main', 'settings'))
-		t.button(t.i(cls = 'i i-messages'), title = text.messages, onclick = _send('messages', 'messages')) # Ξ
-		t.button('Θ', title = text.logout, onclick = _send('main', 'logout'))
-	return result
-
-def admin_menu_button_band(left_buttons):
-	result = t.div(*left_buttons, cls = 'buttonbar')
-	with result:
-		t.div(cls = 'spacer')
-		t.button(t.i(cls = 'i i-all'), title = text.users, onclick = _send('admin', 'users')) # ☺
-		t.button('#', title = text.tags, onclick = _send('admin', 'tags'))
-	return result
-
-
-def filterbox(extra = 'show_inactives'):
-	if extra:
-		extra = f'$("{extra}").checked'
-	return Input(text.filtersearch, type_ = 'search', autofocus = True, attrs = { # NOTE: autofocus = True is the supposed cause of Firefox FOUC https://bugzilla.mozilla.org/show_bug.cgi?id=1404468 - but it does NOT cause the warning in FF console to go away AND we don't see any visual blink evidence, so we're leaving autofocus=True, but an alternative would be to set autofocus in the JS that loads the header content
-		'autocomplete': 'off',
-		'oninput': _send('main', 'filtersearch', searchtext = 'this.value', include_extra = extra),
-	}).build('filtersearch')
-
-def filterbox_checkbox(label, name):
-	return Input(label, type_ = 'checkbox', attrs = {
-		'onclick': _send('main', 'filtersearch', searchtext = '$("filtersearch").value', include_extra = 'this.checked'),
-	}).build(name)
-
+def filterbox(parent, filtersearch_checkboxes):
+	kwargs = dict([(name, f'$("{name}").checked') for name in filtersearch_checkboxes.keys()])
+	with parent:
+		t.div(Input(text.filtersearch, type_ = 'search', autofocus = True, attrs = { # NOTE: autofocus = True is the supposed cause of Firefox FOUC https://bugzilla.mozilla.org/show_bug.cgi?id=1404468 - but it does NOT cause the warning in FF console to go away AND we don't see any visual blink evidence, so we're leaving autofocus=True, but an alternative would be to set autofocus in the JS that loads the header content
+			'autocomplete': 'off',
+			'oninput': _send('main', 'filtersearch', searchtext = 'this.value', **kwargs),
+		}).build('filtersearch')) # TODO: does the Input() really need to go in a t.div container?!!!
+		for key, label in filtersearch_checkboxes.items():
+			Input(label, type_ = 'checkbox', attrs = {'onclick': _send('main', 'filtersearch', searchtext = '$("filtersearch").value', **kwargs)}).build(key)
+	return parent
 
 def fieldset(title: str, html_fields: list, button: t.button, alt_button: t.button = _cancel_button(), more_func: str | None = None) -> t.fieldset:
 	result = t.fieldset()
@@ -286,9 +277,7 @@ def more_person_detail(person_id, emails, phones):
 def tag_users_and_nonusers(tun_table):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
-		with t.div(cls = 'buttonbar'):
-			t.div(filterbox())
-			filterbox_checkbox(text.show_inactives, 'show_inactives')
+		filterbox(t.div(cls = 'buttonbar'), {'show_inactives': text.show_inactives, 'dont_limit': text.dont_limit})
 		t.div(tun_table, id = 'users_and_nonusers_table_container')
 	return result
 
@@ -311,9 +300,7 @@ def user_tags_table(user_tags, available_tags, count):
 def choose_message_draft(drafts):
 	result = t.div(t.div(info(text.choose_message_draft), id = 'detail_banner_container', cls = 'container'))
 	with result:
-		with t.div(cls = 'buttonbar'):
-			t.div(filterbox(extra = '$("show_trashed").checked'))
-			filterbox_checkbox(text.show_trashed, 'show_trashed')
+		filterbox(t.div(cls = 'buttonbar'), {})
 		t.div(choose_message_draft_table(drafts), id = 'choose_message_draft_table_container')
 	return result
 
@@ -324,7 +311,7 @@ def choose_message_draft_table(drafts):
 			with t.tr(cls = 'midlin'):
 				t.td(f"{casual_date(draft['created'])}: {draft['teaser']}", cls = 'pointered', onclick = _send('messages', 'edit_message', message_id = draft['id'])) # note, 'teaser' is already a substring - no need to chop here
 				if not draft['deleted']: # only allow "untrashed" messages to be trashed; can't "permanently" delete anything
-					t.td(t.button(t.i(cls = 'i i-trash'), title = text.trash_draft, cls = 'red_bg', onclick = _send('messages', 'delete_draft_in_list', message_id = draft['id'])))
+					t.td(t.button(t.i(cls = 'i i-trash'), title = text.trash_draft, cls = 'red_bg', onclick = f"""messages.delete_draft_in_list({draft['id']}, "{text.delete_confirmation}")"""))
 		t.tr(t.td(t.button(text.brand_new_message, onclick = _send('messages', 'brand_new_message')), _cancel_button(), align = 'left'))
 	return result
 
@@ -355,7 +342,7 @@ def inline_reply_box(message_id, parent_mid, content = None):
 			t.button(t.i(cls = 'i i-send'), title = text.send_message,
 				onclick = f'''messages.send_reply({message_id}, {parent_mid}, $('reply_recipient_{message_id}').dataset.replyrecipient)''') # ►
 			t.div(cls = 'spacer')
-			t.button(t.i(cls = 'i i-trash'), title = text.delete, onclick = f"messages.delete_unsent_reply_draft({message_id})")
+			t.button(t.i(cls = 'i i-trash'), title = text.delete, onclick = f"""messages.delete_unsent_reply_draft({message_id}, "{text.delete_confirmation}")""")
 			t.div(id = f"reply_recipient_{message_id}", cls = 'hide', data_replyrecipient = 'A')
 	return result
 
@@ -466,11 +453,7 @@ def _ws_submit_button(title: str, field_names: list):
 def _x_tags(xt_table, div_id):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
-		with t.div(cls = 'buttonbar'):
-			t.div(filterbox(0))
-			#TODO!!!! "tags" / "people" / "both" selector here!!!
-			#TODO!!!! "show all" checkbox!
-			#filterbox_checkbox(text.show_inactives, 'show_inactives')
+		filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
 		t.div(xt_table, id = div_id)
 	return result
 
@@ -482,8 +465,9 @@ def _xaa_table(availables, assigneds, name_fetcher, left_title, right_title, tas
 			t.th(left_title, align = 'right')
 			t.th(t.button(text.done, onclick = _send(task_app, task, finished = 'true')), colspan = 2)
 			t.th(right_title, align = 'left')
-		left_elide, right_elide = False, False
-		for line in range(count):
+		left_elide = text.filter_for_more if count and count == len(availables) else ''
+		right_elide = text.filter_for_more if count and count == len(assigneds) else ''
+		for line in range(max(len(availables), len(assigneds))):
 			available = availables.pop(0) if len(availables) > 0 else {}
 			assigned = assigneds.pop(0) if len(assigneds) > 0 else {}
 			if not assigned and not available:
@@ -493,20 +477,16 @@ def _xaa_table(availables, assigneds, name_fetcher, left_title, right_title, tas
 				if available:
 					c1 = name_fetcher(available)
 					c2 = t.button('+', cls = 'green_bg', onclick = adder(available['id']))
-					if line == count - 1:
-						left_elide = True
 				t.td(c1, align = 'right')
 				t.td(c2, align = 'left')
 				c1, c2 = '', ''
 				if assigned:
 					c1 = t.button('-', cls = 'red_bg', onclick = remover(assigned['id']))
 					c2 = name_fetcher(assigned)
-					if line == count - 1:
-						right_elide = True
 				t.td(c1, align = 'right')
 				t.td(c2, align = 'left')
 		if left_elide or right_elide:
-			t.tr(t.td(text.filter_for_more if left_elide else ''), t.td(''),  t.td(''),  t.td(text.filter_for_more if right_elide else ''), cls = 'midlin')
+			t.tr(t.td(left_elide), t.td(''),  t.td(''), t.td(right_elide), cls = 'midlin')
 
 	return result
 

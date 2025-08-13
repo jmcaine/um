@@ -38,7 +38,7 @@ from .const import *
 
 logging.getLogger('aiosqlite').setLevel(logging.ERROR)
 logging.getLogger('asyncio').setLevel(logging.ERROR)
-logging.getLogger('aiohttp').setLevel(logging.INFO if settings.debug else logging.ERROR) # ERROR and INFO will dump tracebacks on console upon "500 Internal Server Error" failures - essential to development; INFO will add informational lines re: GETs and such; DEBUG would be fine here, but aiohttp internal debug info not necessarily useful; probably just noisy
+logging.getLogger('aiohttp').setLevel(logging.ERROR if settings.debug else logging.ERROR) # ERROR and INFO will dump tracebacks on console upon "500 Internal Server Error" failures - essential to development; INFO will add informational lines re: GETs and such; DEBUG would be fine here, but aiohttp internal debug info not necessarily useful; probably just noisy
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s : %(name)s:%(lineno)d -- %(message)s', level = logging.DEBUG if settings.debug else logging.CRITICAL)
 l = logging.getLogger(__name__)
@@ -233,8 +233,7 @@ async def filtersearch(hd):
 	'''
 	Similar to submit_fields - see note there.
 	'''
-	hd.task.state['filtersearch_text'] = hd.payload.get('searchtext', '')
-	hd.task.state['filtersearch_include_extra'] = hd.payload.get('include_extra', False)
+	hd.task.state['filtersearch'] = hd.payload # store for handling by actual task
 	await hd.task.handler(hd)
 
 

@@ -35,12 +35,34 @@ async def admin_screen(hd):
 @ws.handler(auth_func = authorize)
 async def users(hd, reverting = False):
 	if task.just_started(hd, users):
+		await ws.send_sub_content(hd, 'topbar_container', html.users_tags_topbar())
+		await ws.send_sub_content(hd, 'filter_container', html.users_mainbar())
 		await ws.send_content(hd, 'content', html.users_page(await db.get_users(hd.dbc)))
 	else:
+		fs = hd.task.state.get('filtersearch', {})
 		u = await db.get_users(hd.dbc,
-								 like = hd.task.state.get('filtersearch_text', ''),
-								 active = not hd.task.state.get('filtersearch_include_extra', False))
+								active = not fs.get('show_inactives', False),
+								like = fs.get('searchtext', ''),
+								limit = None if fs.get('dont_limit', False) else db.k_default_resultset_limit)
 		await ws.send_content(hd, 'sub_content', html.user_table(u), container = 'user_table_container')
+
+
+@ws.handler(auth_func = authorize)
+async def tags(hd, reverting = False):
+	if task.just_started(hd, tags):
+		await ws.send_sub_content(hd, 'topbar_container', html.users_tags_topbar())
+		await ws.send_sub_content(hd, 'filter_container', html.tags_mainbar())
+		await ws.send_content(hd, 'content', html.tags_page(await db.get_tags(hd.dbc, get_subscriber_count = True)))
+	else:
+		fs = hd.task.state.get('filtersearch', {})
+		t = await db.get_tags(hd.dbc,
+								active = not fs.get('show_inactives', False),
+								like = fs.get('searchtext', ''),
+								limit = None if fs.get('dont_limit', False) else db.k_default_resultset_limit,
+								get_subscriber_count = True)
+		await ws.send_content(hd, 'sub_content', html.tag_table(t), container = 'tag_table_container')
+
+
 
 
 @ws.handler(auth_func = authorize)
@@ -145,11 +167,12 @@ async def user_tags(hd, reverting = False):
 		await ws.send_content(hd, 'sub_content', await user_tags_table(hd), container = 'user_tags_table_container')
 
 async def user_tags_table(hd):
-	limit =10
+	fs = hd.task.state.get('filtersearch', {})
+	limit = None if fs.get('dont_limit', False) else db.k_default_resultset_limit
 	utags, otags = await db.get_user_tags(hd.dbc, hd.task.state['uid'],
 													limit = limit,
-													active = not hd.task.state.get('filtersearch_include_extra'),
-													like = hd.task.state.get('filtersearch_text'),
+													active = not fs.get('show_inactives', False),
+													like = fs.get('searchtext', ''),
 													include_unsubscribed = True)
 	return html.user_tags_table(utags, otags, limit)
 
@@ -168,19 +191,6 @@ async def remove_tag_from_user(hd):
 async def add_tag_to_user(hd):
 	await _remove_or_add_tag_to_user(hd, db.add_user_to_tag, text.added_tag_to_user)
 
-
-
-@ws.handler(auth_func = authorize)
-async def tags(hd, reverting = False):
-	if task.just_started(hd, tags):
-		t = await db.get_tags(hd.dbc, get_subscriber_count = True)
-		await ws.send_content(hd, 'content', html.tags_page(t))
-	else:
-		t = await db.get_tags(hd.dbc,
-								active = not hd.task.state.get('filtersearch_include_extra', False),
-								like = hd.task.state.get('filtersearch_text', ''),
-								get_subscriber_count = True)
-		await ws.send_content(hd, 'sub_content', html.tag_table(t), container = 'tag_table_container')
 
 
 @ws.handler(auth_func = authorize)
@@ -222,11 +232,12 @@ async def tag_users(hd, reverting = False):
 		await ws.send_content(hd, 'sub_content', await tag_users_table(hd), container = 'users_and_nonusers_table_container')
 
 async def tag_users_table(hd):
-	limit = 10
+	fs = hd.task.state.get('filtersearch', {})
+	limit = None if fs.get('dont_limit', False) else db.k_default_resultset_limit
 	users, nonusers = await db.get_tag_users(hd.dbc, hd.task.state['tag']['id'],
 															limit = limit,
-															active = not hd.task.state.get('filtersearch_include_extra'),
-															like = hd.task.state.get('filtersearch_text'),
+															active = not fs.get('show_inactives', False),
+															like = fs.get('searchtext', ''),
 															include_unsubscribed = True)
 	return html.tag_users_table(hd.task.state['tag']['name'], users, nonusers, limit)
 
