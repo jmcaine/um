@@ -330,9 +330,10 @@ async def add_tag_to_message(hd):
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
 async def stash(hd):
-	await db.stash_message(hd.dbc, hd.payload['message_id'], hd.uid)
 	if hd.task.state['skip'] > 0:
 		hd.task.state['skip'] -= 1
+	# we do the above FIRST because, if async context-switches in the db action (below), and we wait until AFTER that to decrement state['skip'], then the next move in messages.js:stash() may process FIRST - that is, to fetch another message if we're scrolled to the bottom; problem is, this newly fetched message will be one we already have if skip is not yet properly decremented!  Then we get a duplicate message popping up.  Decrementing first makes this problem go away.
+	await db.stash_message(hd.dbc, hd.payload['message_id'], hd.uid)
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
 async def pin(hd):
