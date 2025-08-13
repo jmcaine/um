@@ -46,7 +46,7 @@ def unittests():
 k_now_ = '%Y-%m-%d %H:%M:%SZ'
 k_now = f"strftime('{k_now_}')" # could use datetime('now'), but that produces a result in UTC (what we want) but WITHOUT the 'Z' at the end; the problem with this is that using python datetime.fromisoformat() then interprets the datetime to be naive, rather than explicitly UTC, which results in the need to do a .replace(tzinfo = timezone.utc) in order to proceed with timezone shifts.  This use of sqlite's strftime(), where we explicitly append the Z, results in python calls to fromisoformat() returning UTC-specific datetime objects automatically.
 
-k_default_resultset_limit = 3
+k_default_resultset_limit = 10
 
 async def connect(filename):
 	result = await aiosqlite.connect(filename, isolation_level = None, detect_types = PARSE_DECLTYPES) # "isolation_level = None disables the Python wrapper's automatic handling of issuing BEGIN etc. for you. What's left is the underlying C library, which does do "autocommit" by default. That autocommit, however, is disabled when you do a BEGIN (b/c you're signaling a transaction with that statement" - from https://stackoverflow.com/questions/15856976/transactions-with-python-sqlite3 - thanks Thanatos
@@ -511,7 +511,7 @@ async def get_message_tags(dbc, message_id, user_id, limit, active = True, like 
 		like = like,
 		likes = ('name',),
 		join = 'message_tag on tag.id = message_tag.tag',
-		order = 'name',
+		order = 'CASE WHEN user IS NULL THEN 0 ELSE 1 END ASC, name ASC',
 		limit = limit,
 		include_others = include_others,
 		non_join = 'message_tag where tag.id = message_tag.tag and message_tag.message = ?'
