@@ -10,6 +10,7 @@ from dataclasses import dataclass, field as dataclass_field
 from enum import Enum
 from datetime import datetime, date, timedelta, timezone
 from random import randint
+import regex as re
 from zoneinfo import ZoneInfo
 
 from dominate import document as dominate_document
@@ -36,6 +37,8 @@ _format_phone = lambda num: '(' + num[-10:-7] + ') ' + num[-7:-4] + '-' + num[-4
 _send = lambda app, task, **args: f"{app}.send_ws('{task}'" + (f', {{ {", ".join([f"{key}: {value}" for key, value in args.items()])} }})' if args else ')')
 
 _cancel_button = lambda title = text.cancel: t.button(title, onclick = _send('main', 'finish'))
+
+k_url_rec = re.compile(k_url_re)
 
 # Document --------------------------------------------------------------------
 
@@ -377,7 +380,8 @@ def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_fir
 				thread_patriarch = msg['reply_chain_patriarch']
 				if msg['id'] != thread_patriarch: # then this msg is actually a reply, but the patriarch is elsewhere (e.g., stashed), so we need to provide the reply-prefix teaser:
 					t.div(f'''Reply to "{msg['parent_teaser']}...":''', cls = 'italic')
-		t.div(raw(msg['message']))
+
+		t.div(raw(re.sub(k_url_rec, k_url_replacement, msg['message']))) # replace url markdown "links" with real <a href>s
 
 		if msg['attachments']:
 			with t.div(id = f"attachments_for_message_{msg['id']}"):

@@ -1,14 +1,11 @@
-invite new Hurley family...
-
 use new edit_history and resend_history DB tables!
 
 password-reset EMAILing
 	FAMILY concept from ohs
 
-links (internal and external) in messages
-	* started!
-
 downsize videos and images
+
+make videos and images downloadable (download button right beside "x" close button)
 
 BUGS:
 
@@ -38,6 +35,8 @@ BUGS:
 
 	email regexp is broken: JS Console: "Unable to check <input pattern='(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)'> because the pattern is not a valid regexp: invalid character in class in regular expression""
 	SAME with phone!
+
+"internal" links - click link to "go to" a message posted WITHIN Um.
 
 SMS Texting!
 
