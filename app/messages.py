@@ -11,7 +11,9 @@ import string
 
 from dataclasses import dataclass, field as dataclass_field
 
-import cv2 # pip install opencv-python
+#import cv2 # pip install opencv-python -- NOTE that we're using moviepy now, for convenience, BUT moviepy uses cv2 underneath, IF it's installed, in order to achieve highest performance
+from moviepy import VideoFileClip, ImageClip, CompositeVideoClip # pip install moviepy
+from moviepy.video.fx.Resize import Resize as mp_resize
 from PIL import Image # pip install Pillow
 
 from . import db
@@ -350,34 +352,47 @@ async def upload_files(hd, meta, payload):
 	filenames = []
 	for fil in meta['files']:
 		name = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(5)) + '_' + fil['name'] # TODO: sanitize fil['name'] first!!  NOTE that we canNOT have commas in filenames (see _mega_message_select in db.py and the conversation around DISTINCT - we can't choose delimiter in the GROUP_CONCAT - we get a comma whether we want it or not, and this is the best way to get that list, all in one query (like tag names))
-		filenames.append(name)
 		size = fil['size']
 		fp = k_upload_path + name
+		suffix = name.split('.')[-1]
+		assert suffix != name, "All files should have suffixes!"
 
 		if name.lower().endswith(k_video_formats):
-			with open(fp, "wb") as file:
+			orig_fp = fp + k_orig_appendix + suffix
+			with open(orig_fp, "wb") as file:
 				file.write(payload[pos:pos+size])
-			vid = cv2.VideoCapture(fp)
-			vid.set(cv2.CAP_PROP_POS_FRAMES, int(vid.get(cv2.CAP_PROP_FRAME_COUNT)) / 2) # get thumbnail from half-way frame (because the first umpteen are often black, in a fade-from-black)
-			result, image = vid.read()
-			assert result == True, "FAILED to capture frame!"
-			height, width = image.shape[:2]
-			th_width, th_height, overlay_file = \
-				(k_thumbnail_size, k_thumbnail_size * 9 // 16, k_landscape_video_overlay) if width > height else \
-				(k_thumbnail_size * 9 // 16, k_thumbnail_size, k_portrait_video_overlay)
-			thumb = cv2.resize(image, (th_width, th_height))
-			overlay = cv2.imread(overlay_file, cv2.IMREAD_UNCHANGED) # Load with alpha channel
-			bg, alpha = overlay[:, :, :3], overlay[:, :, 3] / 255.0  # Normalize alpha to 0-1 range
-			roi = thumb[0:th_height, 0:th_width]
-			for c in range(3):
-				roi[:, :, c] = roi[:, :, c] * (1 - alpha) + bg[:, :, c] * alpha
-			cv2.imwrite(fp + k_thumb_appendix, thumb)
+			# Make reduced-size version for normal use:
+			vid = VideoFileClip(orig_fp)
+			ow, oh = vid.size
+			nw, nh = ((k_reduced_video_size, oh * k_reduced_video_size / ow) if ow > oh else (ow * k_reduced_video_size / oh, k_reduced_video_size)) if k_reduced_video_size < max(ow, oh) else (ow, oh)
+			resized = vid.with_effects([mp_resize((nw, nh))])
+			if suffix.lower() == 'mp4':
+				filenames.append(name)
+				resized.write_videofile(fp) # the new "stock" version of this video (downsized)
+			else:
+				name += '.mp4'
+				fp += '.mp4'
+				filenames.append(name)
+				resized.write_videofile(fp, codec='libx264', audio_codec='aac') # the new "stock" version of this video (downsized and converted to 264 mp4)
+			# Make thumbnail w/ "play" overlay:
+			thumbnail = Image.fromarray(resized.get_frame(t = resized.duration // 2))
+			thumbnail.thumbnail((k_thumbnail_size, k_thumbnail_size)) # modifies img in-place
+			overlay = Image.open(k_video_overlay).convert("RGBA")
+			thumbnail.paste(overlay, ((thumbnail.width - overlay.width) // 2, (thumbnail.height - overlay.height) // 2), overlay)
+			thumbnail.convert("RGB").save(fp + k_thumb_appendix)
 
 		elif name.lower().endswith(k_image_formats):
 			img = Image.open(io.BytesIO(payload[pos:pos+size])).convert("RGB")
-			img.save(fp)
-			img.thumbnail((k_thumbnail_size, k_thumbnail_size)) # modifies img in-place
-			img.save(fp + k_thumb_appendix)
+			img.save(fp + k_orig_appendix + suffix) # a copy of the original full-sized image... in case it's needed later TODO: make a script that deprecates these old big files....
+			# Make reduced-size version for normal use:
+			ow, oh = img.size
+			nw, nh = ((k_reduced_image_size, oh * k_reduced_image_size / ow) if ow > oh else (ow * k_reduced_image_size / oh, k_reduced_image_size)) if k_reduced_image_size < max(ow, oh) else (ow, oh)
+			resized = img.resize((nw, nh))
+			resized.save(fp) # the new "stock" version of this image (downsized)
+			# Make thumbnail:
+			resized.thumbnail((k_thumbnail_size, k_thumbnail_size)) # modifies resized in-place
+			resized.save(fp + k_thumb_appendix)
+			filenames.append(name)
 
 		elif name.lower().endswith(k_audio_formats): # TODO!!!
 			with open(fp, "wb") as file:
