@@ -506,9 +506,9 @@ async def get_message_tags(dbc, message_id, limit, active = True, like = None, i
 	'''
 	include_others can simply be True or False, or it can be a user-id.  If False, then only the message-tags for `message_id` will be returned; if True, then a 2-tuple will be returned (message-tags, other-tags), where other-tags is a list of tags that are NOT associated with the message; if user-id, then the same 2-tuple will be returned, but the second element will only contained other-tags to which the user belongs.
 	'''
-	if isinstance(include_others, int):
-		include_others = ('join user_tag on tag.id = user_tag.tag', 'user_tag.user = ?', include_others)
-	return await _get_xaa(dbc,
+	io = ('join user_tag on tag.id = user_tag.tag', 'user_tag.user = ?', include_others) if isinstance(include_others, int) else include_others
+	non_join = 'message_tag where tag.id = message_tag.tag and message_tag.message = ?'
+	result = await _get_xaa(dbc,
 		select = 'tag.* from tag',
 		where = 'message_tag.message = ?',
 		where_arg = message_id,
@@ -516,11 +516,26 @@ async def get_message_tags(dbc, message_id, limit, active = True, like = None, i
 		like = like,
 		likes = ('name',),
 		join = 'message_tag on tag.id = message_tag.tag',
-		order = 'CASE WHEN tag.user IS NULL THEN 0 ELSE 1 END ASC, name ASC',
+		order = 'CASE WHEN tag.user IS NULL THEN 0 ELSE 1 END ASC, tag.name ASC',
 		limit = limit,
-		include_others = include_others,
-		non_join = 'message_tag where tag.id = message_tag.tag and message_tag.message = ?'
+		include_others = io,
+		non_join = non_join
 	)
+	if not include_others:
+		return result
+	#else:
+	tags, others = result
+	remaining_others = limit - len(others) if limit else None
+	if (remaining_others == None or remaining_others > 0) and isinstance(include_others, int):
+		# The above doesn't include 'user' tags - those pseudo-tags that correspond to individual users, as not every user is subscribed to every other user.  SO, here we add "users":
+		where, args = ['tag.user is not null', 'tag.user != ?', f'not exists (select 1 from {non_join})',], [include_others, message_id,] # include_others is user_id, in this case! (and user's self is already included in above fetch, since user is (the only one) subscribed to his/her self-tag (in order to properly receive messages to that user_id!))  I.e., we'd get two copies of user if we didn't exclude, here, iwth tag.user != user_id
+		if active:
+			where.append('active = 1')
+		_add_like(like, ('name',), where, args)
+		where = " and ".join(where)
+		limit = f'limit {remaining_others}' if remaining_others else ''
+		others += await _fetchall(dbc, f'select tag.* from tag where {where} order by tag.name {limit}', args)
+	return tags, others
 
 
 async def _get_xaa(dbc, select, where, where_arg, active, like, likes, join, order, limit, include_others, non_join):
@@ -539,6 +554,7 @@ async def _get_xaa(dbc, select, where, where_arg, active, like, likes, join, ord
 	result = await _fetchall(dbc, f'{select} {join} where {where} {order} {limit}', args)
 	if not include_others:
 		return result
+	#else:
 	where2, args2 = [f'not exists (select 1 from {non_join})',], [where_arg,]
 	if active:
 		where2.append('active = 1')

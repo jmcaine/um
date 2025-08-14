@@ -23,7 +23,7 @@ System level needs:
 Install Requirements.
 
 	$ cd um
-	$ pip install aiohttp aiohttp-session aiosqlite cryptography dominate pillow bcrypt opencv-python
+	$ pip install aiohttp aiohttp-session aiosqlite cryptography dominate pillow bcrypt opencv-python moviepy regex
 
 OR consider pip-installing from requirements.txt, but this adds dependencies and specifies versions... not sure if that's wanted, as it can get out of date...
 
