@@ -617,6 +617,14 @@ async def add_message_attachments(dbc, message_id, filenames):
 	await dbc.execute(f'insert into message_attachment (message, attachment) select {message_id}, id from attachment where upload = ?', (upload,))
 
 
+async def receive_sms(dbc, fro, message, timestamp):
+	main_admin = 2 # TODO: kludgey!
+	r = await _fetch1(dbc, 'select user.id from user join phone on user.person = phone.person where phone.phone = ?', (fro,))
+	fro_id = r['id'] if r else main_admin
+	r2 = await dbc.execute(f'insert into message (message, author, created, sent, thread_updated, teaser) values (?, ?, {k_now}, {k_now}, {k_now}, ?)', (message, ))
+	await dbc.execute(f'insert into message_tag (message, tag) values (?, ?)', (r2.lastrowid, main_admin))
+	return r2.lastrowid
+
 
 # Utils -----------------------------------------------------------------------
 

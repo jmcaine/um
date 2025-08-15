@@ -407,6 +407,11 @@ async def upload_files(hd, meta, payload):
 	content = html.thumbnail_strip(filenames)
 	await ws.send_content(hd, 'files_uploaded', content, message_id = message_id)
 
+async def sms(rq, fro, message, timestamp):
+	await db.receive_sms(await dbc(rq), fro, message, timestamp)
+	#TODO? - send_message()?  but we don't have an hd!
+
+
 # -----------------------------------------------------------------------------
 
 async def _get_message_drafts(hd):

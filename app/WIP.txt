@@ -1,11 +1,11 @@
-use new edit_history and resend_history DB tables!
+SMS Texting!
 
-password-reset EMAILing
-	FAMILY concept from ohs
-
-downsize videos and images
+VOTING
 
 make videos and images downloadable (download button right beside "x" close button)
+* make a tutorial on this!
+
+video upload SPINNER
 
 BUGS:
 
@@ -36,11 +36,11 @@ BUGS:
 	email regexp is broken: JS Console: "Unable to check <input pattern='(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)'> because the pattern is not a valid regexp: invalid character in class in regular expression""
 	SAME with phone!
 
+use new edit_history and resend_history DB tables!
+
+FAMILY (password) concept from ohs
+
 "internal" links - click link to "go to" a message posted WITHIN Um.
-
-SMS Texting!
-
-VOTING
 
 emojis
 

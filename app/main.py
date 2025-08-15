@@ -126,6 +126,20 @@ async def redeem_invite(rq):
 	code = rq.match_info['code'][:db.k_reset_code_length].replace('"', '') # simple sanitation; sufficient
 	return hr(html.document(_ws_url(rq), f'code:{code}').render())
 
+@rt.get('/_sms/{to}/{from}/{message}/{id}/{timestamp}')
+async def sms(rq):
+	"""
+	From https://wiki.voip.ms/article/SMS-MMS#Send_and_Receive_Messages_.28via_SIP_MESSAGE_Protocol.29
+	{ID} = The ID of the SMS message.
+	{TIMESTAMP} = The date and time the message was received.
+	{FROM} = The phone number that sent you the message.
+	{TO} = The DID Number that received the message.
+	{MESSAGE} = The content of the message.
+	{MEDIA} = Comma-separated list of media files.
+	"""
+	mi = rq.match_info
+	await messages.sms(rq, mi['from'], mi['message'], mi['timestamp'])
+	return hr('OK')
 
 @rt.get('/_ws')
 async def _ws(rq):
