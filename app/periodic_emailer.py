@@ -52,7 +52,7 @@ def run():
 		unstashed_by_others_lines = [f"""{unstashed['users']} has/have not yet read your message: "{unstashed['teaser']}".""" for unstashed in unstashed_by_others] if unstashed_by_others else []
 		paragraphs = [
 			f"{u['first_name']} {u['last_name']},",
-			f"You currently have {unstashed_total_count} unstashed messages." + ("  Go to https://um.openhome.school/ to stash some messages!" if unstashed_total_count else ""),
+			f"You currently have {unstashed_total_count} unstashed messages." + ('  Go to <a href="https://um.openhome.school/">https://um.openhome.school/</a> to stash some messages!' if unstashed_total_count else ""),
 		] + unstashed_count_lines + unstashed_by_others_lines
 		text = '\n\n'.join(paragraphs)
 		html = '<html><body>' + ''.join(['<p>' + paragraph + '</p>' for paragraph in paragraphs]) + '</body></html>'
