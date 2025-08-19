@@ -38,12 +38,11 @@ users = '''
 	join person on user.person = person.id
 	join email on email.person = person.id
 	where user.active = 1
-	and user.id = 1
 '''
 
 def run():
 	for u in dbc.execute(users, ()):
-		print(f"{u['first_name']} {u['last_name']}")
+		print(f"{u['first_name']} {u['last_name']} -- {u['id']}")
 		unstashed_counts = dbc.execute(unstashed_count_sql, (u['id'],))
 		unstashed_counts = [{'name': item['name'], 'count': item['count']} for item in unstashed_counts] if unstashed_counts else []
 		unstashed_count_lines = [f"{count['name']} - {count['count']} unstashed messages" for count in unstashed_counts] if unstashed_counts else []
@@ -58,6 +57,7 @@ def run():
 		html = '<html><body>' + ''.join(['<p>' + paragraph + '</p>' for paragraph in paragraphs]) + '</body></html>'
 
 		emailer.send_email(u['email'], '"Um..." digest', text, html)
+		#print(text + '\n\n\n')
 
 if __name__ == '__main__':
 	run()
