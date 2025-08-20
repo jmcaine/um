@@ -388,8 +388,7 @@ def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_fir
 				thumbnail_strip(msg['attachments'].split(','))
 
 		with t.div(cls = 'buttonbar'):
-			if stashable:
-				assert not msg['stashed'], 'message should not be already stashed, in this case!'
+			if stashable and not msg['stashed']:
 				t.button(t.i(cls = 'i i-stash'), title = text.stash, onclick = f"messages.stash({msg['id']})") # '▼'
 			t.button(t.i(cls = 'i i-reply'), title = text.reply, onclick = _send('messages', 'compose_reply', message_id = msg['id'])) # '◄'
 			if msg['pinned']:
