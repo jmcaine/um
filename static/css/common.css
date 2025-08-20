@@ -195,6 +195,10 @@ fieldset, .info, .warning, .error {
 	font-style: italic;
 }
 
+.bold {
+	font-weight: bold;
+}
+
 .full_width {
 	width: 100%;
 }

@@ -571,7 +571,7 @@ async def _get_xaa(dbc, select, where, where_arg, active, like, likes, join, ord
 
 
 async def remove_tag_from_message(dbc, message_id, tag_id):
-	return await dbc.execute(f'delete from message_tag where message = ? and tag = ?', (message_id, tag_id))
+	return await dbc.execute('delete from message_tag where message = ? and tag = ?', (message_id, tag_id))
 
 async def add_tag_to_message(dbc, message_id, tag_id):
 	return await _insert1(dbc, 'insert into message_tag (message, tag) values (?, ?)', (message_id, tag_id))
@@ -595,6 +595,9 @@ async def set_reply_message_tags(dbc, message_id):
 
 async def stash_message(dbc, message_id, user_id):
 	return await _insert1(dbc, 'insert into message_stashed (message, stashed_by) values (?, ?)', (message_id, user_id))
+
+async def unstash_message(dbc, message_id, user_id):
+	return await dbc.execute('delete from message_stashed where message = ? and stashed_by = ?', (message_id, user_id))
 
 async def pin_message(dbc, message_id, user_id):
 	return await _insert1(dbc, 'insert into message_pin (message, user) values (?, ?)', (message_id, user_id))
