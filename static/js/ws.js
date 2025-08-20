@@ -84,7 +84,7 @@ ws.onmessage = function(event) {
 
 function ws_send(message) {
 	if (!ws || ws.readyState == WebSocket.CLOSING || ws.readyState == WebSocket.CLOSED) {
-		alert("Lost connection... going to reload page....");
+		//alert("Lost connection... going to reload page....");
 		location.reload();
 	} else {
 		//console.log("SENDING ws message: " + JSON.stringify(message));

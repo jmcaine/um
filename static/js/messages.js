@@ -182,12 +182,14 @@ let messages = {
 		messages.send_ws('pin', {message_id: message_id});
 		button.classList.add('selected');
 		button.setAttribute('title', t_unpin);
+		button.setAttribute('onclick', "messages.unpin(" + message_id + ", this)");
 	},
 
 	unpin: function(message_id, button) {
 		messages.send_ws('unpin', {message_id: message_id});
 		button.classList.remove('selected');
 		button.setAttribute('title', t_pin);
+		button.setAttribute('onclick', "messages.pin(" + message_id + ", this)");
 	},
 
 

@@ -363,7 +363,7 @@ def messages(msgs, user_id, is_admin, stashable, last_thread_patriarch = None, s
 		parents[msg['id']] = html_message
 	return top
 
-def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_first_hr = False, injection = False):
+def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_first_hr = False, injection = False, edited = False):
 	editable = msg['sender_id'] == user_id or is_admin
 	cls = 'container'
 	if injection:
@@ -380,6 +380,8 @@ def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_fir
 				thread_patriarch = msg['reply_chain_patriarch']
 				if msg['id'] != thread_patriarch: # then this msg is actually a reply, but the patriarch is elsewhere (e.g., stashed), so we need to provide the reply-prefix teaser:
 					t.div(f'''Reply to "{msg['parent_teaser']}...":''', cls = 'italic')
+		if edited:
+			t.div('Edited:', cls = 'italic bold')
 
 		t.div(raw(re.sub(k_url_rec, k_url_replacement, msg['message']))) # replace url markdown "links" with real <a href>s
 
@@ -388,8 +390,7 @@ def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_fir
 				thumbnail_strip(msg['attachments'].split(','))
 
 		with t.div(cls = 'buttonbar'):
-			if stashable:
-				assert not msg['stashed'], 'message should not be already stashed, in this case!'
+			if stashable and not msg['stashed']: # the second test is a check; if not checked and the stash button is presented, and the user uses it on an already-stashed message, it would result in a db UNIQUE integrity error upon insert into message_stashed table
 				t.button(t.i(cls = 'i i-stash'), title = text.stash, onclick = f"messages.stash({msg['id']})") # '▼'
 			t.button(t.i(cls = 'i i-reply'), title = text.reply, onclick = _send('messages', 'compose_reply', message_id = msg['id'])) # '◄'
 			if msg['pinned']:

@@ -1,3 +1,8 @@
+PDF upload, view, download
+
+Make "disconnected" just quietly reconnect
+	DONE - TEST!
+
 SMS Texting!
 
 VOTING
@@ -8,6 +13,12 @@ make videos and images downloadable (download button right beside "x" close butt
 video upload SPINNER
 
 BUGS:
+
+	FIXED (but need to fix by using edit_history/resend_history tables!) send message, reply, stash original message, go EDIT and re-send original message -- does it "inject"?  In ALL (presumably; not in NEW!)  does it inject in OTHER user's NEW, even if they stashed it?  If so, is it without the stash button! (bad!)
+
+	pinning, then unpinning (or vice-versa), in some contexts, results in an error and second click of pin doesn't "stick"
+
+	writing a message after blanking out the "new" screen -- the newest message doesn't appear (doesn't have any place to "insert", presumably!)
 
 	When scrolled all the way down, after stashing a message, a duplicate single message pops up at bottom -- it does not belong, it's a ghost, and if you try to stash it, you'll get an "internal error".
 
