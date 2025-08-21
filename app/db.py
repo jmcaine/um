@@ -81,7 +81,7 @@ async def rollback(dbc):
 
 
 async def add_idid_key(dbc, idid, key):
-	r = await dbc.execute(f'insert into id_key (idid, key, timestamp) values (?, ?, {k_now})', (idid, key))
+	r = await dbc.execute(f'insert into id_key (idid, key, login_timestamp) values (?, ?, {k_now})', (idid, key))
 	return r.lastrowid
 
 async def get_user_by_id_key(dbc, idid, pub, hsh):

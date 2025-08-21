@@ -2,9 +2,6 @@ from datetime import datetime
 
 import sqlite3
 
-from . import emailer
-
-
 dbc = sqlite3.connect('um.db', isolation_level = None)
 dbc.row_factory = sqlite3.Row
 
@@ -19,8 +16,8 @@ s_users = '''
 	from user
 	join person on user.person = person.id
 	where user.active = 1
-	and user.id in (1, 9)
 '''
+#	and user.id = 2
 
 s_phones = 'select phone from phone where phone.person = ?'
 s_emails = 'select email from email where email.person = ?'
