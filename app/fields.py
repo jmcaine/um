@@ -46,6 +46,10 @@ PHONE = {
 		html.Input(type_ = 'tel', attrs = {'title': text.Title.phone})),
 }
 
+CHILD = PERSON | {
+	'birth_date': Field(Validator(True), html.Input(type_ = 'date')),
+}
+
 USERNAME_VALIDATOR = Validator(True, valid.USERNAME, 3, 20, text.Valid.username)
 NEW_USERNAME = {
 	'username': Field(

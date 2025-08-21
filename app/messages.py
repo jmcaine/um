@@ -268,6 +268,8 @@ async def deliver_message(hd, message):
 
 @ws.handler(auth_func = active)
 async def injected_message(hd):
+	if 'injects' not in hd.task.state:
+		l.error(f'!! injects NOT in hd.task.state; hd.task.handler: {hd.task.handler} ... uid: {hd.uid}')
 	hd.task.state['injects'].add(hd.payload['message_id'])
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!

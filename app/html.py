@@ -252,7 +252,7 @@ def dialog2(title, fields, data = None, button_title = text.save, alt_button: t.
 	return dialog(title, build_fields(fields, data), fields.keys(), button_title, alt_button, more_func)
 
 
-def more_person_detail(person_id, emails, phones):
+def more_person_detail(person_id, emails, phones, spouse, children):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
 		with t.fieldset():
@@ -261,7 +261,7 @@ def more_person_detail(person_id, emails, phones):
 				t.div(t.span(
 					email['email'],
 					t.button(text.edit, onclick = _send('admin', 'email_detail', person_id = person_id, id = email['id'])),
-					t.button(text.delete, onclick = f'delete_email({email["id"]})'),
+					t.button(text.delete, onclick = f'admin.delete_email({email["id"]})'),
 				))
 			t.div(t.button(text.add, onclick = _send('admin', 'email_detail', person_id = person_id,  id = 0)))
 		with t.fieldset():
@@ -270,9 +270,20 @@ def more_person_detail(person_id, emails, phones):
 				t.div(t.span(
 					_format_phone(phone['phone']),
 					t.button(text.edit, onclick = _send('admin', 'phone_detail', person_id = person_id, id = phone['id'])),
-					t.button(text.delete, onclick = f'delete_phone({phone["id"]})'),
+					t.button(text.delete, onclick = f'admin.delete_phone({phone["id"]})'),
 				))
 			t.div(t.button(text.add, onclick = _send('admin', 'phone_detail', person_id = person_id, id = 0)))
+		#TODO: spouse
+		with t.fieldset():
+			t.legend(text.children)
+			for child in children:
+				bd = datetime.fromisoformat(child['birth_date']).strftime('%m/%d/%Y')
+				t.div(t.span(
+					f"{child['first_name']} {child['last_name']} ({bd})",
+					t.button(text.edit, onclick = _send('admin', 'child_detail', person_id = person_id, id = child['id'])),
+					t.button(text.delete, onclick = f'admin.orphan_child({child["id"]}, {person_id})'),
+				))
+			t.div(t.button(text.add, onclick = _send('admin', 'child_detail', person_id = person_id, id = 0)))
 		t.div(_cancel_button(text.done)) # cancel just reverts to prior task; added/changed emails/phones are saved - those deeds are done, we're just "closing" this more_person_detail portal
 	return result
 
