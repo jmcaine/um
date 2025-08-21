@@ -88,6 +88,7 @@ async def get_user_by_id_key(dbc, idid, pub, hsh):
 	r = await _fetch1(dbc, f'select key, user from id_key where idid = ?', (idid,))
 	if not r:
 		return None # not found; new idid-key pair is going to be needed (see add_idid_key())
+	await _update1(dbc, f'update id_key set touch_timestamp = {k_now} where idid = ?', (idid,))
 	hsh2 = sha256(r['key'].encode("utf-8") + pub.encode("utf-8")).hexdigest()
 	return r['user'] if hsh2 == hsh else None
 
@@ -696,7 +697,7 @@ def _hashpw(password):
 	return bcrypt.hashpw(password.encode(), bcrypt.gensalt())
 
 async def _login(dbc, idid, user_id):
-	r = await _update1(dbc, 'update id_key set user = ? where idid = ?', (user_id, idid))
+	r = await _update1(dbc, f'update id_key set user = ?, login_timestamp = {k_now} where idid = ?', (user_id, idid))
 	return r
 
 def _add_like(like, fields, where, args):
