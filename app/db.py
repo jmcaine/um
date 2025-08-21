@@ -132,6 +132,49 @@ async def get_person_phones(dbc, person_id):
 	return await _fetchall(dbc, 'select phone.id, phone from phone join person on phone.person = person.id where person.id = ?', (person_id,))
 
 
+async def add_child(dbc, guardian_person_id, first_name, last_name, birth_date):
+	try:
+		await begin(dbc)
+		id = await _insert1(dbc, 'insert into person (first_name, last_name, birth_date) values (?, ?, ?)', (first_name, last_name, birth_date))
+		await _insert1(dbc, 'insert into child_guardian (child, guardian) values (?, ?)', (id, guardian_person_id))
+		await commit(dbc)
+		return id
+	except:
+		await rollback(dbc)
+		raise
+
+async def get_child(dbc, child_person_id):
+	return await _fetch1(dbc, 'select id, first_name, last_name, birth_date from person where id = ?', (child_person_id,))
+
+async def set_child(dbc, child_person_id, first_name, last_name, birth_date):
+	return await _update1(dbc, 'update person set first_name = ?, last_name = ?, birth_date = ? where id = ?', (first_name, last_name, birth_date, child_person_id))
+
+
+async def get_person_children(dbc, guardian_person_id):
+	return await _fetchall(dbc, 'select person.id, first_name, last_name, birth_date from person join child_guardian on person.id = child_guardian.child where child_guardian.guardian = ?', (guardian_person_id,))
+
+async def orphan_child(dbc, child_person_id, guardian_person_id): # i.e., "delete" child from family (but don't delete the base child record)
+	await dbc.execute(f'delete from child_guardian where child = ? and guardian = ?', (child_person_id, guardian_person_id))
+
+
+async def get_person_spouse(dbc, person_id):
+	return await _fetch1(dbc, 'select first_name, last_name from person !!!')
+
+async def is_a_guardian(dbc, person_id):
+	return True if await _fetch1(dbc, 'select 1 from child_guardian where guardian = ? limit 1', (person_id,)) else False
+
+async def is_guardian_of(dbc, uid, child_username):
+	return True if await _fetch1(dbc, '''select 1 from user as guardian_user
+		join child_guardian on guardian_user.person = child_guardian.guardian
+		join user as child_user on child_user.person = child_guardian.child
+		where guardian_user.id = ? and child_user.username = ? limit 1''', (uid, child_username)) else False
+
+async def _get_guardians(dbc, person_id):
+	return await _fetchall(dbc, 'select g.* from child_guardian join person as g on child_guardian.guardian = g.id join person as c on child_guardian.child = c.id where c.id = ?', (person_id,))
+
+
+
+
 async def delete_person_detail(dbc, table, id):
 	if table not in ('phone', 'email'):
 		raise Exception(f'Unexpected table: {table} - not expecting to delete from this table with this function')

@@ -117,34 +117,40 @@ async def more_person_detail(hd, reverting = False):
 		person_id = hd.task.state['person_id']
 		emails = await db.get_person_emails(hd.dbc, person_id)
 		phones = await db.get_person_phones(hd.dbc, person_id)
-		await ws.send_content(hd, 'dialog', html.more_person_detail(person_id, emails, phones))
+		spouse = None #TODO: spouse = await db.get_person_spouse(hd.dbc, person_id)
+		children = await db.get_person_children(hd.dbc, person_id)
+		await ws.send_content(hd, 'dialog', html.more_person_detail(person_id, emails, phones, spouse, children))
 	# Refactor NOTE: COULD put all of the code that's under 'not await task.finished' into top block, as long as 'if' check there also checks for 'reverting' - in both cases, send_content(...'dialog'...) is needed to repaint the whole dialog.  The only REAL purpose for the 'not await task.finished' block of code would be, for instance, to manage deletions and, possibly, re-ordering of emails/phones -- in such cases, COULD re-draw ONLY the emails and phones blocks, NOT the entire dialog.  This, in turn, might only be a useful advance if a filtersearch was offered at the top of the dialog, allowing live-updated email/phone lists based on filtersearch text; then, we wouldn't want to redraw the whole dialog and re-draw (and re-populate) the filtersearch box
 
 @ws.handler(auth_func = authorize)
 async def email_detail(hd, reverting = False):
-	await x_detail(hd, email_detail, 'email', fields.EMAIL, db.get_email, db.set_email, db.add_email, text.email, reverting)
+	await x_detail(hd, email_detail, fields.EMAIL, db.get_email, db.set_email, db.add_email, text.email, reverting)
 
 @ws.handler(auth_func = authorize)
 async def phone_detail(hd, reverting = False):
-	await x_detail(hd, phone_detail, 'phone', fields.PHONE, db.get_phone, db.set_phone, db.add_phone, text.phone, reverting)
+	await x_detail(hd, phone_detail, fields.PHONE, db.get_phone, db.set_phone, db.add_phone, text.phone, reverting)
 
-async def x_detail(hd, func, field, flds, db_get, db_set, db_add, txt, reverting):
+@ws.handler(auth_func = authorize)
+async def child_detail(hd, reverting = False):
+	await x_detail(hd, child_detail, fields.CHILD, db.get_child, db.set_child, db.add_child, text.child, reverting)
+
+async def x_detail(hd, func, fields, db_get, db_set, db_add, txt, reverting):
 	if task.just_started(hd, func) or reverting: # 'reverting' check is currently useless, but if sub-dialogs are added here, this is necessary to repaint the whole dialog
 		id = hd.task.state['id'] = int(hd.payload.get('id'))
 		hd.task.state['person_id'] = int(hd.payload['person_id'])
-		hd.task.state[field] = await db_get(hd.dbc, id) if id else {field: ''}
-		await ws.send_content(hd, 'dialog', html.dialog2(txt, flds, hd.task.state[field]))
+		hd.task.state['data'] = await db_get(hd.dbc, id) if id else dict.fromkeys(fields.keys(), '')
+		await ws.send_content(hd, 'dialog', html.dialog2(txt, fields, hd.task.state['data']))
 	elif not await task.finished(hd): # e.g., dialog-box could have been "canceled"
-		data = hd.payload
-		if await valid.invalids(hd, data, flds, handle_invalid, 'detail_banner'):
+		data = dict([(key, hd.payload[key]) for key in fields.keys()])
+		if await valid.invalids(hd, data, fields, handle_invalid, 'detail_banner'):
 			return # if there WERE invalids, bannar was already sent within
 		#else all good, move on!
 		x_id = hd.task.state['id']
 		person_id = hd.task.state['person_id']
 		if x_id:
-			await db_set(hd.dbc, x_id, data[field])
+			await db_set(hd.dbc, x_id, **data)
 		else:
-			await db_add(hd.dbc, person_id, data[field])
+			await db_add(hd.dbc, person_id, **data)
 		await task.finish(hd)
 		person = await db.get_person(hd.dbc, person_id, 'first_name, last_name')
 		await ws.send_content(hd, 'detail_banner', html.info(text.change_detail_success.format(change = f'{person["first_name"]} {person["last_name"]}')))
@@ -154,6 +160,13 @@ async def x_detail(hd, func, field, flds, db_get, db_set, db_add, txt, reverting
 async def delete_mpd(hd):
 	data = hd.payload
 	await db.delete_person_detail(hd.dbc, data['table'], data['id'])
+	await more_person_detail(hd)
+	await ws.send_content(hd, 'detail_banner', html.info(text.deletion_succeeded))
+
+@ws.handler(auth_func = authorize)
+async def orphan_child(hd):
+	data = hd.payload
+	await db.orphan_child(hd.dbc, data['child_person_id'], data['guardian_person_id'])
 	await more_person_detail(hd)
 	await ws.send_content(hd, 'detail_banner', html.info(text.deletion_succeeded))
 
