@@ -509,9 +509,9 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 		where.append('message.deleted is null')
 	if like:
 		if deep:
-			_add_like(like, ('message.message', 'tag.name'), where, args)
+			_add_like(like, ('message.message', 'tag.name', 'sender.username'), where, args)
 		else:
-			_add_like(like, ('message.teaser', 'tag.name'), where, args) # SUBSTR(message.message, 0, 30) would get us arbitrarily deep, rather than relying on teaser, but would be more computationally expensive
+			_add_like(like, ('message.teaser', 'tag.name', 'sender.username'), where, args) # SUBSTR(message.message, 0, 30) would get us arbitrarily deep, rather than relying on teaser, but would be more computationally expensive
 	match filt:
 		case Filter.new:
 			where.append('message.id not in (select message from message_stashed where stashed_by = ?)')
