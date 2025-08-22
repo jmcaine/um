@@ -638,7 +638,10 @@ async def set_reply_message_tags(dbc, message_id):
 		return await dbc.executemany('insert into message_tag (message, tag) values (?, ?)', data)
 
 async def stash_message(dbc, message_id, user_id):
-	return await _insert1(dbc, 'insert into message_stashed (message, stashed_by) values (?, ?)', (message_id, user_id))
+	if not await _fetch1(dbc, 'select 1 from message_stashed where message = ? and stashed_by = ?', (message_id, user_id)):
+		await _insert1(dbc, 'insert into message_stashed (message, stashed_by) values (?, ?)', (message_id, user_id))
+		return True
+	return False
 
 async def unstash_message(dbc, message_id, user_id):
 	return await dbc.execute('delete from message_stashed where message = ? and stashed_by = ?', (message_id, user_id))

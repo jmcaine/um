@@ -339,10 +339,9 @@ async def add_tag_to_message(hd):
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
 async def stash(hd):
-	if hd.task.state['skip'] > 0:
+	if await db.stash_message(hd.dbc, hd.payload['message_id'], hd.uid) and hd.task.state['skip'] > 0:
 		hd.task.state['skip'] -= 1
-	# we do the above FIRST because, if async context-switches in the db action (below), and we wait until AFTER that to decrement state['skip'], then the next move in messages.js:stash() may process FIRST - that is, to fetch another message if we're scrolled to the bottom; problem is, this newly fetched message will be one already showing on their screen if skip is not yet properly decremented!  We don't want duplicate messages popping up.  Decrementing first makes this problem go away.
-	await db.stash_message(hd.dbc, hd.payload['message_id'], hd.uid)
+	#NOTE - we used to decrement skip FIRST, to avoid race condition, where we thought a scroll-to-bottom message might process during the await db.stash_message, resulting in a wrong skip number during a db.get_messages, to get scroll-bottom messages, skipping too MANY, in fact, for the lack of the skip-decrement (yet), here, and thus "missing" a message (originally, we thought the opposite, that we were wrongly re-loading a message already loaded above, in the screen, which WAS actually happening, but couldn't have happened because skip was too high, for lack of early decrement -- that would only happen if skip was too LOW, by one) ... anyway, it became clear that sometimes it's possible to double-stash a message, which actually failed in db.stash_message (until we put a check in there, to avoid UNIQUE integrity exception, trying to add a duplicate record), and, when this happened, we would have INCORRECTLY double-decremented skip, making it, indeed, too LOW; so now db.stash_message returns TRUE only if the stash can happen (and does happen); this keeps skip more correct.
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
 async def pin(hd):
