@@ -71,3 +71,9 @@ function focus_top_input(container) {
 		container.querySelector('input').focus();
 	} catch (e) {} // We don't care; if 'input' doesn't exist, then there's nothing to set focus to, and we move on quietly
 }
+
+function clear_filtersearch() {
+	let fs = $("filtersearch");
+	fs.value = "";
+	fs.focus();
+}

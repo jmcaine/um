@@ -351,6 +351,9 @@ button:hover {
 .i-close {
 	background: url(ico/close.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/105037/PNG/32/ https://icon-icons.com/icon/close-cross-circular-interface-button/105037 */
 }
+.i-clear {
+	background: url(ico/clear.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/180808/PNG/32/ https://icon-icons.com/icon/edit-clear/180808 */
+}
 
 
 

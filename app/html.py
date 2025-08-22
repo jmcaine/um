@@ -183,13 +183,15 @@ def new_password(fields):
 
 def filterbox(parent, filtersearch_checkboxes):
 	kwargs = dict([(name, f'$("{name}").checked') for name in filtersearch_checkboxes.keys()])
+	go = lambda searchstring: _send('main', 'filtersearch', searchtext = searchstring, **kwargs)
 	with parent:
 		t.div(Input(text.filtersearch, type_ = 'search', autofocus = True, attrs = { # NOTE: autofocus = True is the supposed cause of Firefox FOUC https://bugzilla.mozilla.org/show_bug.cgi?id=1404468 - but it does NOT cause the warning in FF console to go away AND we don't see any visual blink evidence, so we're leaving autofocus=True, but an alternative would be to set autofocus in the JS that loads the header content
 			'autocomplete': 'off',
-			'oninput': _send('main', 'filtersearch', searchtext = 'this.value', **kwargs),
+			'oninput': go('this.value'),
 		}).build('filtersearch')) # TODO: does the Input() really need to go in a t.div container?!!!
+		t.button(t.i(cls = 'i i-clear'), title = text.clear, style = 'max-height: 10px', onclick = f'''(function() {{ clear_filtersearch(); {go('""')}; }})()''') # Ξ
 		for key, label in filtersearch_checkboxes.items():
-			Input(label, type_ = 'checkbox', attrs = {'onclick': _send('main', 'filtersearch', searchtext = '$("filtersearch").value', **kwargs)}).build(key)
+			Input(label, type_ = 'checkbox', attrs = {'onclick': go('$("filtersearch").value')}).build(key)
 	return parent
 
 def fieldset(title: str, html_fields: list, button: t.button, alt_button: t.button = _cancel_button(), more_func: str | None = None) -> t.fieldset:
