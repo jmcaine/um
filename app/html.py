@@ -105,8 +105,8 @@ def _users_tags_mainbar(title, add_onclick):
 	filterbox(result, {'show_inactives': text.show_inactives, 'dont_limit': text.dont_limit})
 	with result:
 		t.div(cls = 'spacer')
-		t.button(t.i(cls = 'i i-all'), title = text.users, onclick = _send('admin', 'users')) # ☺
-		t.button('#', title = text.tags, onclick = _send('admin', 'tags'))
+		t.button(t.i(cls = 'i i-one'), title = text.users, onclick = _send('admin', 'users')) # ☺
+		t.button(t.i(cls = 'i i-all'), title = text.tags, onclick = _send('admin', 'tags')) # #
 	return result
 
 def users_mainbar():
@@ -362,7 +362,7 @@ def inline_reply_box(message_id, parent_mid, content = None):
 			t.div(id = f"reply_recipient_{message_id}", cls = 'hide', data_replyrecipient = 'A')
 	return result
 
-def messages(msgs, user_id, is_admin, stashable, last_thread_patriarch = None, skip_first_hr = False):
+def messages(msgs, user_id, is_admin, stashable, last_thread_patriarch = None, skip_first_hr = False, searchtext = None, bg_class = None):
 	top = t.div(id = 'messages', cls = 'container')
 	parents = {None: top}
 	for msg in msgs:
@@ -370,17 +370,19 @@ def messages(msgs, user_id, is_admin, stashable, last_thread_patriarch = None, s
 			last_thread_patriarch = msg['reply_chain_patriarch']
 			html_message = inline_reply_box(msg['id'], msg['reply_to'], msg['message'])
 		elif msg['sent']: # this test ensures we don't try to present draft messages that aren't replies - user has to re-engage with those in a different way ("new message", then select among drafts)... note that the data (msgs) DO include (or MAY include) non-reply (top-level parent) draft messages; we don't want those messages in our message list here
-			last_thread_patriarch, html_message = message(msg, user_id, is_admin, stashable, last_thread_patriarch, skip_first_hr)
+			last_thread_patriarch, html_message = message(msg, user_id, is_admin, stashable, last_thread_patriarch, skip_first_hr, searchtext = searchtext, bg_class = bg_class)
 		parent = parents.get(msg['reply_to'], top)
 		parent.add(html_message)
 		parents[msg['id']] = html_message
 	return top
 
-def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_first_hr = False, injection = False, edited = False):
+def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_first_hr = False, injection = False, edited = False, searchtext = None, bg_class = None):
 	editable = msg['sender_id'] == user_id or is_admin
 	cls = 'container'
 	if injection:
 		cls += ' injection'
+	if bg_class:
+		cls += ' ' + bg_class
 	result = t.div(id = f"message_{msg['id']}", cls = cls)
 	with result:
 		if skip_first_hr and thread_patriarch == None: # first time through, skip hr (just assign thread_patriarch):
@@ -420,9 +422,12 @@ def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_fir
 			if len(all_recipients) > max_recipients:
 				recipients += ', ...'
 			with t.div():
-				edit_button = t.button(t.i(cls = 'i i-all'), title = text.recipients, onclick = f"messages.change_recipients({msg['id']})") if editable else ''
-				t.span(t.b('by '), msg['sender'], t.b(' to '), edit_button, recipients, ' ·'),
-				t.span(text.just_now if injection else '...', cls = 'time_updater', data_isodate = isodate) # 'sent' date/time
+				edit_button = t.button(t.i(cls = 'i i-all'), title = text.recipients,
+									onclick = f"messages.change_recipients({msg['id']})") if editable else ''
+				thread_button = t.button(t.i(cls = 'i i-thread'), title = text.thread,
+									onclick = _send('messages', 'show_whole_thread', message_id = msg['id'], patriarch_id = msg['reply_chain_patriarch'])) if searchtext else ''
+				t.span(t.b('by '), msg['sender'], t.b(' to '), edit_button, recipients, thread_button),
+				t.span(' ·', text.just_now if injection else '...', cls = 'time_updater', data_isodate = isodate) # 'sent' date/time
 			if editable:
 				t.button(t.i(cls = 'i i-trash'), title = text.delete_message, onclick = f"messages.delete_message({msg['id']}, false)")
 	return thread_patriarch, result

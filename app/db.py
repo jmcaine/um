@@ -502,6 +502,18 @@ _user_tag_join = 'left join user_tag on tag.id = user_tag.tag'
 async def get_message(dbc, user_id, message_id):
 	return await _fetch1(dbc, f'{_mega_message_select} {_message_tag_join} where message.id = ?', (user_id, user_id, message_id,))
 
+async def get_whole_thread(dbc, user_id, patriarch_id):
+	where = ['((message.sent is not null and user_tag.user = ?) or (message.author = ? and (message.reply_to is not null or message.sent is not null)))', 'message.reply_chain_patriarch = ?']
+	args = [user_id, user_id, user_id, user_id, patriarch_id] # first two user_ids are for sub-selects in _mega_message_select; third is for our 'where user.id = ?' (see line above)
+	where = 'where ' + ' and '.join(where)
+	group_by = 'group by message.id' # query produces many rows for a message, one per tag for that message; this is required to consolidate to one row, but allows GROUP_CONCAT() to properly build the list of tags that match
+	asc_order = f'order by thread_updated asc, sent asc nulls last' # "nulls last" is for unsent messages, which don't yet have 'sent' set (so, it's null) - those should be "lowest" in the list
+	query = f'{_mega_message_select} {_message_tag_join} {_user_tag_join} {where} {group_by} {asc_order}'
+	#l.debug(f'get_messages query: {query}    ... args: {args}')
+	# SEE: giant_sql_laid_out.txt to show/study the above laid out for straight comprehension.
+	return await _fetchall(dbc, query, args)
+
+
 async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = Filter.new, skip = 0, ignore = None, limit = k_default_resultset_limit):
 	where = []
 	args = [user_id, user_id,] # first two user_ids are for sub-selects in _mega_message_select; third is for our 'where user.id = ?' (see line above)

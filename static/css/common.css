@@ -128,6 +128,9 @@ fieldset, .info, .warning, .error {
 	background-color: #e88;
 }
 
+.bluish {
+	background-color: #cacaf5;
+}
 
 /* dynamics */
 
@@ -349,12 +352,14 @@ button:hover {
 	background: url(ico/upvote.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87486/PNG/32/ - https://icon-icons.com/icon/thumb-up/87486 */
 }
 .i-close {
-	background: url(ico/close.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/105037/PNG/32/ https://icon-icons.com/icon/close-cross-circular-interface-button/105037 */
+	background: url(ico/close.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/105037/PNG/32/ - https://icon-icons.com/icon/close-cross-circular-interface-button/105037 */
 }
 .i-clear {
-	background: url(ico/clear.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/180808/PNG/32/ https://icon-icons.com/icon/edit-clear/180808 */
+	background: url(ico/clear.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/180808/PNG/32/ - https://icon-icons.com/icon/edit-clear/180808 */
 }
-
+.i-thread {
+	background: url(ico/thread.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/3121/PNG/32/ - https://icon-icons.com/icon/needle/3121 */
+}
 
 
 /* ------------------------------------------------------------------------- */

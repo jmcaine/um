@@ -65,9 +65,9 @@ async def messages(hd, reverting = False):
 		hd.task.state['skip'] = 0 # start at "top" (oldest "new" messages), and only load new messages when user scrolls to bottom
 	else:
 		hd.task.state['skip'] = -1 # start at "bottom" of "last page" (newest messages), and load older messages when user scrolls to top
-	ms = await _get_messages(hd)
+	searchtext, ms = await _get_messages(hd)
 	hd.task.state['skip'] += len(ms) if hd.task.state['skip'] >= 0 else -len(ms)
-	await ws.send_content(hd, 'messages', html.messages(ms, hd.uid, hd.admin, news, None, news), scroll_to_bottom = 0 if news else 1, filt = filt)
+	await ws.send_content(hd, 'messages', html.messages(ms, hd.uid, hd.admin, news, None, news, searchtext = searchtext), scroll_to_bottom = 0 if news else 1, filt = filt)
 	if len(ms) > 0:
 		hd.task.state['last_thread_patriarch'] = ms[-1]['reply_chain_patriarch'] if news else ms[0]['reply_chain_patriarch'] # last message, if we're scrolling down; first if up
 
@@ -83,9 +83,9 @@ async def more_new_messages(hd): # inspired by "down-scroll" below "bottom", or 
 		return # nothing to do - all filters except `new` show the "most current (most currently stashed)" at the bottom, in the first load, so there are never any "newer" messages to load beyond those
 	#else:
 	assert(hd.task.state['skip'] >= 0) # true by virtue of filtering new messages - we're only skipping 'forward'
-	ms = await _get_messages(hd)
+	searchtext, ms = await _get_messages(hd)
 	if len(ms) > 0:
-		await ws.send_content(hd, 'more_new_messages', html.messages(ms, hd.uid, hd.admin, True, hd.task.state['last_thread_patriarch']))
+		await ws.send_content(hd, 'more_new_messages', html.messages(ms, hd.uid, hd.admin, True, hd.task.state['last_thread_patriarch'], searchtext = searchtext))
 		hd.task.state['skip'] += len(ms)
 		hd.task.state['last_thread_patriarch'] = ms[-1]['reply_chain_patriarch']
 	else:
@@ -97,18 +97,19 @@ async def more_old_messages(hd): # inspired by "up-scroll" above "top"
 		return # nothing to do - 'new' load always starts with the "oldest new" messages; scrolling "down" loads "newer new" messages but scrolling to the top never needs to invoke any lookups, as there's nothing more to load above the "oldest new" on top
 	#else:
 	assert(hd.task.state['skip'] < 0) # true by virtue of filtering 'new' messages - we're only skipping 'backward'
-	ms = await _get_messages(hd)
+	searchtext, ms = await _get_messages(hd)
 	if len(ms) > 0:
-		await ws.send_content(hd, 'more_old_messages', html.messages(ms, hd.uid, hd.admin, False, hd.task.state['last_thread_patriarch']))
+		await ws.send_content(hd, 'more_old_messages', html.messages(ms, hd.uid, hd.admin, False, hd.task.state['last_thread_patriarch'], searchtext = searchtext))
 		hd.task.state['skip'] -= len(ms)
 		hd.task.state['last_thread_patriarch'] = ms[0]['reply_chain_patriarch']
 	#else: nothing more to do - don't ws.send() anything or update anything!  User has scrolled to the very top of the available messages for the given filter
 
 async def _get_messages(hd):
 	fs = hd.task.state.get('filtersearch', {})
-	return await db.get_messages(hd.dbc, hd.uid,
+	searchtext = fs.get('searchtext') # | None
+	return searchtext, await db.get_messages(hd.dbc, hd.uid,
 													deep = fs.get('deep_search', False),
-													like = fs.get('searchtext', ''),
+													like = searchtext,
 													filt = hd.task.state['filt'],
 													skip = hd.task.state['skip'],
 													ignore = hd.task.state['injects'],
@@ -350,6 +351,11 @@ async def pin(hd):
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
 async def unpin(hd):
 	await db.unpin_message(hd.dbc, hd.payload['message_id'], hd.uid)
+
+@ws.handler(auth_func = active)
+async def show_whole_thread(hd):
+	ms = await db.get_whole_thread(hd.dbc, hd.uid, hd.payload['patriarch_id'])
+	await ws.send_content(hd, 'show_whole_thread', html.messages(ms, hd.uid, hd.admin, False, None, False, bg_class = 'bluish'), message_id = hd.payload['message_id'])
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
 async def upload_files(hd, meta, payload):

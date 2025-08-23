@@ -53,6 +53,9 @@ ws.onmessage = function(event) {
 		case "no_more_new_messages":
 			messages.no_more_new_messages();
 			break;
+		case "show_whole_thread":
+			messages.show_whole_thread(payload.content, payload.message_id);
+			break;
 		case "deliver_message_teaser":
 			messages.deliver_message_teaser(payload.teaser);
 			break;

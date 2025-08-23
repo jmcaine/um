@@ -359,6 +359,12 @@ let messages = {
 		g_accept_injected_messages_at_bottom = true;
 	},
 
+	show_whole_thread: function(content, message_id) {
+		let msg = $('message_' + message_id);
+		msg.insertAdjacentHTML("beforebegin", content);
+		msg.remove(); // we "replaced" it with the whole thread
+	},
+
 	attach_upload: function(message_id) {
 		g_file_upload.dataset.message_id = message_id;
 		g_file_upload.click(); // see g_file_upload.onchange()

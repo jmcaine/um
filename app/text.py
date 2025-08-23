@@ -47,6 +47,7 @@ days = '24 Hrs'
 this_weeks = 'Week'
 pinneds = 'Pinned'
 alls = 'All'
+thread = 'Show whole thread'
 
 # Label prefixes:
 your = 'Your'
