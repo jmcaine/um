@@ -308,8 +308,8 @@ def user_tags(ut_table):
 	return _x_tags(ut_table, 'user_tags_table_container')
 
 def user_tags_table(user_tags, available_tags, count):
-	adder = lambda id: _send('admin', 'add_tag_to_user', user_id = id)
-	remover = lambda id: _send('admin', 'remove_tag_from_user', user_id = id)
+	adder = lambda id: _send('admin', 'add_tag_to_user', tag_id = id)
+	remover = lambda id: _send('admin', 'remove_tag_from_user', tag_id = id)
 	return _xaa_table(available_tags, user_tags, lambda tag: tag['name'], 'NOT Subscribed to:', 'Subscribed to:', 'admin', 'user_tags', adder, remover, count)
 
 
