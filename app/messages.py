@@ -8,6 +8,7 @@ import logging
 import random
 import re
 import string
+import traceback
 
 from dataclasses import dataclass, field as dataclass_field
 
@@ -82,7 +83,12 @@ async def more_new_messages(hd): # inspired by "down-scroll" below "bottom", or 
 
 @ws.handler(auth_func = active)
 async def more_old_messages(hd): # inspired by "up-scroll" above "top"
-	if hd.task.state['filt'] == Filter.new:
+	#!!!DEBUG
+	if 'filt' not in hd.task.state:
+		l.error(f'more_old_messages hd.task.state[filt] failed for {hd.uid}! Handler: {hd.task.handler} ... Traceback:')
+		l.error(traceback.format_exc())
+	#!!!
+	if hd.task.state.get('filt') == Filter.new:
 		return # nothing to do - 'new' load always starts with the "oldest new" messages; scrolling "down" loads "newer new" messages but scrolling to the top never needs to invoke any lookups, as there's nothing more to load above the "oldest new" on top
 	#else:
 	searchtext, ms = await _get_messages(hd)
@@ -259,6 +265,7 @@ async def deliver_message(hd, message):
 async def injected_message(hd):
 	if 'loaded_msg_ids' not in hd.task.state:
 		l.error(f'!! loaded_msg_ids NOT in hd.task.state; hd.task.handler: {hd.task.handler} ... uid: {hd.uid}')
+		l.error(traceback.format_exc())
 	hd.task.state['loaded_msg_ids'].add(hd.payload['message_id'])
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!

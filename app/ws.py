@@ -40,7 +40,7 @@ def handler(func, auth_func = None):
 			try: await db.rollback(hd.dbc)
 			except: pass # move on, even if rollback failed (e.g., there might not even be an outstanding transaction)
 			reference = ''.join(random_choices(ascii_uppercase, k=6))
-			l.error(f'ERROR reference ID: {reference} for user: {hd.uid} ... details/traceback:')
+			l.error(f'ERROR reference ID: {reference} for user: {hd.uid} ... task-handler: {hd.task.handler} ... details/traceback:')
 			l.error(traceback.format_exc())
 			await send_content(hd, 'banner', html.error(text.internal_error.format(reference = reference)))
 	module = func.__module__
