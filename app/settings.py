@@ -1,7 +1,7 @@
 
 debug = True
 
-cache_buster = 'v=3'
+cache_buster = 'v=4'
 
 messages_per_load = 10
 
