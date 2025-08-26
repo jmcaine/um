@@ -44,10 +44,10 @@ ws.onmessage = function(event) {
 		case "messages":
 			messages.show_messages(payload.content, payload.scroll_to_bottom, payload.filt, payload.filtering_banner);
 			break;
-		case "more_old_messages":
+		case "show_more_old_messages":
 			messages.show_more_old_messages(payload.content);
 			break;
-		case "more_new_messages":
+		case "show_more_new_messages":
 			messages.show_more_new_messages(payload.content);
 			break;
 		case "no_more_new_messages":

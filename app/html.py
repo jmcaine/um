@@ -363,7 +363,7 @@ def inline_reply_box(message_id, parent_mid, content = None):
 	return result
 
 def messages(msgs, user_id, is_admin, stashable, last_thread_patriarch = None, skip_first_hr = False, searchtext = None, bg_class = None):
-	top = t.div(id = 'messages', cls = 'container')
+	top = t.div(cls = 'container')
 	parents = {None: top}
 	for msg in msgs:
 		if msg['sender_id'] == user_id and not msg['sent'] and msg['reply_to'] != None: # if this is a user's unsent reply (draft), then include it in editable, inline draft mode:

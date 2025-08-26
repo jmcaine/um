@@ -53,40 +53,29 @@ async def messages(hd, reverting = False):
 		return # nothing to do here - don't reload messages if reverting, unless NewMessageNotify.reload
 
 	just_started = task.just_started(hd, messages) # have to do this first, before referencing hd.task.state, below
-	filt = hd.task.state['filt'] = hd.payload.get('filt', hd.task.state.get('filt', Filter.new)) # prefer filt sent in payload, then filt already recorded, and, finally, if nothing, default to viewing `new` messages (only)
-	hd.task.state['injects'] = set()
-
 	if just_started:
 		await ws.send_sub_content(hd, 'topbar_container', html.messages_topbar(await is_admin(hd, hd.uid)))
 		await ws.send_content(hd, 'content', html.messages_container())
 		# sending the above can happen almost immediately; as message lookup might take a moment longer, we'll do it only subsequently (below), even for the very first load, so that the user at least has the framework of the page to see, and the "loading messages..." to see (or, hopefully not, if things are fast enough!)
+
+	hd.task.state['loaded_msg_ids'] = set()
+	filt = hd.task.state['filt'] = hd.payload.get('filt', hd.task.state.get('filt', Filter.new)) # prefer filt sent in payload, then filt already recorded, and, finally, if nothing, default to viewing `new` messages (only)
 	await ws.send_sub_content(hd, 'filter_container', html.messages_filter(filt))
-	if news := filt == Filter.new:
-		hd.task.state['skip'] = 0 # start at "top" (oldest "new" messages), and only load new messages when user scrolls to bottom
-	else:
-		hd.task.state['skip'] = -1 # start at "bottom" of "last page" (newest messages), and load older messages when user scrolls to top
 	searchtext, ms = await _get_messages(hd)
-	hd.task.state['skip'] += len(ms) if hd.task.state['skip'] >= 0 else -len(ms)
+	news = filt == Filter.new
 	await ws.send_content(hd, 'messages', html.messages(ms, hd.uid, hd.admin, news, None, news, searchtext = searchtext), scroll_to_bottom = 0 if news else 1, filt = filt)
 	if len(ms) > 0:
 		hd.task.state['last_thread_patriarch'] = ms[-1]['reply_chain_patriarch'] if news else ms[0]['reply_chain_patriarch'] # last message, if we're scrolling down; first if up
 
-@ws.handler(auth_func = active)
-async def more_new_messages_forward_only(hd): # this is only called if a screen is taller than the default # of messages can fill, so more messages are immediately needed; note that a skip of -1 canNOT result in a more_new_messages call or we'll have an infinite loop because the number of "newest" messages fits on screen, with room for more, but calling for more incessantly won't result in any change; this method is ONLY for forward (skipping-forward, from older "new" messages) orientations
-	if hd.task.state['skip'] > 0:
-		return await more_new_messages(hd)
-	#else no-op
 
 @ws.handler(auth_func = active)
 async def more_new_messages(hd): # inspired by "down-scroll" below "bottom", or a screen that isn't full of messages and can take more new ones on bottom
 	if hd.task.state.get('filt') != Filter.new:
 		return # nothing to do - all filters except `new` show the "most current (most currently stashed)" at the bottom, in the first load, so there are never any "newer" messages to load beyond those
 	#else:
-	assert(hd.task.state['skip'] >= 0) # true by virtue of filtering new messages - we're only skipping 'forward'
 	searchtext, ms = await _get_messages(hd)
 	if len(ms) > 0:
-		await ws.send_content(hd, 'more_new_messages', html.messages(ms, hd.uid, hd.admin, True, hd.task.state['last_thread_patriarch'], searchtext = searchtext))
-		hd.task.state['skip'] += len(ms)
+		await ws.send_content(hd, 'show_more_new_messages', html.messages(ms, hd.uid, hd.admin, True, hd.task.state['last_thread_patriarch'], searchtext = searchtext))
 		hd.task.state['last_thread_patriarch'] = ms[-1]['reply_chain_patriarch']
 	else:
 		await ws.send(hd, 'no_more_new_messages')
@@ -96,24 +85,23 @@ async def more_old_messages(hd): # inspired by "up-scroll" above "top"
 	if hd.task.state['filt'] == Filter.new:
 		return # nothing to do - 'new' load always starts with the "oldest new" messages; scrolling "down" loads "newer new" messages but scrolling to the top never needs to invoke any lookups, as there's nothing more to load above the "oldest new" on top
 	#else:
-	assert(hd.task.state['skip'] < 0) # true by virtue of filtering 'new' messages - we're only skipping 'backward'
 	searchtext, ms = await _get_messages(hd)
 	if len(ms) > 0:
-		await ws.send_content(hd, 'more_old_messages', html.messages(ms, hd.uid, hd.admin, False, hd.task.state['last_thread_patriarch'], searchtext = searchtext))
-		hd.task.state['skip'] -= len(ms)
+		await ws.send_content(hd, 'show_more_old_messages', html.messages(ms, hd.uid, hd.admin, False, hd.task.state['last_thread_patriarch'], searchtext = searchtext))
 		hd.task.state['last_thread_patriarch'] = ms[0]['reply_chain_patriarch']
 	#else: nothing more to do - don't ws.send() anything or update anything!  User has scrolled to the very top of the available messages for the given filter
 
 async def _get_messages(hd):
 	fs = hd.task.state.get('filtersearch', {})
 	searchtext = fs.get('searchtext') # | None
-	return searchtext, await db.get_messages(hd.dbc, hd.uid,
-													deep = fs.get('deep_search', False),
-													like = searchtext,
-													filt = hd.task.state['filt'],
-													skip = hd.task.state['skip'],
-													ignore = hd.task.state['injects'],
-													limit = settings.messages_per_load)
+	ms = await db.get_messages(hd.dbc, hd.uid,
+										deep = fs.get('deep_search', False),
+										like = searchtext,
+										filt = hd.task.state['filt'],
+										ignore = hd.task.state['loaded_msg_ids'],
+										limit = settings.messages_per_load)
+	hd.task.state['loaded_msg_ids'].update([m['id'] for m in ms])
+	return searchtext, ms
 
 
 @ws.handler(auth_func = active)
@@ -209,7 +197,7 @@ async def compose_reply(hd):
 	patriarch_id = await db.get_patriarch_message_id(hd.dbc, parent_mid)
 	selection = hd.payload.get('selection') # TODO: (int, int) range? or actual text, or...?
 	new_mid = await db.new_message(hd.dbc, hd.uid, parent_mid, patriarch_id)
-	hd.task.state['injects'].add(new_mid) # this new_mid will already be in view, for author of the reply, and should not be loaded upon a scroll-down (incurring a new-message-load)
+	hd.task.state['loaded_msg_ids'].add(new_mid) # this new_mid will already be in view, for author of the reply, and should not be loaded upon a scroll-down (incurring a new-message-load)
 	hd.state['active_reply'] = Active_Reply(new_mid, parent_mid, patriarch_id) # while replying, tell other replies-to-the-same-parent-or-grandparent-message to be injected ABOVE:
 	# load (empty) reply-box: (note that send_reply() handles the "send" ► action)
 	await ws.send_content(hd, 'inline_reply_box', html.inline_reply_box(new_mid, parent_mid), message_id = new_mid, parent_mid = parent_mid)
@@ -256,7 +244,7 @@ async def deliver_message(hd, message):
 						reference_mid = active_reply.parent_mid # place injection just above parent (so that user can see it even while authoring active reply)
 						placement = 'beforebegin'
 					#else: just take the defaults set above - the injection can go wherever it belongs, even if it's off screen
-				#NOTE: we DON'T add(mid) to state['injects'] here, prematurely - within inject_deliver_new_message, client-side, decision may be made to NOT add the message to the DOM! (see injected_message() signal)
+				#NOTE: we DON'T add(mid) to state['loaded_msg_ids'] here, prematurely - within inject_deliver_new_message, client-side, decision may be made to NOT add the message to the DOM! (see injected_message() signal)
 				stashable = hd.task.state.get('filt') == Filter.new
 				edited = False
 				if stashable and message['stashed']: # this round-about-ly indicates that the message is "edited" TODO: use edit_history / resend_history DB (tables) to do this right!
@@ -269,9 +257,9 @@ async def deliver_message(hd, message):
 
 @ws.handler(auth_func = active)
 async def injected_message(hd):
-	if 'injects' not in hd.task.state:
-		l.error(f'!! injects NOT in hd.task.state; hd.task.handler: {hd.task.handler} ... uid: {hd.uid}')
-	hd.task.state['injects'].add(hd.payload['message_id'])
+	if 'loaded_msg_ids' not in hd.task.state:
+		l.error(f'!! loaded_msg_ids NOT in hd.task.state; hd.task.handler: {hd.task.handler} ... uid: {hd.uid}')
+	hd.task.state['loaded_msg_ids'].add(hd.payload['message_id'])
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
 async def delete_draft_in_list(hd):
@@ -340,9 +328,7 @@ async def add_tag_to_message(hd):
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
 async def stash(hd):
-	if await db.stash_message(hd.dbc, hd.payload['message_id'], hd.uid) and hd.task.state['skip'] > 0:
-		hd.task.state['skip'] -= 1
-	#NOTE - we used to decrement skip FIRST, to avoid race condition, where we thought a scroll-to-bottom message might process during the await db.stash_message, resulting in a wrong skip number during a db.get_messages, to get scroll-bottom messages, skipping too MANY, in fact, for the lack of the skip-decrement (yet), here, and thus "missing" a message (originally, we thought the opposite, that we were wrongly re-loading a message already loaded above, in the screen, which WAS actually happening, but couldn't have happened because skip was too high, for lack of early decrement -- that would only happen if skip was too LOW, by one) ... anyway, it became clear that sometimes it's possible to double-stash a message, which actually failed in db.stash_message (until we put a check in there, to avoid UNIQUE integrity exception, trying to add a duplicate record), and, when this happened, we would have INCORRECTLY double-decremented skip, making it, indeed, too LOW; so now db.stash_message returns TRUE only if the stash can happen (and does happen); this keeps skip more correct.
+	await db.stash_message(hd.dbc, hd.payload['message_id'], hd.uid)
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
 async def pin(hd):

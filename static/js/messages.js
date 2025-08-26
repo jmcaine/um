@@ -174,7 +174,7 @@ let messages = {
 		setTimeout(messages._remove_element, 1800, message_element); // slightly less than the 2-second fadeout_short (see common.css), so the thing doesn't pop back into view before disappearing entirely
 
 		if (g_main_pane.scrollTop + g_main_pane.clientHeight >= g_main_pane.scrollHeight) {
-			messages.send_ws('more_new_messages_forward_only');
+			messages.send_ws('more_new_messages');
 		}
 	},
 
@@ -319,7 +319,7 @@ let messages = {
 				messages.send_ws('more_old_messages')
 			}
 			else {
-				messages.send_ws('more_new_messages_forward_only');
+				messages.send_ws('more_new_messages');
 			}
 		}
 		if (scroll_to_bottom == 1) {

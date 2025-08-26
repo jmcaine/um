@@ -514,7 +514,7 @@ async def get_whole_thread(dbc, user_id, patriarch_id):
 	return await _fetchall(dbc, query, args)
 
 
-async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = Filter.new, skip = 0, ignore = None, limit = k_default_resultset_limit):
+async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = Filter.new, ignore = None, limit = k_default_resultset_limit):
 	where = []
 	args = [user_id, user_id,] # first two user_ids are for sub-selects in _mega_message_select; third is for our 'where user.id = ?' (see line above)
 	if not include_trashed:
@@ -545,12 +545,11 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 	group_by = 'group by message.id' # query produces many rows for a message, one per tag for that message; this is required to consolidate to one row, but allows GROUP_CONCAT() to properly build the list of tags that match
 	asc_order = f'order by thread_updated asc, sent asc nulls last' # "nulls last" is for unsent messages, which don't yet have 'sent' set (so, it's null) - those should be "lowest" in the list
 	query = f'{_mega_message_select} {_message_tag_join} {_user_tag_join} {where} {group_by}'
-	if skip < 0: # usually indicating "backing up", but -1 indicates "last page" / "latest stuff"
-		this_skip = 0 if skip == -1 else skip # skip 0 if it's the flag "-1"; else skip `skip` (negative numbers will result proper 
-		desc_order = f'order by thread_updated desc, sent desc'
-		query = f'select * from ({query} {desc_order} limit {-this_skip}, {limit}) {asc_order} limit {limit}' # subquery on desc_order to get the LIMIT right, then properly asc_order that final resultset
-	else:
-		query = f'{query} {asc_order} limit {skip}, {limit}'
+
+	if filt == Filter.new:
+		query = f'{query} {asc_order} limit {limit}'
+	else: # for all other cases, the first `limit` result set should be the NEWEST, then we step back to olders bit by bit as user scrolls UP
+		query = f'select * from ({query} order by thread_updated desc, sent desc limit {limit}) {asc_order}'
 	#l.debug(f'get_messages query: {query}    ... args: {args}')
 	# SEE: giant_sql_laid_out.txt to show/study the above laid out for straight comprehension.
 	return await _fetchall(dbc, query, args)
