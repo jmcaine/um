@@ -56,8 +56,8 @@ def document(ws_url: str, initial = ''):
 			t.hr(cls = 'top')
 
 		with t.div(id = 'main_pane'):
-			t.input_(type = 'file', id = 'file_upload', multiple = 'true', hidden = 'true', accept = 'image/png, image/jpeg, video/mp4')
-			raw(f'''<dialog id="dialog" class="dialog" closedby="any" autofocus="dialog"><div style="float:right">  <button title="{text.close}" onclick="$('dialog').close()"><i class="i i-close"></i></div><div id="dialog_contents"></div></dialog>''') # there's no t.dialog!
+			t.input_(type = 'file', id = 'file_upload', multiple = 'true', hidden = 'true', accept = 'image/png, image/jpeg, video/mp4, application/pdf')
+			raw(f'''<dialog id="dialog" class="dialog" closedby="any" autofocus="dialog"><div style="float:right"> <button title="{text.download}" onclick="messages.download()"><i class="i i-download"></i></button>  <button title="{text.close}" onclick="$('dialog').close()"><i class="i i-close"></i></button></div><div id="dialog_contents"></div></dialog>''') # there's no t.dialog!
 			with t.div(id = 'content_container', cls = 'container', style = 'clear:both'):
 				t.div("Loading...")
 
@@ -450,8 +450,14 @@ def thumbnail_strip(filenames):
 	with result:
 		for name in filenames:
 			path = f'/{k_upload_path}{name}'
+			lilname = name.lower()
 			poster_path = path + k_thumb_appendix
-			onclick = f'messages.play_video("{path}", "{poster_path}")' if name.lower().endswith(k_video_formats) else f'messages.play_image("{path}")'
+			if lilname.endswith(k_video_formats):
+				onclick = f'messages.play_video("{path}", "{poster_path}")'
+			elif lilname.endswith(k_image_formats):
+				onclick = f'messages.play_image("{path}")'
+			elif lilname.endswith(k_pdf_formats):
+				onclick = f'messages.play_pdf("{path}")'
 			t.span(t.img(src = f'/{k_upload_path}{name}{k_thumb_appendix}?cache_bust={cache_bust}', alt = name), onclick = onclick)
 	return result
 

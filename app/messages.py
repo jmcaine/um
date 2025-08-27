@@ -16,6 +16,7 @@ from dataclasses import dataclass, field as dataclass_field
 from moviepy import VideoFileClip, ImageClip, CompositeVideoClip # pip install moviepy
 from moviepy.video.fx.Resize import Resize as mp_resize
 from PIL import Image # pip install Pillow
+import pdf2image
 
 from . import db
 from . import html
@@ -350,26 +351,30 @@ async def show_whole_thread(hd):
 	ms = await db.get_whole_thread(hd.dbc, hd.uid, hd.payload['patriarch_id'])
 	await ws.send_content(hd, 'show_whole_thread', html.messages(ms, hd.uid, hd.admin, False, None, False, bg_class = 'bluish'), message_id = hd.payload['message_id'])
 
+
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
 async def upload_files(hd, meta, payload):
 	message_id = meta['partition_id'] # partition scheme, for message file-attachments, is the message_id
 	pos = 0
 	filenames = []
+	nwnh = lambda ow, oh: ((k_reduced_video_size, oh * k_reduced_video_size // ow) if ow > oh else (ow * k_reduced_video_size // oh, k_reduced_video_size)) if k_reduced_video_size < max(ow, oh) else (ow, oh)
+
 	for fil in meta['files']:
 		name = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(5)) + '_' + fil['name'] # TODO: sanitize fil['name'] first!!  NOTE that we canNOT have commas in filenames (see _mega_message_select in db.py and the conversation around DISTINCT - we can't choose delimiter in the GROUP_CONCAT - we get a comma whether we want it or not, and this is the best way to get that list, all in one query (like tag names))
 		size = fil['size']
 		fp = k_upload_path + name
+		lilname = name.lower()
 		suffix = name.split('.')[-1]
 		assert suffix != name, "All files should have suffixes!"
 
-		if name.lower().endswith(k_video_formats):
+		if lilname.endswith(k_video_formats):
 			orig_fp = fp + k_orig_appendix + suffix
 			with open(orig_fp, "wb") as file:
 				file.write(payload[pos:pos+size])
 			# Make reduced-size version for normal use:
 			vid = VideoFileClip(orig_fp)
 			ow, oh = vid.size
-			nw, nh = ((k_reduced_video_size, oh * k_reduced_video_size / ow) if ow > oh else (ow * k_reduced_video_size / oh, k_reduced_video_size)) if k_reduced_video_size < max(ow, oh) else (ow, oh)
+			nw, nh = nwnh(ow, oh)
 			resized = vid.with_effects([mp_resize((nw, nh))])
 			if suffix.lower() == 'mp4':
 				filenames.append(name)
@@ -386,12 +391,12 @@ async def upload_files(hd, meta, payload):
 			thumbnail.paste(overlay, ((thumbnail.width - overlay.width) // 2, (thumbnail.height - overlay.height) // 2), overlay)
 			thumbnail.convert("RGB").save(fp + k_thumb_appendix)
 
-		elif name.lower().endswith(k_image_formats):
+		elif lilname.endswith(k_image_formats):
 			img = Image.open(io.BytesIO(payload[pos:pos+size])).convert("RGB")
 			img.save(fp + k_orig_appendix + suffix) # a copy of the original full-sized image... in case it's needed later TODO: make a script that deprecates these old big files....
 			# Make reduced-size version for normal use:
 			ow, oh = img.size
-			nw, nh = ((k_reduced_image_size, oh * k_reduced_image_size / ow) if ow > oh else (ow * k_reduced_image_size / oh, k_reduced_image_size)) if k_reduced_image_size < max(ow, oh) else (ow, oh)
+			nw, nh = nwnh(ow, oh)
 			resized = img.resize((nw, nh))
 			resized.save(fp) # the new "stock" version of this image (downsized)
 			# Make thumbnail:
@@ -399,7 +404,22 @@ async def upload_files(hd, meta, payload):
 			resized.save(fp + k_thumb_appendix)
 			filenames.append(name)
 
-		elif name.lower().endswith(k_audio_formats): # TODO!!!
+		elif lilname.endswith(k_pdf_formats):
+			bio = io.BytesIO(payload[pos:pos+size])
+			with open(fp, "wb") as file:
+				file.write(bio.getvalue())
+			images = pdf2image.convert_from_bytes(payload[pos:pos+size])
+			img = images[0]
+			ow, oh = img.size
+			nw, nh = nwnh(ow, oh)
+			resized = img.resize((nw, nh))
+			# Make thumbnail:
+			resized.thumbnail((k_thumbnail_size, k_thumbnail_size)) # modifies resized in-place
+			resized.save(fp + k_thumb_appendix)
+			filenames.append(name)
+
+
+		elif lilname.endswith(k_audio_formats): # TODO!!!
 			with open(fp, "wb") as file:
 				file.write(payload[pos:pos+size])
 		else:

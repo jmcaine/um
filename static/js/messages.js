@@ -6,6 +6,7 @@ const t_unpin = 'UNpin this message' // TODO: this has a duplicate in text.py
 
 const h_message_stashed = '<div class="info fadeout_short">' + t_message_stashed + '</div>';
 
+let g_playing = null;
 
 let g_accept_injected_messages_at_bottom = false;
 let g_forced_scroll = false;
@@ -376,13 +377,34 @@ let messages = {
 	},
 
 	play_video: function(path, poster_path) {
+		g_playing = path;
 		$('dialog_contents').innerHTML = '<video controls id="dialog_video" class="media_container" poster="' + poster_path + '" width="' + Math.floor(parent.innerWidth*8/9) + '"><source src="' + path + '" type="video/mp4" /></video>';
 		$('dialog').showModal();
 	},
 
 	play_image: function(path) {
+		g_playing = path;
 		$('dialog_contents').innerHTML = '<img src="' + path + '" width ="' + Math.floor(parent.innerWidth*8/9) + '" />';
 		$('dialog').showModal();
+	},
+
+	play_pdf: function(path) {
+		g_playing = path;
+		$('dialog_contents').innerHTML = '<embed src="' + path + '" width ="' + Math.floor(parent.innerWidth*8/9) + '" height = "' + Math.floor(parent.innerHeight*8/9) + '" />';
+		$('dialog').showModal();
+	},
+
+	download: function() {
+		if (g_playing != null) {
+			const anchor = document.createElement('a');
+			console.log(g_playing);
+			anchor.href = g_playing;
+			const last_slash = g_playing.lastIndexOf('/');
+			anchor.download = g_playing.substring(last_slash + 1);
+			document.body.appendChild(anchor);
+			anchor.click();
+			document.body.removeChild(anchor);
+		}
 	},
 
 	casual_date: function(reference_date) {

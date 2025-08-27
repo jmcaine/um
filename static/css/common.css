@@ -360,6 +360,9 @@ button:hover {
 .i-thread {
 	background: url(ico/thread.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/3121/PNG/32/ - https://icon-icons.com/icon/needle/3121 */
 }
+.i-download {
+	background: url(ico/download.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/144412/PNG/32/ - https://icon-icons.com/icon/cloud-download/144412 */
+}
 
 
 /* ------------------------------------------------------------------------- */

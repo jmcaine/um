@@ -1,6 +1,8 @@
 k_video_formats = ('.mp4', '.mov', '.mkv',)
 k_audio_formats = ('.m4a', '.mp3', )
-k_image_formats = ('.jpg', '.jpeg', '.png' )
+k_image_formats = ('.jpg', '.jpeg', '.png', )
+k_pdf_formats = ('.pdf', )
+
 k_thumbnail_size = 300
 k_reduced_image_size = 1800
 k_reduced_video_size = 1200
