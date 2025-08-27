@@ -415,19 +415,22 @@ def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_fir
 			if editable:
 				t.button(t.i(cls = 'i i-edit'), title = text.edit_message, onclick = _send('messages', 'edit_message', message_id = msg['id']))
 			t.div(cls = 'spacer')
-			isodate = local_date_iso(msg["sent"]).isoformat()[:-6] # [:-6] to trim offset from end, as javascript code will expect a naive iso variant, and will interpret as "local"
+			with t.div():
+				t.span(t.b('by '), msg['sender'])
+		with t.div(cls = 'buttonbar'): # row 2 (looks nicer on phones; but consider reverting back to the 1-row motif for wider screens)
 			max_recipients = 3
 			all_recipients = '' if not msg['tags'] else msg['tags'].split(',')
 			recipients = ', '.join(all_recipients[0:max_recipients]) # NOTE: would be nice if, in db.py, we could use GROUP_CONCAT(DISTINCT tag.name, ', '), to avoid this replace(',', ', '), but DISTINCT requires one arg only - can't provide a delimiter in that case, unfortunately
 			if len(all_recipients) > max_recipients:
 				recipients += ', ...'
-			with t.div():
-				edit_button = t.button(t.i(cls = 'i i-all'), title = text.recipients,
-									onclick = f"messages.change_recipients({msg['id']})") if editable else ''
-				thread_button = t.button(t.i(cls = 'i i-thread'), title = text.thread,
-									onclick = _send('messages', 'show_whole_thread', message_id = msg['id'], patriarch_id = msg['reply_chain_patriarch'])) if searchtext else ''
-				t.span(t.b('by '), msg['sender'], t.b(' to '), edit_button, recipients, thread_button),
-				t.span(' ·', text.just_now if injection else '...', cls = 'time_updater', data_isodate = isodate) # 'sent' date/time
+			edit_button = t.button(t.i(cls = 'i i-all'), title = text.recipients,
+								onclick = f"messages.change_recipients({msg['id']})") if editable else ''
+			thread_button = t.button(t.i(cls = 'i i-thread'), title = text.thread,
+								onclick = _send('messages', 'show_whole_thread', message_id = msg['id'], patriarch_id = msg['reply_chain_patriarch'])) if searchtext else ''
+			isodate = local_date_iso(msg["sent"]).isoformat()[:-6] # [:-6] to trim offset from end, as javascript code will expect a naive iso variant, and will interpret as "local"
+			t.div(cls = 'spacer')
+			t.span(t.b(' to '), edit_button, recipients, thread_button, ' · ')
+			t.span(text.just_now if injection else '...', cls = 'time_updater', data_isodate = isodate) # 'sent' date/time
 			if editable:
 				t.button(t.i(cls = 'i i-trash'), title = text.delete_message, onclick = f"messages.delete_message({msg['id']}, false)")
 	return thread_patriarch, result
