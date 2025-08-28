@@ -542,6 +542,9 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 		case Filter.pinned:
 			where.append(f'message.id in (select message from message_pin where user = ?)')
 			args.append(user_id)
+		case Filter.pegged:
+			where.append(f'message.id in (select message from message_peg)')
+			args.append(user_id)
 		case Filter.day:
 			where.append(f'message.sent >= "{(datetime.utcnow() - timedelta(days=1)).isoformat()}Z"') # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!
 		case Filter.this_week: # we'll interpret as "7 days back"

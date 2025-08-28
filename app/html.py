@@ -131,7 +131,8 @@ def messages_filter(filt):
 		filt_button(text.alls, text.show_alls, Filter.all)
 		filt_button(text.days, text.show_days, Filter.day)
 		filt_button(text.this_weeks, text.show_this_weeks, Filter.this_week)
-		filt_button(text.pinneds, text.show_pinneds, Filter.pinned)
+		filt_button(text.pins, text.show_pins, Filter.pinned)
+		filt_button(text.pegs, text.show_pegs, Filter.pegged)
 	return result
 
 def messages_container():
