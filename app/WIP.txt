@@ -1,9 +1,5 @@
 MAKE a button to set the default reply-to initial state, so that replies will go to the original sender or whole group, by default, based on your setting when you send the message.
 
-PDF upload, view, download
-make videos and images downloadable (download button right beside "x" close button)
-* make a tutorial on this!
-
 SMS Texting!
 	take note of um_a/flowroute-sms-mms-secret-key.txt
 
@@ -15,6 +11,14 @@ auto "reminders", and birthdays (based on birth-dates!)
 
 
 BUGS:
+
+	the very first message in NEW (and maybe elsewhere?), when it's a reply in a thread, does NOT show the prelude italics!
+
+	make the "thread" button show always (not just for a "search"), and maybe put it in the dialog box, instead of inline with other messages?
+
+	when editing a message, injects should NOT be processed -- message list will be reloaded when edit is finished and messages (re-)sent, anyway, and underway-task is not 'messages', so task.state is not appropriate to receiving an injection
+
+	pasting images in replies and edits works differently (note duplicate text in pastes, lack of our special handling when pasting images, etc...)
 
 	"paste" plain text -- DOUBLE-pastes the text (perhaps it's using url-paste logic)
 
