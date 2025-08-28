@@ -402,7 +402,7 @@ async def upload_files(hd, meta, payload):
 			bio = io.BytesIO(payload[pos:pos+size])
 			with open(fp, "wb") as file:
 				file.write(bio.getvalue())
-			images = pdf2image.convert_from_bytes(payload[pos:pos+size])
+			images = pdf2image.convert_from_bytes(payload[pos:pos+size], poppler_path = '/usr/bin')
 			img = images[0]
 			ow, oh = img.size
 			nw, nh = nwnh(ow, oh)
