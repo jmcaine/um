@@ -376,7 +376,7 @@ def messages(msgs, user_id, is_admin, stashable, last_thread_patriarch = None, s
 		parents[msg['id']] = html_message
 	return top
 
-def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_first_hr = False, injection = False, edited = False, searchtext = None, bg_class = None):
+def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_first_hr = False, injection = False, searchtext = None, bg_class = None):
 	editable = msg['sender_id'] == user_id or is_admin
 	cls = 'container'
 	if injection:
@@ -385,17 +385,20 @@ def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_fir
 		cls += ' ' + bg_class
 	result = t.div(id = f"message_{msg['id']}", cls = cls)
 	with result:
+		continuation = False
 		if skip_first_hr and thread_patriarch == None: # first time through, skip hr (just assign thread_patriarch):
 			thread_patriarch = msg['reply_chain_patriarch']
 		else: # thereafter, prepend each (next) msg with an hr() or "gray" hr() (for replies), to separate messages:
 			if msg['reply_chain_patriarch'] == thread_patriarch:
 				t.hr(cls = 'gray') # continued thread
+				continuation = True
 			else:
-				t.hr() # new thread (or clean_top is False, so we never set thread_patriarch; but this is fine, as we would never want a 'gray' line in that case; the oddity is that the following reply-prefix is likely to be set, if this is a reply, and it's possible that the parent is just above, but was simply sitting there from the last load (last call to messages(), so we lost track of that old thread_patriarch)... this is fine.  It might be nice, actually, for really long reply-chains, to occasionally have the "reminder" when the user keeps scrolling down to see more....)
+				t.hr() # new thread ... OR thread_patriarch is None because we're loading a set of newly-fetched messages, BUT, if this IS a reply, it's possible that the parent is sitting just above, from the last load (we lost track of that old thread_patriarch)... this is fine - it might be nice, actually, for really long reply-chains, to occasionally have the "reminder" when the user keeps scrolling to see more....)
 				thread_patriarch = msg['reply_chain_patriarch']
-				if msg['id'] != thread_patriarch: # then this msg is actually a reply, but the patriarch is elsewhere (e.g., stashed), so we need to provide the reply-prefix teaser:
-					t.div(f'''Reply to "{msg['parent_teaser']}...":''', cls = 'italic')
-		if edited:
+
+		if msg['reply_to'] and not continuation: # then this msg is actually a reply, but the patriarch is elsewhere (e.g., stashed... or see above comment on t.hr()), so we need to provide the reply-prefix teaser:
+			t.div(f'''Reply to "{msg['parent_teaser']}...":''', cls = 'italic')
+		if msg['edited']:
 			t.div('Edited:', cls = 'italic bold')
 
 		t.div(raw(re.sub(k_url_rec, k_url_replacement, msg['message']))) # replace url markdown "links" with real <a href>s
@@ -426,7 +429,7 @@ def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_fir
 			edit_button = t.button(t.i(cls = 'i i-all'), title = text.recipients,
 								onclick = f"messages.change_recipients({msg['id']})") if editable else ''
 			thread_button = t.button(t.i(cls = 'i i-thread'), title = text.thread,
-								onclick = _send('messages', 'show_whole_thread', message_id = msg['id'], patriarch_id = msg['reply_chain_patriarch'])) if searchtext else ''
+								onclick = _send('messages', 'show_whole_thread', message_id = msg['id'], patriarch_id = msg['reply_chain_patriarch'])) # if searchtext else ''
 			isodate = local_date_iso(msg["sent"]).isoformat()[:-6] # [:-6] to trim offset from end, as javascript code will expect a naive iso variant, and will interpret as "local"
 			t.div(cls = 'spacer')
 			t.span(t.b(' to '), edit_button, recipients, thread_button, ' · ')

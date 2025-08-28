@@ -20,7 +20,7 @@ from uuid import uuid4
 import aiosqlite
 import bcrypt # cf https://security.stackexchange.com/questions/133239/what-is-the-specific-reason-to-prefer-bcrypt-or-pbkdf2-over-sha256-crypt-in-pass
 	# pip install bcrypt
-from sqlite3 import PARSE_DECLTYPES, IntegrityError
+from sqlite3 import PARSE_DECLTYPES, IntegrityError, Error as SQL_Error
 
 from . import exception as ex
 from .messages_const import *
@@ -461,15 +461,26 @@ async def send_message(dbc, user_id, message_id) -> Send_Message_Result | dict:
 		sets.append('deleted = null') # un-delete the message if it's now being sent
 	if not message['sent']: # don't mess with an already set 'sent' value (i.e., message being edited, after sent)
 		sets.append(f'sent = {k_now}')
-		message['sent'] = datetime.utcnow().strftime(k_now_) # kludge - parties using the return from this function (message) sometimes need that 'sent' field, but it's not actually set upon update, in the message object itself, and it seems needless to do a fetch; so, just set the date the same as it is in the DB... (NOTE: # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!)
+		message['sent'] = datetime.utcnow().strftime(k_now_) # kludge - parties using the return from this function (the message) sometimes need that 'sent' field, but it's not actually set upon update, in the message object itself, and it seems needless to do a fetch; so, just set the date the same as it is in the DB... (NOTE: # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!)
+	else:
+		message['edited'] = 1 # kludge - parties using the return from this function (the message) need that 'edited' field, and, in fact, need it to be meaningful for a wide audience, such as: in order to "deliver" (inject) the message to all live clients, in real time.  This value for message['edited'] (1) makes the most sense if the message was ALREADY ['sent'], before, and yet here we are in send_message (obviously "re-sending", e.g., an edit). In another arc, e.g., when a user loads new messages, this ['edited'] value gets set to 1, for that user alone, fetching the message(s), when it lands in his "unstashed" (which only happens if it was previously in his "stashed").
 	if message['reply_chain_patriarch'] == message['id']: # if this is the patriarch of the thread, update its thread_updated
 		sets.append(f'thread_updated = {k_now}')
 	if sets: # only continue if there's actually something to set(); else no-op
 		sets = 'set ' + ', '.join(sets)
-		await _update1(dbc, f'update message {sets} where id = ?', args)
-	if message['reply_chain_patriarch'] != message['id']:
-		# Need to update reply_chain_patriarch's thread_updated field, too:
-		await _update1(dbc, f'update message set thread_updated = {k_now} where id = ?', (message['reply_chain_patriarch'],))
+		try:
+			await begin(dbc)
+			await _update1(dbc, f'update message {sets} where id = ?', args)
+			await dbc.execute('insert into message_unstashed (message, unstashed_for) select message, stashed_by from message_stashed where message_stashed.message = ?', (message_id,))
+			await dbc.execute('delete from message_stashed where message = ?', (message_id,))
+			if message['reply_chain_patriarch'] != message['id']:
+				# Need to update reply_chain_patriarch's thread_updated field, too:
+				await _update1(dbc, f'update message set thread_updated = {k_now} where id = ?', (message['reply_chain_patriarch'],))
+			await commit(dbc)
+		except SQL_Error:
+			await rollback(dbc)
+			raise
+
 	return message
 
 async def has_tags(dbc, message_id):
@@ -492,7 +503,7 @@ def test_strip_tags(self):
 	t('<div>hello</div><div>', 'hello...')
 	t('<div>hello</div><div>oh', 'hello...oh')
 
-_mega_message_select = "select message.id, message.message, message.deleted, GROUP_CONCAT(DISTINCT attachment.filename) as attachments, message.reply_chain_patriarch, message.teaser, parent.teaser as parent_teaser, sender.username as sender, sender.id as sender_id, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(DISTINCT tag.name) as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_stashed where stashed_by = ? and message = message.id) as stashed from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id left join message_attachment on message.id = message_attachment.message left join attachment on attachment.id = message_attachment.attachment" # NOTE that GROUP_CONCAT(DISTINCT tag.name) is the only way to get singles (not multiple copies) of group names - using GROUP_CONCAT(tag.name, ', ') would be nice, since the default doesn't place a space after the comma, but providing the ', ' argument only works if you do NOT use DISTINCT, which isn't an option for us.  Similar goes for attachment.filename
+_mega_message_select = "select message.id, message.message, message.deleted, GROUP_CONCAT(DISTINCT attachment.filename) as attachments, message.reply_chain_patriarch, message.teaser, parent.teaser as parent_teaser, sender.username as sender, sender.id as sender_id, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(DISTINCT tag.name) as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_peg where message = message.id) as pegged,  (select 1 from message_stashed where stashed_by = ? and message = message.id) as stashed, (select 1 from message_unstashed where unstashed_for = ? and message = message.id) as edited  from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id left join message_attachment on message.id = message_attachment.message left join attachment on attachment.id = message_attachment.attachment" # NOTE that GROUP_CONCAT(DISTINCT tag.name) is the only way to get singles (not multiple copies) of group names - using GROUP_CONCAT(tag.name, ', ') would be nice, since the default doesn't place a space after the comma, but providing the ', ' argument only works if you do NOT use DISTINCT, which isn't an option for us.  Similar goes for attachment.filename
 
 
 _message_tag_join = 'left join message_tag on message.id = message_tag.message left join tag on message_tag.tag = tag.id'
@@ -500,11 +511,11 @@ _message_tag_join = 'left join message_tag on message.id = message_tag.message l
 _user_tag_join = 'left join user_tag on tag.id = user_tag.tag'
 
 async def get_message(dbc, user_id, message_id):
-	return await _fetch1(dbc, f'{_mega_message_select} {_message_tag_join} where message.id = ?', (user_id, user_id, message_id,))
+	return await _fetch1(dbc, f'{_mega_message_select} {_message_tag_join} where message.id = ?', (user_id, user_id, user_id, message_id,))
 
 async def get_whole_thread(dbc, user_id, patriarch_id):
 	where = ['((message.sent is not null and user_tag.user = ?) or (message.author = ? and (message.reply_to is not null or message.sent is not null)))', 'message.reply_chain_patriarch = ?']
-	args = [user_id, user_id, user_id, user_id, patriarch_id] # first two user_ids are for sub-selects in _mega_message_select; third is for our 'where user.id = ?' (see line above)
+	args = [user_id, user_id, user_id, user_id, user_id, patriarch_id] # first three user_ids are for sub-selects in _mega_message_select; third is for our 'where user.id = ?' (see line above)
 	where = 'where ' + ' and '.join(where)
 	group_by = 'group by message.id' # query produces many rows for a message, one per tag for that message; this is required to consolidate to one row, but allows GROUP_CONCAT() to properly build the list of tags that match
 	asc_order = f'order by thread_updated asc, sent asc nulls last' # "nulls last" is for unsent messages, which don't yet have 'sent' set (so, it's null) - those should be "lowest" in the list
@@ -515,8 +526,8 @@ async def get_whole_thread(dbc, user_id, patriarch_id):
 
 
 async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = Filter.new, ignore = None, limit = k_default_resultset_limit):
-	where = []
-	args = [user_id, user_id,] # first two user_ids are for sub-selects in _mega_message_select; third is for our 'where user.id = ?' (see line above)
+	where = ['message.message != ""' ]
+	args = [user_id, user_id, user_id, ] # three user_ids are for sub-selects in _mega_message_select
 	if not include_trashed:
 		where.append('message.deleted is null')
 	if like:
@@ -650,7 +661,14 @@ async def set_reply_message_tags(dbc, message_id):
 
 async def stash_message(dbc, message_id, user_id):
 	if not await _fetch1(dbc, 'select 1 from message_stashed where message = ? and stashed_by = ?', (message_id, user_id)):
-		await _insert1(dbc, 'insert into message_stashed (message, stashed_by) values (?, ?)', (message_id, user_id))
+		try:
+			await begin(dbc)
+			await _insert1(dbc, 'insert into message_stashed (message, stashed_by) values (?, ?)', (message_id, user_id))
+			await dbc.execute('delete from message_unstashed where message = ? and unstashed_for = ?', (message_id, user_id)) # may be no-op, of course!
+			await commit(dbc)
+		except:
+			await rollback(dbc)
+			raise
 		return True
 	return False
 
