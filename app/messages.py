@@ -343,7 +343,7 @@ async def unpin(hd):
 @ws.handler(auth_func = active)
 async def show_whole_thread(hd):
 	ms = await db.get_whole_thread(hd.dbc, hd.uid, hd.payload['patriarch_id'])
-	await ws.send_content(hd, 'show_whole_thread', html.messages(ms, hd.uid, hd.admin, False, None, False, bg_class = 'bluish'), message_id = hd.payload['message_id'])
+	await ws.send_content(hd, 'show_whole_thread', html.messages(ms, hd.uid, hd.admin, False, None, False, whole_thread = True), message_id = hd.payload['message_id'])
 
 
 @ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!

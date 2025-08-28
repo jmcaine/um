@@ -363,7 +363,7 @@ def inline_reply_box(message_id, parent_mid, content = None):
 			t.div(id = f"reply_recipient_{message_id}", cls = 'hide', data_replyrecipient = 'A')
 	return result
 
-def messages(msgs, user_id, is_admin, stashable, last_thread_patriarch = None, skip_first_hr = False, searchtext = None, bg_class = None):
+def messages(msgs, user_id, is_admin, stashable, last_thread_patriarch = None, skip_first_hr = False, searchtext = None, whole_thread = False):
 	top = t.div(cls = 'container')
 	parents = {None: top}
 	for msg in msgs:
@@ -371,19 +371,19 @@ def messages(msgs, user_id, is_admin, stashable, last_thread_patriarch = None, s
 			last_thread_patriarch = msg['reply_chain_patriarch']
 			html_message = inline_reply_box(msg['id'], msg['reply_to'], msg['message'])
 		elif msg['sent']: # this test ensures we don't try to present draft messages that aren't replies - user has to re-engage with those in a different way ("new message", then select among drafts)... note that the data (msgs) DO include (or MAY include) non-reply (top-level parent) draft messages; we don't want those messages in our message list here
-			last_thread_patriarch, html_message = message(msg, user_id, is_admin, stashable, last_thread_patriarch, skip_first_hr, searchtext = searchtext, bg_class = bg_class)
+			last_thread_patriarch, html_message = message(msg, user_id, is_admin, stashable, last_thread_patriarch, skip_first_hr, searchtext = searchtext, whole_thread = whole_thread)
 		parent = parents.get(msg['reply_to'], top)
 		parent.add(html_message)
 		parents[msg['id']] = html_message
 	return top
 
-def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_first_hr = False, injection = False, searchtext = None, bg_class = None):
+def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_first_hr = False, injection = False, searchtext = None, whole_thread = False):
 	editable = msg['sender_id'] == user_id or is_admin
 	cls = 'container'
 	if injection:
 		cls += ' injection'
-	if bg_class:
-		cls += ' ' + bg_class
+	if whole_thread:
+		cls += ' bluish'
 	result = t.div(id = f"message_{msg['id']}", cls = cls)
 	with result:
 		continuation = False
@@ -430,7 +430,7 @@ def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_fir
 			edit_button = t.button(t.i(cls = 'i i-all'), title = text.recipients,
 								onclick = f"messages.change_recipients({msg['id']})") if editable else ''
 			thread_button = t.button(t.i(cls = 'i i-thread'), title = text.thread,
-								onclick = _send('messages', 'show_whole_thread', message_id = msg['id'], patriarch_id = msg['reply_chain_patriarch'])) # if searchtext else ''
+								onclick = _send('messages', 'show_whole_thread', message_id = msg['id'], patriarch_id = msg['reply_chain_patriarch'])) if not whole_thread else '' # no thread-button when whole-thread is already expanded
 			isodate = local_date_iso(msg["sent"]).isoformat()[:-6] # [:-6] to trim offset from end, as javascript code will expect a naive iso variant, and will interpret as "local"
 			t.div(cls = 'spacer')
 			t.span(t.b(' to '), edit_button, recipients, thread_button, ' · ')
