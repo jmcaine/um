@@ -253,13 +253,7 @@ async def deliver_message(hd, message):
 					#else: just take the defaults set above - the injection can go wherever it belongs, even if it's off screen
 				#NOTE: we DON'T add(mid) to state['loaded_msg_ids'] here, prematurely - within inject_deliver_new_message, client-side, decision may be made to NOT add the message to the DOM! (see injected_message() signal)
 				stashable = hd.task.state.get('filt') == Filter.new
-				edited = False
-				if stashable and message['stashed']: # this round-about-ly indicates that the message is "edited" TODO: use edit_history / resend_history DB (tables) to do this right!
-					await db.unstash_message(hd.dbc, mid, hd.uid) # just un-stash it; user will have to re-stash
-					message['stashed'] = False
-					edited = True
-				patriarch = None if reference_mid == None else message['reply_chain_patriarch'] # `None` means the message has no parent (is not a reply, so it will be "injected" at the bottom)
-				_, html_message = html.message(message, hd.uid, hd.admin, stashable, patriarch, injection = True, edited = edited) # when `patriarch` is not None, `message`'s own reply_chain_patriarch has to be the patriarch
+				_, html_message = html.message(message, hd.uid, hd.admin, stashable, injection = True) # NOTE: do NOT send message['reply_chain_patriarch'] as `thread_patriarch` arg - that would be a misunderstanding; that assignment will be made within html.message(), anyway, but the `thread_patriarch` arg is really for tracking a patriarch when painting message after message, not for injecting a message like this, right now, without any knowledge of the messages that are immediately above in the user's window'
 				await ws.send_content(hd, 'inject_deliver_new_message', html_message, new_mid = mid, reference_mid = reference_mid or 0, placement = placement)
 
 @ws.handler(auth_func = active)

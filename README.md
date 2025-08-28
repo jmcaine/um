@@ -18,7 +18,7 @@ System level needs:
 
 	$ apt install libgl1-mesa-glx sqlite3
 
-(Note, the pip installs below may rely on other apt-installs like build-essential, libffi-dev, python3-dev, ..., but the most recent install from scratch seemed to call out libgl and sqlite3 only)
+(Note, the pip installs below may rely on other apt-installs like build-essential, libffi-dev, python3-dev, ..., but the most recent install from scratch seemed to call out libgl, sqlite3, and poppler-utils only)
 
 Install Requirements.
 
