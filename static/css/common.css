@@ -222,6 +222,10 @@ fieldset, .info, .warning, .error {
 	background-color: #2a2;
 }
 
+.highlight {
+	background-color: #fff780;
+}
+
 div.yellow_border {
 	border: 2px;
 	border-color: #ffff9a;

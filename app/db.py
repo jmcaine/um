@@ -491,7 +491,7 @@ def make_teaser(content):
 	return strip_tags(content[:100])[:50] # [:50] to just operate on opening portion of content, but then, once stripped of tags, whittle down to [:20]; if only one of these was used, "taggy" content would be rather over-shrunk or under-taggy content would be rather under-shrunk
 
 def strip_tags(content):
-	return re.sub('<.*', '', re.sub('<[^<]+?>', '', re.sub('</[^<]+?>', '...', content)))
+	return re.sub(r'&nbsp;', '', re.sub(r'<.*', '', re.sub(r'<[^<]+?>', '', re.sub(r'</[^<]+?>', '...', content))))
 
 @addtest()
 def test_strip_tags(self):
@@ -503,7 +503,7 @@ def test_strip_tags(self):
 	t('<div>hello</div><div>', 'hello...')
 	t('<div>hello</div><div>oh', 'hello...oh')
 
-_mega_message_select = "select message.id, message.message, message.deleted, GROUP_CONCAT(DISTINCT attachment.filename) as attachments, message.reply_chain_patriarch, message.teaser, parent.teaser as parent_teaser, sender.username as sender, sender.id as sender_id, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(DISTINCT tag.name) as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_peg where message = message.id) as pegged,  (select 1 from message_stashed where stashed_by = ? and message = message.id) as stashed, (select 1 from message_unstashed where unstashed_for = ? and message = message.id) as edited  from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id left join message_attachment on message.id = message_attachment.message left join attachment on attachment.id = message_attachment.attachment" # NOTE that GROUP_CONCAT(DISTINCT tag.name) is the only way to get singles (not multiple copies) of group names - using GROUP_CONCAT(tag.name, ', ') would be nice, since the default doesn't place a space after the comma, but providing the ', ' argument only works if you do NOT use DISTINCT, which isn't an option for us.  Similar goes for attachment.filename
+_mega_message_select = lambda message: f"select message.id, {message}, message.deleted, GROUP_CONCAT(DISTINCT attachment.filename) as attachments, message.reply_chain_patriarch, message.teaser, parent.teaser as parent_teaser, sender.username as sender, sender.id as sender_id, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(DISTINCT tag.name) as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_peg where message = message.id) as pegged,  (select 1 from message_stashed where stashed_by = ? and message = message.id) as stashed, (select 1 from message_unstashed where unstashed_for = ? and message = message.id) as edited  from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id left join message_attachment on message.id = message_attachment.message left join attachment on attachment.id = message_attachment.attachment" # NOTE that GROUP_CONCAT(DISTINCT tag.name) is the only way to get singles (not multiple copies) of group names - using GROUP_CONCAT(tag.name, ', ') would be nice, since the default doesn't place a space after the comma, but providing the ', ' argument only works if you do NOT use DISTINCT, which isn't an option for us.  Similar goes for attachment.filename
 
 
 _message_tag_join = 'left join message_tag on message.id = message_tag.message left join tag on message_tag.tag = tag.id'
@@ -511,7 +511,7 @@ _message_tag_join = 'left join message_tag on message.id = message_tag.message l
 _user_tag_join = 'left join user_tag on tag.id = user_tag.tag'
 
 async def get_message(dbc, user_id, message_id):
-	return await _fetch1(dbc, f'{_mega_message_select} {_message_tag_join} where message.id = ?', (user_id, user_id, user_id, message_id,))
+	return await _fetch1(dbc, f'{_mega_message_select("message.message")} {_message_tag_join} where message.id = ?', (user_id, user_id, user_id, message_id,))
 
 async def get_whole_thread(dbc, user_id, patriarch_id):
 	where = ['((message.sent is not null and user_tag.user = ?) or (message.author = ? and (message.reply_to is not null or message.sent is not null)))', 'message.reply_chain_patriarch = ?']
@@ -519,7 +519,7 @@ async def get_whole_thread(dbc, user_id, patriarch_id):
 	where = 'where ' + ' and '.join(where)
 	group_by = 'group by message.id' # query produces many rows for a message, one per tag for that message; this is required to consolidate to one row, but allows GROUP_CONCAT() to properly build the list of tags that match
 	asc_order = f'order by thread_updated asc, sent asc nulls last' # "nulls last" is for unsent messages, which don't yet have 'sent' set (so, it's null) - those should be "lowest" in the list
-	query = f'{_mega_message_select} {_message_tag_join} {_user_tag_join} {where} {group_by} {asc_order}'
+	query = f'{_mega_message_select("message.message")} {_message_tag_join} {_user_tag_join} {where} {group_by} {asc_order}'
 	#l.debug(f'get_messages query: {query}    ... args: {args}')
 	# SEE: giant_sql_laid_out.txt to show/study the above laid out for straight comprehension.
 	return await _fetchall(dbc, query, args)
@@ -557,7 +557,8 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 	where = 'where ' + ' and '.join(where)
 	group_by = 'group by message.id' # query produces many rows for a message, one per tag for that message; this is required to consolidate to one row, but allows GROUP_CONCAT() to properly build the list of tags that match
 	asc_order = f'order by thread_updated asc, sent asc nulls last' # "nulls last" is for unsent messages, which don't yet have 'sent' set (so, it's null) - those should be "lowest" in the list
-	query = f'{_mega_message_select} {_message_tag_join} {_user_tag_join} {where} {group_by}'
+	msg_field = f'''REPLACE(message.message, "{like}", "<span class='highlight'>{like}</span>") as message''' if like else 'message.message'
+	query = f'{_mega_message_select(msg_field)} {_message_tag_join} {_user_tag_join} {where} {group_by}'
 
 	if filt == Filter.new:
 		query = f'{query} {asc_order} limit {limit}'
@@ -638,10 +639,12 @@ async def _get_xaa(dbc, select, where, where_arg, active, like, likes, join, ord
 	return result, others
 
 
-async def remove_tag_from_message(dbc, message_id, tag_id):
+async def remove_tag_from_message(dbc, message_id, tag_id, uid):
+	#TODO: add 'favorites', but not like this, as user_tag does not contain user-user records (for good reason)... not sure how to solve this well.... await _update1(dbc, 'update user_tag set popularity = MAX(0, popularity - 1) where user = ? and tag = ?', (uid, tag_id)) # sqlite apparently truncates, rather than overflow-wrapping; 2^63 is a long ways away, too
 	return await dbc.execute('delete from message_tag where message = ? and tag = ?', (message_id, tag_id))
 
-async def add_tag_to_message(dbc, message_id, tag_id):
+async def add_tag_to_message(dbc, message_id, tag_id, uid):
+	#TODO: add 'favorites', but not like this, as user_tag does not contain user-user records (for good reason)... not sure how to solve this well.... await _update1(dbc, 'update user_tag set popularity = popularity + 1 where user = ? and tag = ?', (uid, tag_id)) # sqlite apparently truncates, rather than overflow-wrapping; 2^63 is a long ways away, too
 	return await _insert1(dbc, 'insert into message_tag (message, tag) values (?, ?)', (message_id, tag_id))
 
 async def delete_message(dbc, message_id):
