@@ -363,6 +363,9 @@ def inline_reply_box(message_id, parent_mid, content = None):
 			t.div(id = f"reply_recipient_{message_id}", cls = 'hide', data_replyrecipient = 'A')
 	return result
 
+def no_messages(searchtext = None):
+	return t.div(t.p(text.not_found.format(searchtext = searchtext) if searchtext else text.no_messages))
+
 def messages(msgs, user_id, is_admin, stashable, last_thread_patriarch = None, skip_first_hr = False, searchtext = None, whole_thread = False):
 	top = t.div(cls = 'container')
 	parents = {None: top}

@@ -133,6 +133,8 @@ cant_send_message_without_recipients = 'Cannot send a message with no recipients
 message_sent = 'Message sent!'
 filter_for_more = '... (filter to see more...)'
 no_such_invitation_code = 'Uh oh!  No such invitation code can be found on record!  Please contact an admin.'
+not_found = 'No messages found that match the search "{searchtext}"'
+no_messages = 'No messages here!'
 
 reset_email_subject = 'Reset...'
 password_reset_code_email_body = "You requested a password reset code for um.openhome.school. Here it is: {code} <-- type or paste that code into your browser, where it's requested."

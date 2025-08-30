@@ -65,7 +65,11 @@ async def messages(hd, reverting = False):
 	await ws.send_sub_content(hd, 'filter_container', html.messages_filter(filt))
 	searchtext, ms = await _get_messages(hd)
 	news = filt == Filter.new
-	await ws.send_content(hd, 'messages', html.messages(ms, hd.uid, hd.admin, news, None, news, searchtext = searchtext), scroll_to_bottom = 0 if news else 1, filt = filt)
+	if ms:
+		await ws.send_content(hd, 'messages', html.messages(ms, hd.uid, hd.admin, news, None, news, searchtext = searchtext), scroll_to_bottom = 0 if news else 1, filt = filt)
+	else:
+		await ws.send_content(hd, 'messages', html.no_messages(searchtext))
+
 	if len(ms) > 0:
 		hd.task.state['last_thread_patriarch'] = ms[-1]['reply_chain_patriarch'] if news else ms[0]['reply_chain_patriarch'] # last message, if we're scrolling down; first if up
 
@@ -175,7 +179,7 @@ async def send_message(hd, message_id = None, banner = True):
 async def send_reply(hd):
 	mid = hd.payload['message_id']
 	if hd.payload.get('to_sender_only') == '1': # replier wishes to send only to the original (parent_mid) sender, and leave others out of it...
-		await db.add_tag_to_message(hd.dbc, mid, (await db.get_author_tag(hd.dbc, hd.payload['parent_mid']))['id'])
+		await db.add_tag_to_message(hd.dbc, mid, (await db.get_author_tag(hd.dbc, hd.payload['parent_mid']))['id'], hd.uid)
 	else: # replier wishes to send "to all original recipients", instead...
 		await db.set_reply_message_tags(hd.dbc, mid)
 	message = await db.send_message(hd.dbc, hd.uid, mid)
@@ -445,7 +449,7 @@ async def _send_message_draft_table(hd, drafts):
 async def _remove_or_add_tag_to_message(hd, db_func, banner_text):
 	tid = int(hd.payload['tag_id'])
 	mid = int(hd.payload['message_id'])
-	await db_func(hd.dbc, mid, tid)
+	await db_func(hd.dbc, mid, tid, hd.uid)
 	await ws.send_content(hd, 'sub_content', await message_tags_table(hd, mid), container = 'message_tags_table_container')
 	tag = await db.get_tag(hd.dbc, tid, 'name')
 	await ws.send_content(hd, 'detail_banner', html.info(banner_text.format(name = tag['name'])))
