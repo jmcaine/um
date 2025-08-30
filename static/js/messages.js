@@ -390,7 +390,10 @@ let messages = {
 
 	play_pdf: function(path) {
 		g_playing = path;
-		$('dialog_contents').innerHTML = '<embed src="' + path + '" width ="' + Math.floor(parent.innerWidth*8/9) + '" height = "' + Math.floor(parent.innerHeight*8/9) + '" />';
+		const width = Math.floor(parent.innerWidth*8/9);
+		const height = Math.floor(parent.innerHeight*8/9);
+		$('dialog_contents').innerHTML = '<object data="' + path + '" type="application/pdf" width="' + width + '" height="' + height + '"><embed src="' + path + '" width ="' + width + '" height = "' + height + '" /> <p>This browser does not support PDFs. Please download the PDF to view it: <a href="' + path + '">Download (click) here</a></p></object>';
+		// thanks http://jsgyan.blogspot.com/2017/12/how-to-display-pdf-in-html-web-page.html
 		$('dialog').showModal();
 	},
 
