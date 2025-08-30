@@ -9,14 +9,21 @@ video upload SPINNER
 
 auto "reminders", and birthdays (based on birth-dates!)
 
+SEARCH - replace found terms, in messages, with highlighted versions thereof (https://www.google.com/search?client=firefox-b-1-e&channel=entpr&q=faster+to+do+text+substitution+in+sqlite3+SQL+or+in+python+regex+after)
+	AT THE SAME TIME, get rid of &nbsp; in teaser text creation
 
 BUGS:
 
+	Sometimes getting this, when I've just come back from Admin (task_handler is users() or tags()), ALSO when coming back from an edit-message (task_handler edit_message()):
+			File "/home/ohs/um/um/app/messages.py", line 264, in injected_message
+				hd.task.state['loaded_msg_ids'].add(hd.payload['message_id'])
+				~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+			KeyError: 'loaded_msg_ids'
+	SO, CONFIRM that task.finish() is being called, where task is pop()'d
+
+	when you expand a thread (blue), the messages within no longer have "stash" buttons, even in new; at least the acutally-unstashed messages should...
+
 	when editing a message, injects should NOT be processed -- message list will be reloaded when edit is finished and messages (re-)sent, anyway, and underway-task is not 'messages', so task.state is not appropriate to receiving an injection
-
-	pasting images in replies and edits works differently (note duplicate text in pastes, lack of our special handling when pasting images, etc...)
-
-	"paste" plain text -- DOUBLE-pastes the text (perhaps it's using url-paste logic)
 
 	Keyboard covers contenteditable at bottom of screen!
 		one browser works (perhaps on its own) and one doesn't!?
@@ -26,8 +33,6 @@ BUGS:
 
 	filter isn't working to narrow drafts list down
 
-	new_reply_box.addEventListener('paste', (e) does NOT "run" for a re-loaded page, where the reply box is just re-presented, rather than created afresh.  (This is understandable, but not desirable)
-
 	reply to own reply - this creates a reply to self (only) - nobody else gets it; seems like a footgun
 		but note - you have to intentionally click to send to "sender only", rather than group, so probably not likely to happen (much)
 	auto-save doesn't save attachments that have been added (well... it just doesn't show them, right?  Upon send, I think they show up fine...?  True of an edited message, at least....)
@@ -35,11 +40,17 @@ BUGS:
 
 	"paste" attachments (https://www.google.com/search?client=firefox-b-1-e&channel=entpr&q=javascript+accept+image+paste+as+file+upload)
 		pasting multiple at a time doesn't work
+	* "paste" plain text -- DOUBLE-pastes the text (perhaps it's using url-paste logic)
+	* pasting images in replies and edits works differently (note duplicate text in pastes, lack of our special handling when pasting images, etc...)
+	* new_reply_box.addEventListener('paste', (e) does NOT "run" for a re-loaded page, where the reply box is just re-presented, rather than created afresh.  (This is understandable, but not desirable)
 
 	email regexp is broken: JS Console: "Unable to check <input pattern='(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)'> because the pattern is not a valid regexp: invalid character in class in regular expression""
 	SAME with phone!
 
 	child's birth-date -- not yet reverted to proper input time....
+
+	PDFs don't embed in some browsers
+	TEST improvement made 8/29
 
 use new edit_history and resend_history DB tables!
 
