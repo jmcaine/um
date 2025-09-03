@@ -15,12 +15,12 @@ import asyncio
 
 from aiohttp import web, WSMsgType, WSCloseCode
 
-from . import admin
+from . import admin # must import all modules that have @ws.handlers, so that code is run at init
 from . import db
 from . import emailer
 from . import fields
 from . import html
-from . import messages
+from . import messages # must import all modules that have @ws.handlers, so that code is run at init
 from . import settings
 from . import task
 from .task import Task
@@ -258,10 +258,10 @@ async def identify(hd):
 			await login(hd) #await login_or_join(hd)
 	else: # it's one or the other (idid and key were sent, or else idid and pub and hsh were sent)
 		# existing identity; resume:
-		user_id = await db.get_user_by_id_key(hd.dbc, idid, hd.payload['pub'], hd.payload['hsh'])
+		user_id = await db.get_user_by_id_key(hd.dbc, idid, hd.payload['pub'], hd.payload['hsh']) # note that if user is inactive, this will return None!
 		if user_id: # "persistent session" all in order, "auto log-in"... go straight to it:
 			hd.uid = user_id
-			hd.admin = await admin.authorize(hd, user_id)
+			hd.admin = await db.authorized(hd.dbc, hd.uid, 'admin')
 			await messages.messages(hd) # show main messages page
 		else:
 			await ws.send(hd, 'new_key')
@@ -274,27 +274,41 @@ async def login_or_join(hd):
 
 
 @ws.handler
-async def login(hd, reverting = False):
+async def login(hd, reverting = False, username = None):
 	if task.just_started(hd, login):
-		await ws.send(hd, 'fieldset', fieldset = html.login(fields.LOGIN).render())
+		await ws.send(hd, 'fieldset', fieldset = html.login(fields.LOGIN, username).render())
 	else:
 		data = hd.payload
 		if await valid.invalids(hd, data, fields.LOGIN, handle_invalid, 'banner'):
 			return # if there WERE invalids, banner was already sent within
 		#else all good, move on!
-		uid = await db.login(hd.dbc, hd.idid, data['username'], data['password'])
+		uid = await db.login(hd.dbc, hd.idid, data['username'], data['password']) # Note that if user is inactive, this will return None!
 		if uid:
 			hd.uid = uid
-			hd.admin = await admin.authorize(hd, uid)
+			hd.admin = await db.authorized(hd.dbc, hd.uid, 'admin')
 			await messages.messages(hd)
 		else:
 			await ws.send_content(hd, 'banner', html.error(text.invalid_login))
 
 @ws.handler
+async def switch_login(hd):
+	username = hd.payload['username']
+	uid = await db.get_user_id(hd.dbc, username)
+	if not hd.payload['require_password_on_switch']:
+		l.debug('!!!!!!')
+		hd.uid = uid
+		hd.admin = await db.authorized(hd.dbc, hd.uid, 'admin')
+		await db.force_login(hd.dbc, hd.idid, hd.uid)
+		await messages.messages(hd)
+	else:
+		l.debug('@@@@@')
+		await login(hd, username = username)
+
+@ws.handler
 async def redeem_invite(hd, code = None):
 	if task.just_started(hd, redeem_invite):
 		if uid := await db.get_user_id_by_reset_code(hd.dbc, code):
-			hd.uid = hd.task.state['user_id'] = uid
+			hd.task.state['user_id'] = uid
 			hd.task.state['code'] = code
 			await ws.send(hd, 'fieldset', fieldset = html.new_password(fields.NEW_PASSWORD).render())
 		else:
@@ -306,7 +320,8 @@ async def redeem_invite(hd, code = None):
 			await ws.send_content(hd, 'banner', html.error(text.Valid.password_match))
 		else:
 			await db.reset_user_password(hd.dbc, hd.task.state['user_id'], password)
-			hd.admin = await admin.authorize(hd, hd.uid)
+			hd.uid = hd.task.state['user_id']
+			hd.admin = await db.authorized(hd.dbc, hd.uid, 'admin')
 			await db.force_login(hd.dbc, hd.idid, hd.uid)
 			await messages.messages(hd)
 
@@ -354,7 +369,7 @@ async def forgot_password(hd):
 			else:
 				await db.reset_user_password(hd.dbc, hd.task.state['user_id'], password)
 				hd.uid = hd.task.state['user_id']
-				hd.admin = await admin.authorize(hd, hd.uid)
+				hd.admin = await db.authorized(hd.dbc, hd.uid, 'admin')
 				await db.force_login(hd.dbc, hd.idid, hd.uid)
 				await messages.messages(hd)
 
@@ -474,12 +489,11 @@ async def continue_join_or_invite(hd, send_username_fieldset):
 			await db.reset_user_password(hd.dbc, hd.task.state['user_id'], data['password'])
 			await db.commit(hd.dbc) # finally, commit it all
 			hd.uid = hd.task.state['user_id']
-			hd.admin = await admin.authorize(hd, hd.uid)
+			hd.admin = await db.authorized(hd.dbc, hd.uid, 'admin')
 			await db.force_login(hd.dbc, hd.idid, hd.uid)
 			task.clear_all(hd) # a "join" results in a clean slate - no prior tasks (note that, above, the end of invite, after the db-commit, we DO finish() to revert to prior task, which may be administrative user-list management.....
 			await ws.send(hd, 'hide_dialog') # safe; no need to finish() task - we just logged in (force_login) and have a clean slate
 			await messages.messages(hd) # show main messages page
-
 
 
 # Utils -----------------------------------------------------------------------

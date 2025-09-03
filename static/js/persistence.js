@@ -1,6 +1,5 @@
 
 ws.onopen = function(event) {
-	//ws_send({task: "init"});
 	identify();
 }
 

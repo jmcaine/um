@@ -211,7 +211,7 @@ fieldset, .info, .warning, .error {
 }
 
 .center {
-	margin: auto;
+	margin: 0 auto; /* doesn't seem to work, usually; use center_flex container instead..? */
 }
 
 .red_bg {
@@ -245,6 +245,12 @@ div.yellow_border {
 .changeable :hover {
 	background-color: #6567a8;
 	cursor: pointer;
+}
+
+.center_flex {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
 }
 
 

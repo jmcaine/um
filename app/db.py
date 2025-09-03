@@ -85,9 +85,9 @@ async def add_idid_key(dbc, idid, key):
 	return r.lastrowid
 
 async def get_user_by_id_key(dbc, idid, pub, hsh):
-	r = await _fetch1(dbc, f'select key, user from id_key where idid = ?', (idid,))
+	r = await _fetch1(dbc, f'select key, user from id_key join user on user.id = id_key.user where id_key.idid = ? and user.active = 1', (idid,))
 	if not r:
-		return None # not found; new idid-key pair is going to be needed (see add_idid_key())
+		return None # not found (id-key doesn't exist or user is (now) inactive); new idid-key pair is going to be needed (see add_idid_key())  NOTE: inactive user is an exception, and a potential point of confusion, but essential to security; must be able to deactivate a user, as an admin, for example, to disable login/auto-login and activity
 	await _update1(dbc, f'update id_key set touch_timestamp = {k_now} where idid = ?', (idid,))
 	hsh2 = sha256(r['key'].encode("utf-8") + pub.encode("utf-8")).hexdigest()
 	return r['user'] if hsh2 == hsh else None
@@ -100,6 +100,9 @@ async def get_person(dbc, id, fields: str | None = None):
 	if not fields:
 		fields = '*'
 	return await _fetch1(dbc, f'select {fields} from person where id = ?', (id,))
+
+async def get_user_person(dbc, uid):
+	return await _fetch1(dbc, 'select * from person join user on user.person = person.id where user.id = ?', (uid,))
 
 async def get_persons(dbc, like = None):
 	where = ' where ' + like if like else ''
@@ -144,15 +147,23 @@ async def add_child(dbc, guardian_person_id, first_name, last_name, birth_date):
 		await rollback(dbc)
 		raise
 
-async def get_child(dbc, child_person_id):
-	return await _fetch1(dbc, 'select id, first_name, last_name, birth_date from person where id = ?', (child_person_id,))
+async def get_child(dbc, child_person_id, include_is_user = False):
+	select = 'select person.id, first_name, last_name, birth_date'
+	args = [child_person_id]
+	if include_is_user:
+		select += ', (select 1 from user where user.person = ? and user.active = 1)'
+		args.append(child_person_id)
+	select += ' as is_user from person where id = ?'
+	return await _fetch1(dbc, select, args)
 
 async def set_child(dbc, child_person_id, first_name, last_name, birth_date):
 	return await _update1(dbc, 'update person set first_name = ?, last_name = ?, birth_date = ? where id = ?', (first_name, last_name, birth_date, child_person_id))
 
-
 async def get_person_children(dbc, guardian_person_id):
-	return await _fetchall(dbc, 'select person.id, first_name, last_name, birth_date from person join child_guardian on person.id = child_guardian.child where child_guardian.guardian = ?', (guardian_person_id,))
+	return await _fetchall(dbc, "select person.id, first_name, last_name, birth_date, case when user.active = 1 then username else '' end as username from person join child_guardian on person.id = child_guardian.child left join user on user.person = person.id where child_guardian.guardian = ?", (guardian_person_id,))
+
+async def get_user_children_ids(dbc, user_id):
+	return await _fetchall(dbc, 'select person.id from person join child_guardian on person.id = child_guardian.child join user on user.person = child_guardian.guardian where user.id  = ?', (user_id,))
 
 async def orphan_child(dbc, child_person_id, guardian_person_id): # i.e., "delete" child from family (but don't delete the base child record)
 	await dbc.execute(f'delete from child_guardian where child = ? and guardian = ?', (child_person_id, guardian_person_id))
@@ -186,7 +197,7 @@ async def username_exists(dbc, username):
 	return await _fetch1(dbc, 'select 1 from user where username = ?', (username,)) != None
 
 async def suggest_username(dbc, person):
-	username = username_base = '%s.%s' % (person['first_name'].lower(), person['last_name'].lower())
+	username = username_base = '%s.%s' % (person['first_name'].lower().replace(' ', ''), person['last_name'].lower().replace(' ', ''))
 	if await username_exists(dbc, username):
 		# First pass (first_name.last_name) didn't work, so try appending numbers...
 		for x in range(1, 100):
@@ -250,9 +261,8 @@ async def login(dbc, idid, username, password):
 
 async def force_login(dbc, idid, user_id):
 	# use, e.g., to auto-login user when user first creates self (don't ask for password again right after creation)
-	r = await _fetch1(dbc, 'select id from user where id = ? and active = 1', (user_id,))
-	if await _login(dbc, idid, r['id']):
-		return r['id']
+	if await _login(dbc, idid, user_id):
+		return user_id
 	#else...
 	return None
 
@@ -304,6 +314,7 @@ async def validate_reset_password_code(dbc, code, user_id):
 	return False
 
 async def get_user_id_by_reset_code(dbc, code):
+	# note that user need not be active at this point... active will be set to 1 in reset_user_password()
 	r = await _fetch1(dbc, 'select user from reset_code where code = ?', (code,))
 	if r:
 		return r['user']
@@ -311,11 +322,44 @@ async def get_user_id_by_reset_code(dbc, code):
 
 async def reset_user_password(dbc, uid, new_password):
 	# note that this re-activates a de-activated user (see deactivate_user())
+	# TODO: consider: this is a potential loophole: if a user is marked "not active" (user.active = 0), then a password-reset cycle, initiated by the user, will result in a reset_user_password() call that will re-activate user
 	return await _update1(dbc, 'update user set password = ?, active = 1 where id = ?', (_hashpw(new_password), uid,))
 
 async def deactivate_user(dbc, username):
 	# note: use reset_user_password() to re-activate
-	await dbc.execute('update user set active = 0 where username = ?', [username,])
+	await dbc.execute('delete from id_key where user == (select id from user where user.username = ?)', (username,))
+	return await _update1(dbc, 'update user set active = 0 where username = ?', (username,))
+
+async def set_child_password(dbc, child_person_id, password):
+	# Note: returns positively in THREE cases: if the user was deactivated ('' password), if the user's password was reset, or if the user was created (not already existing for child_person_id); returns False in any other case.
+	r = await _fetch1(dbc, 'select id, username from user where person = ?', (child_person_id,))
+	if r:
+		# user already exists, either set `password` or, if `password` is null, deactivate user:
+		if not password:
+			return await deactivate_user(dbc, r['username']) # should always succeed
+		else:
+			return await reset_user_password(dbc, r['id'], password)
+	else:
+		# user doesn't yet exist; create, as long as password is real
+		if password:
+			child = await get_person(dbc, child_person_id)
+			uid = await add_user(dbc, child_person_id, await suggest_username(dbc, child))
+			if uid:
+				return await reset_user_password(dbc, uid, password) # TODO?: this is second DB xaction; possibly commit/rollback?
+	return False
+
+async def get_other_logins(dbc, uid):
+	person = await get_user_person(dbc, uid)
+	pid = person['id']
+	guardian_pids = [r['guardian'] for r in (await _fetchall(dbc, 'select guardian from child_guardian where child = ?', (pid,)))]
+	if guardian_pids: # then uid is a child
+		children_pids = [r['child'] for r in (await _fetchall(dbc, 'select child from child_guardian where guardian in ({seq})'.format(seq = ','.join(['?']*len(guardian_pids))), guardian_pids))]
+	else: # uid is a guardian
+		guardian_pids = [pid,]
+		children_pids = [r['child'] for r in (await _fetchall(dbc, 'select child from child_guardian where guardian = ?', (pid,)))]
+	all_pids = guardian_pids + children_pids
+	return await _fetchall(dbc, 'select id, username, require_password_on_switch from user where person in ({seq})'.format(seq = ','.join(['?']*len(all_pids))), all_pids)
+
 
 
 async def add_role(dbc, user_id, role):
@@ -734,8 +778,7 @@ def _hashpw(password):
 	return bcrypt.hashpw(password.encode(), bcrypt.gensalt())
 
 async def _login(dbc, idid, user_id):
-	r = await _update1(dbc, f'update id_key set user = ?, login_timestamp = {k_now} where idid = ?', (user_id, idid))
-	return r
+	return await _update1(dbc, f'update id_key set user = ?, login_timestamp = {k_now} where idid = ?', (user_id, idid))
 
 def _add_like(like, fields, where, args):
 	if like:

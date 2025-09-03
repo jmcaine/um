@@ -88,7 +88,7 @@ def messages_topbar(admin):
 		#TODO: t.button('...', title = text.change_settings, onclick = _send('main', 'settings'))
 		if admin:
 			t.button('Ѫ', title = text.admin, onclick = _send('admin', 'users'))
-		t.button('Θ', title = text.logout, onclick = _send('main', 'logout'))
+		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
 	return result
 
 def users_tags_topbar():
@@ -97,7 +97,7 @@ def users_tags_topbar():
 		t.div(cls = 'spacer')
 		#TODO: t.button('...', title = text.change_settings, onclick = _send('main', 'settings'))
 		t.button(t.i(cls = 'i i-messages'), title = text.messages, onclick = _send('messages', 'messages')) # Ξ
-		t.button('Θ', title = text.logout, onclick = _send('main', 'logout'))
+		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
 	return result
 
 def _users_tags_mainbar(title, add_onclick):
@@ -161,10 +161,11 @@ def build_fields(fields, data = None, label_prefix = None, invalids = None):
 	return [field.html_field.build(name, data, label_prefix, invalids) \
 		for name, field in fields.items()]
 
-def login(fields):
+def login(fields, username = None):
 	button = _ws_submit_button(text.login, fields.keys())
 	forgot = t.button(text.forgot_password, onclick = _send('main', 'forgot_password'))
-	result = fieldset(text.login, build_fields(fields), button, forgot)
+	data = {'username': username} if username else None
+	result = fieldset(text.login, build_fields(fields, data), button, forgot)
 	return result
 
 def forgot_password(fields):
@@ -181,6 +182,22 @@ def new_password(fields):
 	button = _ws_submit_button(text.submit, fields.keys())
 	result = fieldset(text.new_password, build_fields(fields), button)
 	return result
+
+def session_options(other_logins):
+	result = t.div(cls = 'center_flex')
+	with result:
+		t.div(t.button(text.logout, onclick = _send('main', 'logout')))
+		t.div(t.button(text.account_details, onclick = _send('admin', 'my_account_detail')))
+		#t.button(t.i(cls = 'i i-clear'), title = text.clear, style = 'max-height: 10px', onclick = f'''(function() {{ clear_filtersearch(); {go('""')}; }})()''') # Ξ
+		t.hr()
+		t.div(text.switch_to)
+		for user in other_logins:
+			t.div(t.button(user['username'], onclick = _send('main', 'switch_login', username = f'''"{user['username']}"''', require_password_on_switch = user['require_password_on_switch'])))
+		t.hr()
+		t.div(_cancel_button())
+
+	return result
+
 
 def filterbox(parent, filtersearch_checkboxes):
 	kwargs = dict([(name, f'$("{name}").checked') for name in filtersearch_checkboxes.keys()])
@@ -222,7 +239,7 @@ def user_table(users):
 		for user in users:
 			with t.tr(cls = 'midlin'):
 				t.td(user['username'], cls = 'pointered', align = 'right', onclick = user_detail(user))
-				t.td(f"{user['first_name']} {user['last_name']}", cls = 'pointered', align = 'left', onclick = _send('admin', 'person_detail', id = user['person_id']))
+				t.td(f"{user['first_name']} {user['last_name']}", cls = 'pointered', align = 'left', onclick = _send('admin', 'person_detail', person_id = user['person_id']))
 				t.td(datetime.fromisoformat(user['created']).strftime('%m/%d/%Y %H:%M'), align = 'center')
 				t.td(user['verified'] or '', cls = 'pointered', align = 'center', onclick = user_detail(user))
 				t.td(_yes_or_no(int(user['active'])), align = 'center', cls = 'pointered', onclick = user_detail(user))
@@ -281,10 +298,15 @@ def more_person_detail(person_id, emails, phones, spouse, children):
 			t.legend(text.children)
 			for child in children:
 				bd = datetime.fromisoformat(child['birth_date']).strftime('%m/%d/%Y')
+				child_line = f"{child['first_name']} {child['last_name']} ({bd})"
+				if child['username']:
+					child_line += f" - {child['username']}"
 				t.div(t.span(
-					f"{child['first_name']} {child['last_name']} ({bd})",
+					child_line,
+					t.br(),
 					t.button(text.edit, onclick = _send('admin', 'child_detail', person_id = person_id, id = child['id'])),
 					t.button(text.delete, onclick = f'admin.orphan_child({child["id"]}, {person_id})'),
+					t.hr(),
 				))
 			t.div(t.button(text.add, onclick = _send('admin', 'child_detail', person_id = person_id, id = 0)))
 		t.div(_cancel_button(text.done)) # cancel just reverts to prior task; added/changed emails/phones are saved - those deeds are done, we're just "closing" this more_person_detail portal
@@ -565,6 +587,7 @@ class Input: # HTML input element, `frozen` with the intention of avoiding side-
 	autofocus: bool = False # True if this field should get autofocus upon form load
 	attrs: dict = dataclass_field(default_factory = dict) # other HTML field attrs like 'maxlength', 'autocomplete', etc.
 	bool_attrs: list = dataclass_field(default_factory = list) # other HTML bool attrs like 'readonly'
+	prompt_note: str | None = None
 
 	def __post_init__(self):
 		if self.autofocus:
@@ -606,5 +629,7 @@ class Input: # HTML input element, `frozen` with the intention of avoiding side-
 			result = i
 		if invalids and name in invalids.keys():
 			result = t.div(result, t.span(invalids[name], cls = 'invalid container'))
+		elif self.prompt_note: # don't really need both - prompt_note is good clarification for field on first encounter, but no need to duplicate if we've got invalids and need to draw focus to that (above)....
+			result = t.div(t.div(self.prompt_note), result, cls = 'container')
 		return result
 

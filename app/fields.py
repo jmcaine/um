@@ -48,6 +48,7 @@ PHONE = {
 
 CHILD = PERSON | {
 	'birth_date': Field(Validator(True), html.Input(type_ = 'date')),
+	'password': Field(Validator(False), html.Input(prompt_note = text.child_password)),
 }
 
 USERNAME_VALIDATOR = Validator(True, valid.USERNAME, 3, 20, text.Valid.username)

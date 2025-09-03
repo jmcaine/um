@@ -28,6 +28,7 @@ BUGS:
 	Keyboard covers contenteditable at bottom of screen!
 		one browser works (perhaps on its own) and one doesn't!?
 		g: android keyboard web page viewport bottom javascript
+		https://developer.mozilla.org/en-US/docs/Web/API/VirtualKeyboard_API
 
 	since messages save periodically while being edited, if another user loads/views a message mid-edit, they see the message before it's finished and sent!
 

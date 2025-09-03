@@ -25,7 +25,6 @@ from . import task
 from . import text
 from . import ws
 
-from .admin import authorize as is_admin
 from .messages_const import *
 
 from .const import *
@@ -33,9 +32,6 @@ from .const import *
 
 l = logging.getLogger(__name__)
 
-
-async def active(hd, user_id):
-	return (await db.get_user(hd.dbc, user_id, 'active'))['active']
 
 
 @ws.handler
@@ -47,7 +43,7 @@ async def enter_module(hd):
 async def exit_module(hd):
 	hd.state['message_notify'] = NewMessageNotify.tease
 
-@ws.handler(auth_func = active)
+@ws.handler
 async def messages(hd, reverting = False):
 	if hd.rq.app['active_module'] != 'messages': # frequently, messages() is called from elsewhere (other than user request), e.g., as a default startup.  In this case, the normal framework caller of our enter_module() doesn't get called, so we need to call it; this is the exception, and is because this method is a little special
 		await enter_module(hd)
@@ -56,7 +52,7 @@ async def messages(hd, reverting = False):
 
 	just_started = task.just_started(hd, messages) # have to do this first, before referencing hd.task.state, below
 	if just_started:
-		await ws.send_sub_content(hd, 'topbar_container', html.messages_topbar(await is_admin(hd, hd.uid)))
+		await ws.send_sub_content(hd, 'topbar_container', html.messages_topbar(hd.admin))
 		await ws.send_content(hd, 'content', html.messages_container())
 		# sending the above can happen almost immediately; as message lookup might take a moment longer, we'll do it only subsequently (below), even for the very first load, so that the user at least has the framework of the page to see, and the "loading messages..." to see (or, hopefully not, if things are fast enough!)
 
@@ -74,7 +70,7 @@ async def messages(hd, reverting = False):
 		hd.task.state['last_thread_patriarch'] = ms[-1]['reply_chain_patriarch'] if news else ms[0]['reply_chain_patriarch'] # last message, if we're scrolling down; first if up
 
 
-@ws.handler(auth_func = active)
+@ws.handler
 async def more_new_messages(hd): # inspired by "down-scroll" below "bottom", or a screen that isn't full of messages and can take more new ones on bottom
 	if hd.task.state.get('filt') != Filter.new:
 		return # nothing to do - all filters except `new` show the "most current (most currently stashed)" at the bottom, in the first load, so there are never any "newer" messages to load beyond those
@@ -86,7 +82,7 @@ async def more_new_messages(hd): # inspired by "down-scroll" below "bottom", or 
 	else:
 		await ws.send(hd, 'no_more_new_messages')
 
-@ws.handler(auth_func = active)
+@ws.handler
 async def more_old_messages(hd): # inspired by "up-scroll" above "top"
 	#!!!DEBUG
 	if 'filt' not in hd.task.state:
@@ -115,7 +111,7 @@ async def _get_messages(hd):
 	return searchtext, ms
 
 
-@ws.handler(auth_func = active)
+@ws.handler
 async def new_message(hd, reverting = False):
 	if reverting:
 		await task.finish(hd) # just bump back another step (no value in reverting to this transient task)
@@ -133,11 +129,11 @@ async def new_message(hd, reverting = False):
 		# user did something like filtersearch update, and we're back here with a new set of drafts to present:
 		await _send_message_draft_table(hd, drafts)
 
-@ws.handler(auth_func = active)
+@ws.handler
 async def brand_new_message(hd):
 	await edit_message(hd, False, await db.new_message(hd.dbc, hd.uid))
 
-@ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
+@ws.handler # TODO: also confirm user is owner of this message (or admin)!
 async def edit_message(hd, reverting = False, message_id = None):
 	first = task.just_started(hd, edit_message)
 	message_id = hd.task.state['message_id'] = message_id or (hd.payload.get('message_id') or hd.task.state.get('message_id')) # using hd.task.state['message_id'] as a preserver - we may detour on a subtask, then revert here, and have lost arg message_id or payload message_id
@@ -153,11 +149,11 @@ async def edit_message(hd, reverting = False, message_id = None):
 
 _strip_trailing_br = lambda content: content.rstrip('<br>') # TODO: make use of this!
 
-@ws.handler(auth_func = active)
+@ws.handler
 async def save_wip(hd):
 	await db.save_message(hd.dbc, hd.payload['message_id'], hd.payload['content'])
 
-@ws.handler(auth_func = active)
+@ws.handler
 async def send_message(hd, message_id = None, banner = True):
 	mid = message_id or hd.payload.get('message_id')
 	message = await db.send_message(hd.dbc, hd.uid, mid)
@@ -175,7 +171,7 @@ async def send_message(hd, message_id = None, banner = True):
 	if banner:
 		await ws.send_content(hd, 'banner', html.info(text.message_sent))
 
-@ws.handler(auth_func = active)
+@ws.handler
 async def send_reply(hd):
 	mid = hd.payload['message_id']
 	if hd.payload.get('to_sender_only') == '1': # replier wishes to send only to the original (parent_mid) sender, and leave others out of it...
@@ -202,7 +198,7 @@ class Active_Reply:
 	parent_mid: int
 	patriarch_mid: int | None
 
-@ws.handler(auth_func = active)
+@ws.handler
 async def compose_reply(hd):
 	parent_mid = hd.payload['message_id']
 	patriarch_id = await db.get_patriarch_message_id(hd.dbc, parent_mid)
@@ -260,14 +256,14 @@ async def deliver_message(hd, message):
 				_, html_message = html.message(message, hd.uid, hd.admin, stashable, injection = True) # NOTE: do NOT send message['reply_chain_patriarch'] as `thread_patriarch` arg - that would be a misunderstanding; that assignment will be made within html.message(), anyway, but the `thread_patriarch` arg is really for tracking a patriarch when painting message after message, not for injecting a message like this, right now, without any knowledge of the messages that are immediately above in the user's window'
 				await ws.send_content(hd, 'inject_deliver_new_message', html_message, new_mid = mid, reference_mid = reference_mid or 0, placement = placement)
 
-@ws.handler(auth_func = active)
+@ws.handler
 async def injected_message(hd):
 	if 'loaded_msg_ids' not in hd.task.state:
 		l.error(f'!! loaded_msg_ids NOT in hd.task.state; hd.task.handler: {hd.task.handler} ... uid: {hd.uid}')
 		l.error(traceback.format_exc())
 	hd.task.state['loaded_msg_ids'].add(hd.payload['message_id'])
 
-@ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
+@ws.handler # TODO: also confirm user is owner of this message (or admin)!
 async def delete_draft_in_list(hd):
 	# NOTE: not an independent task; processing expected from within 'new_message' task, during choose_message_draft processing
 	await db.delete_message(hd.dbc, hd.payload['message_id'])
@@ -278,13 +274,13 @@ async def delete_draft_in_list(hd):
 	await ws.send_content(hd, 'detail_banner', html.info(banner))
 	await _send_message_draft_table(hd, drafts)
 
-@ws.handler(auth_func = active)
+@ws.handler
 async def delete_draft(hd):
 	mid = hd.payload['message_id']
 	await db.delete_message(hd.dbc, mid)
 	await ws.send_content(hd, 'banner', html.info(text.message_deleted))
 
-@ws.handler(auth_func = active)
+@ws.handler
 async def delete_message(hd):
 	mid = hd.payload['message_id']
 	await db.delete_message(hd.dbc, mid)
@@ -295,7 +291,7 @@ async def delete_message(hd):
 	if hd.task and hd.task.handler == edit_message:
 		await task.finish(hd) # actually finishing the edit_message task, here!
 
-@ws.handler(auth_func = active)
+@ws.handler
 async def message_tags(hd, reverting = False, send_after = False):
 	just_started = task.just_started(hd, message_tags)
 	send_after = hd.task.state['send_after'] = hd.payload.get('send_after', hd.task.state.get('send_after', send_after)) # prefer payload arg, then state already recorded, and, finally, if nothing, default to direct function arg; this preference order IS quite significant
@@ -324,33 +320,33 @@ async def message_tags_table(hd, mid):
 													include_others = hd.uid)
 	return html.message_tags_table(utags, otags, mid, limit)
 
-@ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
+@ws.handler # TODO: also confirm user is owner of this message (or admin)!
 async def remove_tag_from_message(hd):
 	await _remove_or_add_tag_to_message(hd, db.remove_tag_from_message, text.removed_tag_from_message)
 
-@ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
+@ws.handler # TODO: also confirm user is owner of this message (or admin)!
 async def add_tag_to_message(hd):
 	await _remove_or_add_tag_to_message(hd, db.add_tag_to_message, text.added_tag_to_message)
 
-@ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
+@ws.handler # TODO: also confirm user is owner of this message (or admin)!
 async def stash(hd):
 	await db.stash_message(hd.dbc, hd.payload['message_id'], hd.uid)
 
-@ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
+@ws.handler # TODO: also confirm user is owner of this message (or admin)!
 async def pin(hd):
 	await db.pin_message(hd.dbc, hd.payload['message_id'], hd.uid)
 
-@ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
+@ws.handler # TODO: also confirm user is owner of this message (or admin)!
 async def unpin(hd):
 	await db.unpin_message(hd.dbc, hd.payload['message_id'], hd.uid)
 
-@ws.handler(auth_func = active)
+@ws.handler
 async def show_whole_thread(hd):
 	ms = await db.get_whole_thread(hd.dbc, hd.uid, hd.payload['patriarch_id'])
 	await ws.send_content(hd, 'show_whole_thread', html.messages(ms, hd.uid, hd.admin, False, None, False, whole_thread = True), message_id = hd.payload['message_id'])
 
 
-@ws.handler(auth_func = active) # TODO: also confirm user is owner of this message (or admin)!
+@ws.handler # TODO: also confirm user is owner of this message (or admin)!
 async def upload_files(hd, meta, payload):
 	message_id = meta['partition_id'] # partition scheme, for message file-attachments, is the message_id
 	pos = 0

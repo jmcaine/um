@@ -30,7 +30,7 @@ def handler(func, auth_func = None):
 	@wraps(func)
 	async def inner(hd, *args, **kwargs):
 		try:
-			if auth_func and not await auth_func(hd, hd.uid):
+			if auth_func and not await auth_func(hd):
 				await send_content(hd, 'banner', html.error(text.auth_required))
 				return # done
 			#else:
