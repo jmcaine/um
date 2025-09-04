@@ -308,6 +308,7 @@ let messages = {
 
 	time_updater: null,
 	show_messages: function(content, scroll_to_bottom, filtering_banner) {
+		hide_dialog();
 		set_sub_content('messages_container', content);
 		if (filtering_banner) {
 			set_sub_content('banner_container', filtering_banner);

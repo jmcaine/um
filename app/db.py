@@ -102,7 +102,7 @@ async def get_person(dbc, id, fields: str | None = None):
 	return await _fetch1(dbc, f'select {fields} from person where id = ?', (id,))
 
 async def get_user_person(dbc, uid):
-	return await _fetch1(dbc, 'select * from person join user on user.person = person.id where user.id = ?', (uid,))
+	return await _fetch1(dbc, 'select person.* from person join user on user.person = person.id where user.id = ?', (uid,))
 
 async def get_persons(dbc, like = None):
 	where = ' where ' + like if like else ''
@@ -355,11 +355,16 @@ async def get_other_logins(dbc, uid):
 	if guardian_pids: # then uid is a child
 		children_pids = [r['child'] for r in (await _fetchall(dbc, 'select child from child_guardian where guardian in ({seq})'.format(seq = ','.join(['?']*len(guardian_pids))), guardian_pids))]
 	else: # uid is a guardian
-		guardian_pids = [pid,]
 		children_pids = [r['child'] for r in (await _fetchall(dbc, 'select child from child_guardian where guardian = ?', (pid,)))]
 	all_pids = guardian_pids + children_pids
-	return await _fetchall(dbc, 'select id, username, require_password_on_switch from user where person in ({seq})'.format(seq = ','.join(['?']*len(all_pids))), all_pids)
+	try: all_pids.remove(pid)
+	except ValueError: pass
+	r = await _fetchall(dbc, 'select id, username, require_password_on_switch, color from user where active = 1 and person in ({seq})'.format(seq = ','.join(['?']*len(all_pids))), all_pids)
+	return r
 
+async def get_user_color(dbc, username):
+	r = await _fetch1(dbc, 'select color from user where username = ?', (username,))
+	return r['color'] if (r and r['color']) else '#ffffff'
 
 
 async def add_role(dbc, user_id, role):

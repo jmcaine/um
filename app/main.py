@@ -295,13 +295,12 @@ async def switch_login(hd):
 	username = hd.payload['username']
 	uid = await db.get_user_id(hd.dbc, username)
 	if not hd.payload['require_password_on_switch']:
-		l.debug('!!!!!!')
 		hd.uid = uid
 		hd.admin = await db.authorized(hd.dbc, hd.uid, 'admin')
 		await db.force_login(hd.dbc, hd.idid, hd.uid)
+		await ws.send(hd, 'set_topbar_color', color = await db.get_user_color(hd.dbc, username))
 		await messages.messages(hd)
 	else:
-		l.debug('@@@@@')
 		await login(hd, username = username)
 
 @ws.handler

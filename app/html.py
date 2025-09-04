@@ -164,7 +164,7 @@ def build_fields(fields, data = None, label_prefix = None, invalids = None):
 def login(fields, username = None):
 	button = _ws_submit_button(text.login, fields.keys())
 	forgot = t.button(text.forgot_password, onclick = _send('main', 'forgot_password'))
-	data = {'username': username} if username else None
+	data = {'username': username, 'password': ''} if username else None
 	result = fieldset(text.login, build_fields(fields, data), button, forgot)
 	return result
 
@@ -186,15 +186,16 @@ def new_password(fields):
 def session_options(other_logins):
 	result = t.div(cls = 'center_flex')
 	with result:
+		t.div(_cancel_button(text.cancel_return))
 		t.div(t.button(text.logout, onclick = _send('main', 'logout')))
 		t.div(t.button(text.account_details, onclick = _send('admin', 'my_account_detail')))
 		#t.button(t.i(cls = 'i i-clear'), title = text.clear, style = 'max-height: 10px', onclick = f'''(function() {{ clear_filtersearch(); {go('""')}; }})()''') # Ξ
 		t.hr()
 		t.div(text.switch_to)
 		for user in other_logins:
-			t.div(t.button(user['username'], onclick = _send('main', 'switch_login', username = f'''"{user['username']}"''', require_password_on_switch = user['require_password_on_switch'])))
+			color = user['color'] if user['color'] else '#000000'
+			t.div(t.button(user['username'], style = f'background-color: {color}', onclick = _send('main', 'switch_login', username = f'''"{user['username']}"''', require_password_on_switch = user['require_password_on_switch'])))
 		t.hr()
-		t.div(_cancel_button())
 
 	return result
 

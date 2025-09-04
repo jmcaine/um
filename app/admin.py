@@ -20,8 +20,8 @@ l = logging.getLogger(__name__)
 async def authorize_admin(hd):
 	return hd.admin
 
-async def authorize_self_or_admin(hd):
-	return hd.uid == int(hd.payload.get('user_id', 0)) or hd.admin
+async def authorize_logged_in(hd):
+	return hd.uid
 
 async def authorize_family_or_admin(hd):
 	payload_person_id = int(hd.payload.get('person_id', 0))
@@ -129,7 +129,7 @@ async def more_person_detail(hd, reverting = False):
 		await ws.send_content(hd, 'dialog', html.more_person_detail(person_id, emails, phones, spouse, children))
 	# Refactor NOTE: COULD put all of the code that's under 'not await task.finished' into top block, as long as 'if' check there also checks for 'reverting' - in both cases, send_content(...'dialog'...) is needed to repaint the whole dialog.  The only REAL purpose for the 'not await task.finished' block of code would be, for instance, to manage deletions and, possibly, re-ordering of emails/phones -- in such cases, COULD re-draw ONLY the emails and phones blocks, NOT the entire dialog.  This, in turn, might only be a useful advance if a filtersearch was offered at the top of the dialog, allowing live-updated email/phone lists based on filtersearch text; then, we wouldn't want to redraw the whole dialog and re-draw (and re-populate) the filtersearch box
 
-@ws.handler(auth_func = authorize_self_or_admin)
+@ws.handler
 async def session(hd, reverting = False):
 	if reverting:
 		await task.finish(hd) # just bump back another step - no value in returning to this dialog
@@ -139,7 +139,7 @@ async def session(hd, reverting = False):
 	if not await task.finished(hd):
 		await ws.send_content(hd, 'dialog', html.session_options(await db.get_other_logins(hd.dbc, hd.uid)))
 
-@ws.handler(auth_func = authorize_self_or_admin)
+@ws.handler(auth_func = authorize_logged_in)
 async def my_account_detail(hd, reverting = False):
 	if task.just_started(hd, my_account_detail):
 		pass
@@ -166,7 +166,7 @@ async def phone_detail(hd, reverting = False):
 
 @ws.handler(auth_func = authorize_admin)
 async def child_detail(hd, reverting = False):
-	await x_detail(hd, child_detail, fields.CHILD, _get_tweeked_child, _set_tweaked_child, db.add_child, text.child, reverting)
+	await x_detail(hd, child_detail, fields.CHILD, _get_tweeked_child, _set_tweaked_child, _add_tweaked_child, text.child, reverting)
 
 async def _get_tweeked_child(dbc, child_person_id):
 	r = await db.get_child(dbc, child_person_id, True)
@@ -175,6 +175,13 @@ async def _get_tweeked_child(dbc, child_person_id):
 
 async def _set_tweaked_child(dbc, child_person_id, first_name, last_name, birth_date, password):
 	await db.set_child(dbc, child_person_id, first_name, last_name, birth_date)
+	await _set_child_password(dbc, child_person_id, password)
+
+async def _add_tweaked_child(dbc, guardian_person_id, first_name, last_name, birth_date, password):
+	pid = await db.add_child(dbc, guardian_person_id, first_name, last_name, birth_date)
+	await _set_child_password(dbc, pid, password)
+
+async def _set_child_password(dbc, child_person_id, password):
 	if not password or not all(c == text.pretend_password[0] for c in password): # all() returns True if test string is '' (empty); we want "in" for empty OR real; pseudocod: if (no password string) OR (some real-looking password string)...
 		await db.set_child_password(dbc, child_person_id, password)
 

@@ -1,3 +1,7 @@
+
+user (2 new columns) and user_color table
+
+
 MAKE a button to set the default reply-to initial state, so that replies will go to the original sender or whole group, by default, based on your setting when you send the message.
 
 SMS Texting!

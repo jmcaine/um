@@ -28,6 +28,7 @@ function set_page(content) {
 }
 
 function set_content(content, clear_banner = true, focus_top_inp = true) {
+	hide_dialog();
 	_set_content($('content_container'), content, clear_banner, focus_top_inp);
 }
 
@@ -76,4 +77,8 @@ function clear_filtersearch() {
 	let fs = $("filtersearch");
 	fs.value = "";
 	fs.focus();
+}
+
+function set_topbar_color(color) {
+	$('topbar_container').style.backgroundColor = color;
 }

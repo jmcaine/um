@@ -38,6 +38,9 @@ ws.onmessage = function(event) {
 		case "hide_dialog":
 			hide_dialog();
 			break;
+		case "set_topbar_color":
+			set_topbar_color(payload.color);
+			break;
 		case "edit_message":
 			messages.edit_message(payload.content, payload.message_id);
 			break;
