@@ -286,6 +286,7 @@ async def login(hd, reverting = False, username = None):
 		if uid:
 			hd.uid = uid
 			hd.admin = await db.authorized(hd.dbc, hd.uid, 'admin')
+			await ws.send(hd, 'set_topbar_color', color = await db.get_user_color(hd.dbc, username))
 			await messages.messages(hd)
 		else:
 			await ws.send_content(hd, 'banner', html.error(text.invalid_login))
