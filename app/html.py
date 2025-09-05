@@ -193,7 +193,7 @@ def session_options(other_logins):
 		t.hr()
 		t.div(text.switch_to)
 		for user in other_logins:
-			color = user['color'] if user['color'] else '#000000'
+			color = user['color'] if (user['color'] and user['color'] != '#ffffff') else '#919191'
 			t.div(t.button(user['username'], style = f'background-color: {color}', onclick = _send('main', 'switch_login', username = f'''"{user['username']}"''', require_password_on_switch = user['require_password_on_switch'])))
 		t.hr()
 
