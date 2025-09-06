@@ -327,8 +327,17 @@ async def reset_user_password(dbc, uid, new_password):
 
 async def deactivate_user(dbc, username):
 	# note: use reset_user_password() to re-activate
-	await dbc.execute('delete from id_key where user == (select id from user where user.username = ?)', (username,))
-	return await _update1(dbc, 'update user set active = 0 where username = ?', (username,))
+	user_id = '(select id from user where user.username = ?)'
+	try:
+		await begin(dbc)
+		await dbc.execute(f'delete from id_key where user = {user_id}', (username,))
+		await _update1(dbc, 'update user set active = 0 where username = ?', (username,))
+		await _update1(dbc, f'update tag set active = 0 where user = {user_id}', (username,))
+		await commit(dbc)
+		return True # superfluous, at best (?!)
+	except SQL_Error:
+		await rollback(dbc)
+		raise
 
 async def set_child_password(dbc, child_person_id, password):
 	# Note: returns positively in THREE cases: if the user was deactivated ('' password), if the user's password was reset, or if the user was created (not already existing for child_person_id); returns False in any other case.
