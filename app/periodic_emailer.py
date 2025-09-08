@@ -29,7 +29,7 @@ unstashed_by_others_sql = '''
 	join user on user_tag.user = user.id
 	where not exists (select 1 from message_stashed where message.id = message_stashed.message and user.id = message_stashed.stashed_by)
 	and message.author = ? and message.deleted is null
-	group by message.id
+	group by message.id order by message.id desc
 '''
 
 users = '''
@@ -48,7 +48,7 @@ def run():
 		unstashed_count_lines = [f"{count['name']} - {count['count']} unstashed messages" for count in unstashed_counts] if unstashed_counts else []
 		unstashed_total_count = sum([count['count'] for count in unstashed_counts]) if unstashed_counts else 0
 		unstashed_by_others = dbc.execute(unstashed_by_others_sql, (u['id'],))
-		unstashed_by_others_lines = [f"""{unstashed['users']} has/have not yet read your message: "{unstashed['teaser']}".""" for unstashed in unstashed_by_others] if unstashed_by_others else []
+		unstashed_by_others_lines = [f"""Your message: "{unstashed['teaser']}" - the following have not yet read: {unstashed['users']}""" for unstashed in unstashed_by_others] if unstashed_by_others else []
 		paragraphs = [
 			f"{u['first_name']} {u['last_name']},",
 			f"You currently have {unstashed_total_count} unstashed messages." + ('  Go to <a href="https://um.openhome.school/">https://um.openhome.school/</a> to stash some messages!' if unstashed_total_count else ""),
