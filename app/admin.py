@@ -100,7 +100,7 @@ async def user_detail(hd, reverting = False):
 		await ws.send_content(hd, 'banner', html.info(text.change_detail_success.format(change = f'"{un}"')))
 
 
-@ws.handler(auth_func = authorize_admin)
+@ws.handler(auth_func = authorize_family_or_admin)
 async def person_detail(hd, reverting = False):
 	if reverting:
 		await task.finish(hd) # just bump back another step - no value in returning to this name-edit dialog when name-editing was not the objective in the first place (email or phone number or something were); note that this is the RIGHT way to do it - we never want to "call back" (e.g., from more_person_detail() to users(), skipping this) for TWO reasons - 1) it would create a false and ever-growing task stack!, and 2) we don't necessarily know that, e.g., more_person_detail came from users() - it could have come from an individual user clicking somewhere to edit his/her own phones/emails, and then the need would be to wherever THEY came from.
@@ -119,7 +119,7 @@ async def person_detail(hd, reverting = False):
 		await task.finish(hd)
 		await ws.send_content(hd, 'banner', html.info(text.change_detail_success.format(change = f'{first} {last}')))
 
-@ws.handler(auth_func = authorize_admin)
+@ws.handler(auth_func = authorize_family_or_admin)
 async def more_person_detail(hd, reverting = False):
 	if task.just_started(hd, more_person_detail):
 		hd.task.state['person_id'] = int(hd.payload.get('id'))
@@ -156,15 +156,15 @@ async def _more_person_detail(hd, person_id):
 		await db.get_person_children(hd.dbc, person_id),
 	)
 
-@ws.handler(auth_func = authorize_admin)
+@ws.handler(auth_func = authorize_family_or_admin)
 async def email_detail(hd, reverting = False):
 	await x_detail(hd, email_detail, fields.EMAIL, db.get_email, db.set_email, db.add_email, text.email, reverting)
 
-@ws.handler(auth_func = authorize_admin)
+@ws.handler(auth_func = authorize_family_or_admin)
 async def phone_detail(hd, reverting = False):
 	await x_detail(hd, phone_detail, fields.PHONE, db.get_phone, db.set_phone, db.add_phone, text.phone, reverting)
 
-@ws.handler(auth_func = authorize_admin)
+@ws.handler(auth_func = authorize_family_or_admin)
 async def child_detail(hd, reverting = False):
 	await x_detail(hd, child_detail, fields.CHILD, _get_tweeked_child, _set_tweaked_child, _add_tweaked_child, text.child, reverting)
 
@@ -208,7 +208,7 @@ async def x_detail(hd, func, fields, db_get, db_set, db_add, txt, reverting):
 		await ws.send_content(hd, 'detail_banner', html.info(text.change_detail_success.format(change = f'{person["first_name"]} {person["last_name"]}')))
 	# Refactor NOTE: we happen to know that the 'prior task', in this case, is also dialog-based, so we know that 'detail_banner' is the right banner (rather than the main, full-page 'banner'), but it would be better if we could be ignorant of that detail.  This would allow this very dialog, in fact, to be called from other places, and after our finish(), here, we could send the html.info() ignorantly, and let the (js-side?) handler place the info in the correct banner.  TODO!
 
-@ws.handler(auth_func = authorize_admin)
+@ws.handler(auth_func = authorize_family_or_admin)
 async def delete_mpd(hd):
 	data = hd.payload
 	await db.delete_person_detail(hd.dbc, data['table'], data['id'])
