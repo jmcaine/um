@@ -26,7 +26,7 @@ async def authorize_logged_in(hd):
 async def authorize_family_or_admin(hd):
 	payload_person_id = int(hd.payload.get('person_id', 0))
 	return \
-		payload_person_id == await db.get_user_person(hd.dbc, hd.uid)['id'] or \
+		payload_person_id == (await db.get_user_person(hd.dbc, hd.uid))['id'] or \
 		payload_person_id in [c['id'] for c in (await db.get_user_children_ids(hd.dbc, hd.uid))] or \
 		hd.admin
 
