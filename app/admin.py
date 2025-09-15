@@ -4,6 +4,7 @@ __version__ = '0.1'
 __license__ = 'MIT'
 
 import logging
+import traceback
 
 from . import db
 from . import fields
@@ -18,17 +19,23 @@ l = logging.getLogger(__name__)
 
 
 async def authorize_admin(hd):
+	if not hd.admin:
+		l.warn(f'User {hd.uid} attempting to be admin:')
+		l.warn('\n'.join(traceback.format_stack()))
 	return hd.admin
 
 async def authorize_logged_in(hd):
 	return hd.uid
 
 async def authorize_family_or_admin(hd):
-	payload_person_id = int(hd.payload.get('person_id', 0))
-	return \
-		payload_person_id == (await db.get_user_person(hd.dbc, hd.uid))['id'] or \
-		payload_person_id in [c['id'] for c in (await db.get_user_children_ids(hd.dbc, hd.uid))] or \
+	person_id = int(hd.payload.get('person_id', hd.task.state.get('person_id', 0)))
+	result = person_id == (await db.get_user_person(hd.dbc, hd.uid))['id'] or \
+		person_id in [c['id'] for c in (await db.get_user_children_ids(hd.dbc, hd.uid))] or \
 		hd.admin
+	if not result:
+		l.warn(f'User {hd.uid} attempting to be family:')
+		l.warn('\n'.join(traceback.format_stack()))
+	return result
 
 
 async def handle_invalid(hd, message, banner):
