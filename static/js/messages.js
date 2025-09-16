@@ -1,5 +1,6 @@
 
-// TODO: i18n
+// TODO: i18n; see equivalent text. strings
+const t_loading_messages = 'Loading messages...'
 const t_message_stashed = 'Message stashed!';
 const t_pin = 'Pin this message' // TODO: this has a duplicate in text.py
 const t_unpin = 'UNpin this message' // TODO: this has a duplicate in text.py
@@ -41,7 +42,7 @@ let messages = {
 
 	filter: function(id, filt) {
 		messages.send_ws('messages', {filt: filt});
-		$('messages_container').innerHTML = "Loading messages..."; // set placeholder, awaiting loading... TODO: deport hard string!
+		$('messages_container').innerHTML = t_loading_messages; // set placeholder, awaiting load...
 	},
 
 
@@ -307,12 +308,9 @@ let messages = {
 	},
 
 	time_updater: null,
-	show_messages: function(content, scroll_to_bottom, filtering_banner) {
+	show_messages: function(content, scroll_to_bottom) {
 		hide_dialog();
 		set_sub_content('messages_container', content);
-		if (filtering_banner) {
-			set_sub_content('banner_container', filtering_banner);
-		}
 		
 		//TODO: DEPRECATE (unused?!?): const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
 		if (g_main_pane.scrollTop + g_main_pane.clientHeight >= g_main_pane.scrollHeight) {

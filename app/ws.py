@@ -31,7 +31,7 @@ def handler(func, auth_func = None):
 	async def inner(hd, *args, **kwargs):
 		try:
 			if auth_func and not await auth_func(hd):
-				await send_content(hd, 'banner', html.error(text.auth_required))
+				await send_content(hd, 'banner', html.error(text.auth_required)) # TODO - when viewing in a dialog, this results in a hidden banner BEHIND (mostly invisible) - needs to be smart enough to load the sub-banner....
 				return # done
 			#else:
 			#l.debug(f'**************** hd.task: {hd.task}; *args: {args}; *kwargs: {kwargs}')

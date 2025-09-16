@@ -52,8 +52,9 @@ async def messages(hd, reverting = False):
 
 	just_started = task.just_started(hd, messages) # have to do this first, before referencing hd.task.state, below
 	if just_started:
-		await ws.send_sub_content(hd, 'topbar_container', html.messages_topbar(hd.admin))
-		await ws.send_content(hd, 'content', html.messages_container())
+		enrollments = await db.get_enrollments(hd.dbc, hd.uid)
+		await ws.send_sub_content(hd, 'topbar_container', html.messages_topbar(hd.admin, len(enrollments) > 0))
+		await ws.send_content(hd, 'content', html.container(text.loading_messages, 'messages_container'))
 		# sending the above can happen almost immediately; as message lookup might take a moment longer, we'll do it only subsequently (below), even for the very first load, so that the user at least has the framework of the page to see, and the "loading messages..." to see (or, hopefully not, if things are fast enough!)
 
 	hd.task.state['loaded_msg_ids'] = set()
@@ -62,7 +63,7 @@ async def messages(hd, reverting = False):
 	searchtext, ms = await _get_messages(hd)
 	news = filt == Filter.new
 	if ms:
-		await ws.send_content(hd, 'messages', html.messages(ms, hd.uid, hd.admin, news, None, news, searchtext = searchtext), scroll_to_bottom = 0 if news else 1, filt = filt)
+		await ws.send_content(hd, 'messages', html.messages(ms, hd.uid, hd.admin, news, None, news, searchtext = searchtext), scroll_to_bottom = 0 if news else 1)
 	else:
 		await ws.send_content(hd, 'messages', html.no_messages(searchtext))
 
@@ -72,7 +73,7 @@ async def messages(hd, reverting = False):
 
 @ws.handler
 async def more_new_messages(hd): # inspired by "down-scroll" below "bottom", or a screen that isn't full of messages and can take more new ones on bottom
-	if hd.task.state.get('filt') != Filter.new:
+	if hd.task.handler != messages or hd.task.state.get('filt') != Filter.new:
 		return # nothing to do - all filters except `new` show the "most current (most currently stashed)" at the bottom, in the first load, so there are never any "newer" messages to load beyond those
 	#else:
 	searchtext, ms = await _get_messages(hd)
@@ -84,6 +85,8 @@ async def more_new_messages(hd): # inspired by "down-scroll" below "bottom", or 
 
 @ws.handler
 async def more_old_messages(hd): # inspired by "up-scroll" above "top"
+	if hd.task.handler != messages:
+		return # nothing to do - we're not handling messages right now; a scroll event must have called this, but not within a messages window (TODO: re-consider this....)
 	#!!!DEBUG
 	if 'filt' not in hd.task.state:
 		l.error(f'more_old_messages hd.task.state[filt] failed for {hd.uid}! Handler: {hd.task.handler} ... Traceback:')

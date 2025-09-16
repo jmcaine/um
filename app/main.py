@@ -16,6 +16,7 @@ import asyncio
 from aiohttp import web, WSMsgType, WSCloseCode
 
 from . import admin # must import all modules that have @ws.handlers, so that code is run at init
+from . import assignments # must import all modules that have @ws.handlers, so that code is run at init
 from . import db
 from . import emailer
 from . import fields

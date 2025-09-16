@@ -1,6 +1,22 @@
 
-user (2 new columns) and user_color table
+SQL...
 
+show recent logins:
+	select username, touch_timestamp from user join id_key on user.id = id_key.user order by id_key.id desc limit 10;
+
+-------------------------
+
+campus(?)
+academic_year
+subject
+class
+resource
+class_resource
+assignment
+instruction
+
+
+-------------------------
 
 MAKE a button to set the default reply-to initial state, so that replies will go to the original sender or whole group, by default, based on your setting when you send the message.
 
@@ -16,7 +32,16 @@ auto "reminders", and birthdays (based on birth-dates!)
 SEARCH - replace found terms, in messages, with highlighted versions thereof (https://www.google.com/search?client=firefox-b-1-e&channel=entpr&q=faster+to+do+text+substitution+in+sqlite3+SQL+or+in+python+regex+after)
 	AT THE SAME TIME, get rid of &nbsp; in teaser text creation
 
+when pinning a message in "New" - make it disappear (fade) just like stashing does - they're both kinds of acknowledgment
+
 BUGS:
+	ws.py, line 34 -- need to make bannering of message more robust, to succeed in dialogs!
+
+	no audio on iphones, for some movies -- always make mkvs to avoid this!  No mp4s!
+
+	trim spaces (that auto-appear) in filter string before using in sql LIKE
+
+	that little "two-people" button in the lower-right of a message should be a "one-person" icon when there's only one recipient (currently) - just a visual confusion
 
 	Sometimes getting this, when I've just come back from Admin (task_handler is users() or tags()), ALSO when coming back from an edit-message (task_handler edit_message()):
 			File "/home/ohs/um/um/app/messages.py", line 264, in injected_message

@@ -18,9 +18,11 @@ from dominate import tags as t
 from dominate.util import raw
 
 from . import text
+from . import messages_const
+from . import assignments_const
+
 from .const import *
 from .settings import cache_buster
-from .messages_const import *
 
 
 # Logging ---------------------------------------------------------------------
@@ -64,7 +66,7 @@ def document(ws_url: str, initial = ''):
 		with t.div(id = 'scripts', cls = 'container'):
 			t.script(raw(f'var ws = new WebSocket("{ws_url}");'))
 			t.script(raw(f'const initial = "{initial}";'))
-			for script in ('basic.js', 'ws.js', 'persistence.js', 'main.js', 'admin.js', 'submit.js', 'messages.js'): # TODO: only load admin.js if user is an admin (somehow? - dom-manipulate with $('scripts').insertAdjacentHTML("beforeend", ...) after login!)!
+			for script in ('basic.js', 'ws.js', 'persistence.js', 'main.js', 'admin.js', 'submit.js', 'messages.js', 'assignments.js'): # TODO: only load admin.js if user is an admin (somehow? - dom-manipulate with $('scripts').insertAdjacentHTML("beforeend", ...) after login!)!
 				t.script(src = f'/static/js/{script}')
 
 	return d
@@ -80,7 +82,7 @@ def login_or_join():
 	)
 
 # button symbols:    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦ ►
-def messages_topbar(admin):
+def messages_topbar(admin, enrolled):
 	result = t.div(t.button('+', title = 'new message', onclick = _send('messages', 'new_message')), cls = 'buttonbar')
 	filterbox(result, {'deep_search': text.deep_search})
 	with result:
@@ -88,6 +90,8 @@ def messages_topbar(admin):
 		#TODO: t.button('...', title = text.change_settings, onclick = _send('main', 'settings'))
 		if admin:
 			t.button('Ѫ', title = text.admin, onclick = _send('admin', 'users'))
+		if enrolled:
+			t.button('A', title = text.assignments, onclick = _send('assignments', 'main'))
 		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
 	return result
 
@@ -127,18 +131,35 @@ def messages_filter(filt):
 	result = t.div(cls = 'buttonbar')
 	with result:
 		filt_button = lambda title, hint, _filt: t.button(title, title = hint, cls = 'selected' if filt == _filt else '', onclick = f'messages.filter(id, "{_filt}")')
-		filt_button(text.news, text.show_news, Filter.new)
-		filt_button(text.alls, text.show_alls, Filter.all)
-		filt_button(text.days, text.show_days, Filter.day)
-		filt_button(text.this_weeks, text.show_this_weeks, Filter.this_week)
-		filt_button(text.pins, text.show_pins, Filter.pinned)
-		filt_button(text.pegs, text.show_pegs, Filter.pegged)
+		filt_button(text.news, text.show_news, messages_const.Filter.new)
+		filt_button(text.alls, text.show_alls, messages_const.Filter.all)
+		filt_button(text.days, text.show_days, messages_const.Filter.day)
+		filt_button(text.this_weeks, text.show_this_weeks, messages_const.Filter.this_week)
+		filt_button(text.pins, text.show_pins, messages_const.Filter.pinned)
+		filt_button(text.pegs, text.show_pegs, messages_const.Filter.pegged)
 	return result
 
-def messages_container():
-	return t.div(text.loading_messages, cls = 'container', id = 'messages_container')
+def container(placeholder_text, id):
+	return t.div(placeholder_text, cls = 'container', id = id)
 
 
+def assignments_topbar():
+	result = t.div(cls = 'buttonbar')
+	filterbox(result, {'deep_search': text.deep_search})
+	with result:
+		t.div(cls = 'spacer')
+		t.button(t.i(cls = 'i i-messages'), title = text.messages, onclick = _send('messages', 'messages')) # Ξ
+		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
+	return result
+
+def assignments_filter(filt):
+	result = t.div(cls = 'buttonbar')
+	with result:
+		filt_button = lambda title, hint, _filt: t.button(title, title = hint, cls = 'selected' if filt == _filt else '', onclick = f'assignments.filter(id, "{_filt}")')
+		filt_button(text.currents, text.show_currents, assignments_const.Filter.current)
+		filt_button(text.previouses, text.show_previouses, assignments_const.Filter.previous)
+		filt_button(text.nexts, text.show_nexts, assignments_const.Filter.next)
+	return result
 
 
 # Divs/fieldsets/partials -----------------------------------------------------
@@ -389,6 +410,38 @@ def inline_reply_box(message_id, parent_mid, content = None):
 def no_messages(searchtext = None):
 	return t.div(t.p(text.not_found.format(searchtext = searchtext) if searchtext else text.no_messages))
 
+def assignments(assignments):
+	result = t.div(cls = 'container')
+	class_name = None
+	resource = None
+	class_div = None
+	week = None
+	for assignment in assignments:
+		if assignment['class_name'] != class_name or assignment['resource_name'] != resource_name:
+			if assignment['class_name'] != class_name:
+				class_name = assignment['class_name']
+				if assignment['week'] != week:
+					if week != None:
+						result.add(t.hr())
+					week = assignment['week']
+					result.add(t.div(f"{text.week} {week}", cls = 'week_header'))
+				result.add(t.hr(cls = 'gray'))
+			resource_name = assignment['resource_name']
+			class_div = t.div(t.div(class_name + ' - ', t.em(resource_name), cls = 'assignment_header'), cls = 'container')
+			result.add(class_div)
+
+		instruction = assignment['instruction']
+		instruction = instruction.replace('{chapters}', str(assignment['chapters']))
+		instruction = instruction.replace('{pages}', str(assignment['pages']))
+		instruction = instruction.replace('{items}', str(assignment['items']))
+		instruction = instruction.replace('{skips}', str(assignment['skips']) if assignment['skips'] else '')
+		if assignment['optional']:
+			instruction = '<b>[optional]</b> ' + instruction
+
+		class_div.add(t.div(t.label(t.input_(type = 'checkbox', onclick = f"assignments.mark_complete({assignment['assignment_id']}, this)"), raw(instruction))))
+
+	return result
+
 def messages(msgs, user_id, is_admin, stashable, last_thread_patriarch = None, skip_first_hr = False, searchtext = None, whole_thread = False):
 	top = t.div(cls = 'container')
 	parents = {None: top}
@@ -426,7 +479,7 @@ def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_fir
 		if msg['reply_to'] and not continuation: # then this msg is actually a reply, but the patriarch is elsewhere (e.g., stashed... or see above comment on t.hr()), so we need to provide the reply-prefix teaser:
 			t.div(f'''Reply to "{msg['parent_teaser']}...":''', cls = 'italic')
 		if msg['edited']:
-			t.div('Edited:', cls = 'italic bold')
+			t.div(text.edited + ':', cls = 'italic bold')
 
 		t.div(raw(re.sub(k_url_rec, k_url_replacement, msg['message']))) # replace url markdown "links" with real <a href>s
 

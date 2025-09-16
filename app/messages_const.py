@@ -1,4 +1,3 @@
-
 from enum import StrEnum
 
 NewMessageNotify = StrEnum('NewMessageNotify', [

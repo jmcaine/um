@@ -23,7 +23,8 @@ import bcrypt # cf https://security.stackexchange.com/questions/133239/what-is-t
 from sqlite3 import PARSE_DECLTYPES, IntegrityError, Error as SQL_Error
 
 from . import exception as ex
-from .messages_const import *
+from . import messages_const
+from . import assignments_const
 
 l = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ k_now_ = '%Y-%m-%d %H:%M:%SZ'
 k_now = f"strftime('{k_now_}')" # could use datetime('now'), but that produces a result in UTC (what we want) but WITHOUT the 'Z' at the end; the problem with this is that using python datetime.fromisoformat() then interprets the datetime to be naive, rather than explicitly UTC, which results in the need to do a .replace(tzinfo = timezone.utc) in order to proceed with timezone shifts.  This use of sqlite's strftime(), where we explicitly append the Z, results in python calls to fromisoformat() returning UTC-specific datetime objects automatically.
 
 k_default_resultset_limit = 10
+k_assignment_resultset_limit = 50
 
 async def connect(filename):
 	result = await aiosqlite.connect(filename, isolation_level = None, detect_types = PARSE_DECLTYPES) # "isolation_level = None disables the Python wrapper's automatic handling of issuing BEGIN etc. for you. What's left is the underlying C library, which does do "autocommit" by default. That autocommit, however, is disabled when you do a BEGIN (b/c you're signaling a transaction with that statement" - from https://stackoverflow.com/questions/15856976/transactions-with-python-sqlite3 - thanks Thanatos
@@ -166,7 +168,7 @@ async def get_user_children_ids(dbc, user_id):
 	return await _fetchall(dbc, 'select person.id from person join child_guardian on person.id = child_guardian.child join user on user.person = child_guardian.guardian where user.id  = ?', (user_id,))
 
 async def orphan_child(dbc, child_person_id, guardian_person_id): # i.e., "delete" child from family (but don't delete the base child record)
-	await dbc.execute(f'delete from child_guardian where child = ? and guardian = ?', (child_person_id, guardian_person_id))
+	await dbc.execute('delete from child_guardian where child = ? and guardian = ?', (child_person_id, guardian_person_id))
 
 
 async def get_person_spouse(dbc, person_id):
@@ -582,8 +584,7 @@ async def get_whole_thread(dbc, user_id, patriarch_id):
 	# SEE: giant_sql_laid_out.txt to show/study the above laid out for straight comprehension.
 	return await _fetchall(dbc, query, args)
 
-
-async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = Filter.new, ignore = None, limit = k_default_resultset_limit):
+async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = messages_const.Filter.new, ignore = None, limit = k_default_resultset_limit):
 	where = ['message.message != ""' ]
 	args = [user_id, user_id, user_id, ] # three user_ids are for sub-selects in _mega_message_select
 	if not include_trashed:
@@ -594,17 +595,17 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 		else:
 			_add_like(like, ('message.teaser', 'tag.name', 'sender.username'), where, args) # SUBSTR(message.message, 0, 30) would get us arbitrarily deep, rather than relying on teaser, but would be more computationally expensive
 	match filt:
-		case Filter.new:
+		case messages_const.Filter.new:
 			where.append('message.id not in (select message from message_stashed where stashed_by = ?)')
 			args.append(user_id)
-		case Filter.pinned:
+		case messages_const.Filter.pinned:
 			where.append(f'message.id in (select message from message_pin where user = ?)')
 			args.append(user_id)
-		case Filter.pegged:
+		case messages_const.Filter.pegged:
 			where.append(f'message.id in (select message from message_peg)')
-		case Filter.day:
-			where.append(f'message.sent >= "{(datetime.utcnow() - timedelta(days=1)).isoformat()}Z"') # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!
-		case Filter.this_week: # we'll interpret as "7 days back"
+		case messages_const.Filter.day:
+			where.append(f'message.sent >= "{(datetime.utcnow() - timedelta(days=2)).isoformat()}Z"') # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!
+		case messages_const.Filter.this_week: # we'll interpret as "7 days back"
 			where.append(f'message.sent >= "{(datetime.combine(datetime.utcnow().date(), datetime.min.time()) - timedelta(days=7)).isoformat()}Z"') # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!
 	if ignore:
 		where.append('message.id not in ({seq})'.format(seq = ','.join(['?']*len(ignore))))
@@ -618,7 +619,7 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 	msg_field = f'''REPLACE(message.message, "{like}", "<span class='highlight'>{like}</span>") as message''' if like else 'message.message'
 	query = f'{_mega_message_select(msg_field)} {_message_tag_join} {_user_tag_join} {where} {group_by}'
 
-	if filt == Filter.new:
+	if filt == messages_const.Filter.new:
 		query = f'{query} {asc_order} limit {limit}'
 	else: # for all other cases, the first `limit` result set should be the NEWEST, then we step back to olders bit by bit as user scrolls UP
 		query = f'select * from ({query} order by thread_updated desc, sent desc limit {limit}) {asc_order}'
@@ -767,6 +768,59 @@ async def receive_sms(dbc, fro, message, timestamp):
 	await dbc.execute(f'insert into message_tag (message, tag) values (?, ?)', (r2.lastrowid, main_admin))
 	return r2.lastrowid
 
+
+async def get_enrollments(dbc, user_id):
+	return await _fetchall(dbc, 'select enrollment.id from enrollment join person on enrollment.person = person.id join user on user.person = person.id where user.id = ?', (user_id,))
+
+k_academic_year = '6' # TODO: KLUDGE!
+k_week = 1 # TODO: KLUDGE!
+async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Filter.current, limit = k_assignment_resultset_limit):
+	week = k_week if filt == assignments_const.Filter.current else (k_week - 1 if filt == assignments_const.Filter.previous else k_week + 1) # final possibility: Filter.next
+	wheres = [	'user.id = ?',
+					'assignment.deleted is NULL',
+					'enrollment.academic_year = ' + k_academic_year, # TODO academic_year is kludge; plus, need campus ('all' or own)
+					'week = ' + str(week), # TODO week is kludge
+				]
+	args = [		user_id, ]
+	fields = [	'class.name as class_name',
+					'resource.id as resource_id',
+					'resource.name as resource_name',
+					'assignment.id as assignment_id',
+					'instruction.text as instruction',
+					'week', 'pages', 'chapters', 'items', 'skips', 'optional', 'sequence',
+					'(select 1 from assignment_complete where enrollment = enrollment.id and assignment = assignment.id) as complete',
+				]
+	froms = [	'assignment',
+					'resource on assignment.resource = resource.id',
+					'instruction on assignment.instruction = instruction.id',
+					'class on assignment.class = class.id',
+					'enrollment on class.id = enrollment.class',
+					'person on enrollment.person = person.id',
+					'user on person.id = user.person',
+				]
+	fields = ', '.join(fields)
+	wheres = ' and '.join(wheres)
+	froms = ' join '.join(froms)
+	orders = 'class.subject, assignment.week, optional, assignment.resource, assignment.sequence'
+	query = f'select {fields} from {froms} where {wheres} order by {orders}'
+	return await _fetchall(dbc, query, args)
+
+
+async def mark_assignment_complete(dbc, user_id, assignment_id, complete):
+	complete = 1 if complete else 0
+	enrollment = await _fetch1(dbc, 'select enrollment.id from enrollment join person on enrollment.person = person.id join user on person.id = user.person where user.id = ?', (user_id,))
+	if not enrollment:
+		return False
+	#else:
+	args = [enrollment['id'], assignment_id]
+	if complete:
+		try:
+			await _insert1(dbc, 'insert into assignment_complete (enrollment, assignment) values (?, ?)', args)
+		except IntegrityError:
+			pass # we don't care - already "complete", so this is a no-op
+	else:
+		await dbc.execute('delete from assignment_complete where enrollment = ? and assignment = ?', args) # may be a no-op; fine!
+	return True
 
 # Utils -----------------------------------------------------------------------
 

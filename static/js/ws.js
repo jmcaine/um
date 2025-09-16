@@ -45,7 +45,7 @@ ws.onmessage = function(event) {
 			messages.edit_message(payload.content, payload.message_id);
 			break;
 		case "messages":
-			messages.show_messages(payload.content, payload.scroll_to_bottom, payload.filt, payload.filtering_banner);
+			messages.show_messages(payload.content, payload.scroll_to_bottom);
 			break;
 		case "show_more_old_messages":
 			messages.show_more_old_messages(payload.content);
@@ -80,8 +80,12 @@ ws.onmessage = function(event) {
 		case "files_uploaded":
 			messages.files_uploaded(payload.content, payload.message_id);
 			break;
+		case "show_assignments":
+			assignments.show_assignments(payload.content);
+			break;
 		case "reload":
 			window.location.href = '/';
+			break;
 		default:
 			console.log("ERROR - unknown payload task: " + payload.task);
 	}
