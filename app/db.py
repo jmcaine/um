@@ -360,6 +360,9 @@ async def set_child_password(dbc, child_person_id, password):
 	return False
 
 async def get_other_logins(dbc, uid):
+	if await authorized(dbc, uid, 'admin'):
+		return await _fetchall(dbc, 'select id, username, require_password_on_switch, color from user where active = 1 and require_password_on_switch != 1', [])
+	#else:
 	person = await get_user_person(dbc, uid)
 	pid = person['id']
 	guardian_pids = [r['guardian'] for r in (await _fetchall(dbc, 'select guardian from child_guardian where child = ?', (pid,)))]
