@@ -815,7 +815,7 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 	fields = ', '.join(fields)
 	wheres = ' and '.join(wheres)
 	froms = ' join '.join(froms)
-	orders = 'class.subject, assignment.week, optional, assignment.resource, assignment.sequence'
+	orders = 'assignment.week, class.subject, optional, assignment.resource, assignment.sequence'
 	query = f'select {fields} from {froms} where {wheres} order by {orders}'
 	return await _fetchall(dbc, query, args)
 
