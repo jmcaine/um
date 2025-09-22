@@ -21,6 +21,10 @@ let assignments = {
 		set_sub_content('assignments_container', content);
 	},
 
+	show_assignments_print: function(content) {
+		document.body.innerHTML = content;
+	},
+
 	mark_complete: function(assignment_id, checkbox) {
 		assignments.send_ws('mark_complete', {assignment_id: assignment_id, checked: (checkbox.checked == true)});
 	},

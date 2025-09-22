@@ -159,6 +159,7 @@ def assignments_filter(filt):
 		filt_button(text.currents, text.show_currents, assignments_const.Filter.current)
 		filt_button(text.previouses, text.show_previouses, assignments_const.Filter.previous)
 		filt_button(text.nexts, text.show_nexts, assignments_const.Filter.next)
+		filt_button(text.alls, text.show_all_assignments, assignments_const.Filter.all)
 	return result
 
 
@@ -416,16 +417,24 @@ def assignments(assignments):
 	resource = None
 	class_div = None
 	week = None
+	class_counter = 0
+	right_page = False
 	for assignment in assignments:
 		if assignment['class_name'] != class_name or assignment['resource_name'] != resource_name:
 			if assignment['class_name'] != class_name:
 				class_name = assignment['class_name']
 				if assignment['week'] != week:
 					if week != None:
-						result.add(t.hr())
+						result.add(t.hr(cls = 'page_break_after'))
+						right_page = False
+						class_counter = 0
 					week = assignment['week']
-					result.add(t.div(f"{text.week} {week}", cls = 'week_header'))
+					result.add(t.div(f"{text.week} {week} - {assignment['first_name']} {assignment['last_name']}", cls = 'week_header'))
 				result.add(t.hr(cls = 'gray'))
+				class_counter = (class_counter + 1) % assignments_const.k_classes_per_page
+				if class_counter == 0 and not right_page:
+					result.add(t.div(cls = 'page_break_after zero'))
+					right_page = True
 			resource_name = assignment['resource_name']
 			class_div = t.div(t.div(class_name + ' - ', t.em(resource_name), cls = 'assignment_header'), cls = 'container')
 			result.add(class_div)

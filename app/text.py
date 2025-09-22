@@ -96,6 +96,7 @@ delete_message = 'Delete (UN-send) message'
 message_deleted = 'Message deleted'
 show_news = 'Show ONLY "new" messages'
 show_alls = 'Show ALL messages'
+show_all_assignments = 'Show ALL assignments (entire year)'
 show_days = "Show ONLY messages from the last 24 hours"
 show_this_weeks = "Show ONLY this week's messages"
 show_pins = 'Show ONLY my pinned messages'

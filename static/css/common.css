@@ -400,3 +400,16 @@ button:hover {
 	box-shadow: none;
 }
 
+
+/* ------------------------------------------------------------------------- */
+
+@media print {
+	.page_break_after {
+		page-break-after: always;
+	}
+}
+
+div.zero {
+	padding: 0;
+	margin: 0;
+}

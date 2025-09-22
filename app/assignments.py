@@ -43,7 +43,10 @@ async def main(hd, reverting = False):
 							filt = filt,
 							limit = None if fs.get('dont_limit', False) else db.k_assignment_resultset_limit)
 	#WISH (see comment on next line): await ws.send_sub_content(hd, k_container_id, html.assignments(a))
-	await ws.send_content(hd, 'show_assignments', html.assignments(a)) # TODO would prefer the above, to centralize k_container_id, but have to refactor the send_content semantics to handle sub_content hide_dialog() behavior....
+	if filt == Filter.all and hd.admin:
+		await ws.send_content(hd, 'show_assignments_print', html.assignments(a)) # TODO would prefer the above, to centralize k_container_id, but have to refactor the send_content semantics to handle sub_content hide_dialog() behavior....
+	else:
+		await ws.send_content(hd, 'show_assignments', html.assignments(a)) # TODO would prefer the above, to centralize k_container_id, but have to refactor the send_content semantics to handle sub_content hide_dialog() behavior....
 
 
 @ws.handler(auth_func = authorize_logged_in)

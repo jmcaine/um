@@ -775,21 +775,32 @@ async def receive_sms(dbc, fro, message, timestamp):
 async def get_enrollments(dbc, user_id):
 	return await _fetchall(dbc, 'select enrollment.id from enrollment join person on enrollment.person = person.id join user on user.person = person.id where user.id = ?', (user_id,))
 
-k_academic_year = '6' # TODO: KLUDGE!
+k_academic_year = 6 # TODO: KLUDGE!
 k_week = 1 # TODO: KLUDGE!
 async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Filter.current, limit = k_assignment_resultset_limit):
-	week = k_week if filt == assignments_const.Filter.current else (k_week - 1 if filt == assignments_const.Filter.previous else k_week + 1) # final possibility: Filter.next
 	wheres = [	'user.id = ?',
 					'assignment.deleted is NULL',
-					'enrollment.academic_year = ' + k_academic_year, # TODO academic_year is kludge; plus, need campus ('all' or own)
-					'week = ' + str(week), # TODO week is kludge
+					'enrollment.academic_year = ' + str(k_academic_year), # TODO academic_year is kludge; plus, need campus ('all' or own)
 				]
+	week = k_week # default # TODO k_week is kludge!
+	match filt:
+		case assignments_const.Filter.current:
+			week = k_week # TODO k_week is kludge!
+		case assignments_const.Filter.previous:
+			week = k_week - 1
+		case assignments_const.Filter.next:
+			week = k_week + 1
+		case _: # assignments_const.Filter.all
+			week = None
+	if week:
+		wheres.append('week = ' + str(week)),
 	args = [		user_id, ]
 	fields = [	'class.name as class_name',
 					'resource.id as resource_id',
 					'resource.name as resource_name',
 					'assignment.id as assignment_id',
 					'instruction.text as instruction',
+					'person.first_name as first_name', 'person.last_name as last_name',
 					'week', 'pages', 'chapters', 'items', 'skips', 'optional', 'sequence',
 					'(select 1 from assignment_complete where enrollment = enrollment.id and assignment = assignment.id) as complete',
 				]
