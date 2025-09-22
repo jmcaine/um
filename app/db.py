@@ -796,6 +796,7 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 			week = k_week + 1
 		case _: # assignments_const.Filter.all
 			week = None
+			wheres.append('week >= 1') # TODO: KLUDGE!
 			wheres.append('week <= 12') # TODO: KLUDGE!
 	if week:
 		wheres.append('week = ' + str(week)),

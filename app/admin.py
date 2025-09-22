@@ -31,9 +31,8 @@ async def authorize_logged_in(hd):
 
 async def authorize_parent_or_admin(hd):
 	person_id = int(hd.payload.get('person_id', hd.task.state.get('person_id', 0)))
-	result = person_id == (await db.get_user_person(hd.dbc, hd.uid))['id'] or \
-		person_id in [c['id'] for c in (await db.get_user_children_ids(hd.dbc, hd.uid))] or \
-		hd.admin
+	result = person_id == (await db.get_user_person(hd.dbc, hd.uid))['id'] \
+		or person_id in [c['id'] for c in (await db.get_user_children_ids(hd.dbc, hd.uid))]
 	if not result:
 		l.warn(f'User {hd.uid} attempting to be family:')
 		l.warn('\n'.join(traceback.format_stack()))
