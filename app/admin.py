@@ -14,6 +14,8 @@ from . import text
 from . import valid
 from . import ws
 
+from . import assignments_const # TODO: this breaks encapsulation... figure out a better way to keep admin from depending on assignments!
+
 
 l = logging.getLogger(__name__)
 
@@ -90,7 +92,9 @@ async def user_detail(hd, reverting = False):
 	if task.just_started(hd, user_detail):
 		user_id = int(hd.payload.get('id'))
 		hd.task.state['user'] = await db.get_user(hd.dbc, user_id)
-		await ws.send_content(hd, 'dialog', html.dialog2(text.user, fields.USER, hd.task.state['user'], more_func = f'admin.send_ws("user_tags", {{ user_id: {user_id} }})'))
+		await ws.send_content(hd, 'dialog', html.dialog2(text.user, fields.USER, hd.task.state['user'], more_funcs = [
+			(text.more_detail, f'admin.send_ws("user_tags", {{ user_id: {user_id} }})'),
+		]))
 	elif not await task.finished(hd): # e.g., dialog-box could have been "canceled"
 		data = hd.payload
 		if await valid.invalids(hd, data, fields.USER, handle_invalid, 'detail_banner'):
@@ -115,7 +119,10 @@ async def person_detail(hd, reverting = False):
 	if task.just_started(hd, person_detail):
 		person_id = int(hd.payload.get('person_id'))
 		hd.task.state['person'] = await db.get_person(hd.dbc, person_id)
-		await ws.send_content(hd, 'dialog', html.dialog2(text.person, fields.PERSON, hd.task.state['person'], more_func = f'admin.send_ws("more_person_detail", {{ id: {person_id} }})'))
+		await ws.send_content(hd, 'dialog', html.dialog2(text.person, fields.PERSON, hd.task.state['person'], more_funcs = [
+			(text.more_detail, f'admin.send_ws("more_person_detail", {{ id: {person_id} }})'),
+			(text.assignments, f'assignments.filter("{assignments_const.Filter.all}", {person_id})'),
+		]))
 	elif not await task.finished(hd): # e.g., dialog-box could have been "canceled"
 		data = hd.payload
 		if await valid.invalids(hd, data, fields.PERSON, handle_invalid, 'detail_banner'):

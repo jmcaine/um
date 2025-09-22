@@ -106,6 +106,9 @@ async def get_person(dbc, id, fields: str | None = None):
 async def get_user_person(dbc, uid):
 	return await _fetch1(dbc, 'select person.* from person join user on user.person = person.id where user.id = ?', (uid,))
 
+async def get_person_user(dbc, person_id):
+	return await _fetch1(dbc, 'select user.id from user where user.person = ?', (person_id,))
+
 async def get_persons(dbc, like = None):
 	where = ' where ' + like if like else ''
 	return await _fetchall(dbc, 'select * from person ' + where + ' order by last_name')
@@ -781,6 +784,7 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 	wheres = [	'user.id = ?',
 					'assignment.deleted is NULL',
 					'enrollment.academic_year = ' + str(k_academic_year), # TODO academic_year is kludge; plus, need campus ('all' or own)
+					#'campus_period_dates.campus in (1, class.campus)', # TODO - this doesn't work; need to constrain to campus, though, somehow...
 				]
 	week = k_week # default # TODO k_week is kludge!
 	match filt:
@@ -792,10 +796,12 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 			week = k_week + 1
 		case _: # assignments_const.Filter.all
 			week = None
+			wheres.append('week <= 12') # TODO: KLUDGE!
 	if week:
 		wheres.append('week = ' + str(week)),
 	args = [		user_id, ]
 	fields = [	'class.name as class_name',
+					'start_date', 'end_date',
 					'resource.id as resource_id',
 					'resource.name as resource_name',
 					'assignment.id as assignment_id',
@@ -805,6 +811,7 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 					'(select 1 from assignment_complete where enrollment = enrollment.id and assignment = assignment.id) as complete',
 				]
 	froms = [	'assignment',
+					'campus_period_dates on assignment.week = campus_period_dates.period',
 					'resource on assignment.resource = resource.id',
 					'instruction on assignment.instruction = instruction.id',
 					'class on assignment.class = class.id',

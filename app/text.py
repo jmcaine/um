@@ -56,6 +56,7 @@ thread = 'Show whole thread'
 currents = 'Current'
 previouses = 'Previous'
 nexts = 'Next'
+today = 'Today'
 
 
 # Label prefixes:

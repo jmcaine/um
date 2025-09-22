@@ -8,12 +8,14 @@ show recent logins:
 
 campus(?)
 academic_year
-subject
-class
-resource
-class_resource
 assignment
+assignment_complete
+class
+class_resource
+enrollment
 instruction
+resource
+subject
 
 
 -------------------------

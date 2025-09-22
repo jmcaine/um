@@ -37,16 +37,16 @@ async def main(hd, reverting = False):
 	filt = hd.task.state['filt'] = hd.payload.get('filt', hd.task.state.get('filt', Filter.current)) # prefer filt sent in payload, then filt already recorded, and, finally, if nothing, default to viewing `current` assignments (only)
 	await ws.send_sub_content(hd, 'filter_container', html.assignments_filter(filt))
 
+	person_id = hd.payload.get('person_id', 0) if hd.admin else None
+	uid = (await db.get_person_user(hd.dbc, person_id))['id'] if hd.admin and person_id else hd.uid
+
 	fs = hd.task.state.get('filtersearch', {})
-	a = await db.get_assignments(hd.dbc, hd.uid,
+	a = await db.get_assignments(hd.dbc, uid,
 							like = fs.get('searchtext', ''),
 							filt = filt,
 							limit = None if fs.get('dont_limit', False) else db.k_assignment_resultset_limit)
 	#WISH (see comment on next line): await ws.send_sub_content(hd, k_container_id, html.assignments(a))
-	if filt == Filter.all and hd.admin:
-		await ws.send_content(hd, 'show_assignments_print', html.assignments(a)) # TODO would prefer the above, to centralize k_container_id, but have to refactor the send_content semantics to handle sub_content hide_dialog() behavior....
-	else:
-		await ws.send_content(hd, 'show_assignments', html.assignments(a)) # TODO would prefer the above, to centralize k_container_id, but have to refactor the send_content semantics to handle sub_content hide_dialog() behavior....
+	await ws.send_content(hd, 'show_assignments', html.assignments(a)) # TODO would prefer the above ("WISH"), to centralize k_container_id, but have to refactor the send_content semantics to handle sub_content hide_dialog() behavior....
 
 
 @ws.handler(auth_func = authorize_logged_in)

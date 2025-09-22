@@ -11,8 +11,8 @@ let assignments = {
 
 	// ---------------
 
-	filter: function(id, filt) {
-		assignments.send_ws('main', {filt: filt});
+	filter: function(filt, person_id = 0) {
+		assignments.send_ws('main', {filt: filt, person_id: person_id});
 		$('assignments_container').innerHTML = t_loading_assignments; // set placeholder, awaiting load...
 	},
 

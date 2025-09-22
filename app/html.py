@@ -155,7 +155,7 @@ def assignments_topbar():
 def assignments_filter(filt):
 	result = t.div(cls = 'buttonbar')
 	with result:
-		filt_button = lambda title, hint, _filt: t.button(title, title = hint, cls = 'selected' if filt == _filt else '', onclick = f'assignments.filter(id, "{_filt}")')
+		filt_button = lambda title, hint, _filt: t.button(title, title = hint, cls = 'selected' if filt == _filt else '', onclick = f'assignments.filter("{_filt}")')
 		filt_button(text.currents, text.show_currents, assignments_const.Filter.current)
 		filt_button(text.previouses, text.show_previouses, assignments_const.Filter.previous)
 		filt_button(text.nexts, text.show_nexts, assignments_const.Filter.next)
@@ -235,14 +235,15 @@ def filterbox(parent, filtersearch_checkboxes):
 			Input(label, type_ = 'checkbox', attrs = {'onclick': go('$("filtersearch").value')}).build(key)
 	return parent
 
-def fieldset(title: str, html_fields: list, button: t.button, alt_button: t.button = _cancel_button(), more_func: str | None = None) -> t.fieldset:
+def fieldset(title: str, html_fields: list, button: t.button, alt_button: t.button = _cancel_button(), more_funcs: tuple | None = None) -> t.fieldset:
 	result = t.fieldset()
 	with result:
 		t.legend(title + '...')
 		for field in html_fields:
 			t.div(field)
-		if more_func:
-			t.div(t.button(text.more_detail, onclick = more_func))
+		if more_funcs:
+			for title, click in more_funcs:
+				t.div(t.button(title, onclick = click))
 		if alt_button:
 			t.div(t.span(button, alt_button))
 		else:
@@ -285,14 +286,14 @@ def tag_table(tags):
 	return result
 
 
-def dialog(title, html_fields, field_names, button_title = text.save, alt_button: t.button = _cancel_button(), more_func = None):
+def dialog(title, html_fields, field_names, button_title = text.save, alt_button: t.button = _cancel_button(), more_funcs = None):
 	return t.div(
 		t.div(id = 'detail_banner_container', cls = 'container'), # for later ws-delivered banner messages
-		fieldset(title, html_fields, _ws_submit_button(button_title, field_names), alt_button, more_func),
+		fieldset(title, html_fields, _ws_submit_button(button_title, field_names), alt_button, more_funcs),
 	)
 
-def dialog2(title, fields, data = None, button_title = text.save, alt_button: t.button = _cancel_button(), more_func = None):
-	return dialog(title, build_fields(fields, data), fields.keys(), button_title, alt_button, more_func)
+def dialog2(title, fields, data = None, button_title = text.save, alt_button: t.button = _cancel_button(), more_funcs = None):
+	return dialog(title, build_fields(fields, data), fields.keys(), button_title, alt_button, more_funcs)
 
 
 def more_person_detail(person_id, emails, phones, spouse, children):
@@ -423,16 +424,20 @@ def assignments(assignments):
 		if assignment['class_name'] != class_name or assignment['resource_name'] != resource_name:
 			if assignment['class_name'] != class_name:
 				class_name = assignment['class_name']
+				# Insert page-break to go to new week ("left page") if we're on a new week
 				if assignment['week'] != week:
-					if week != None:
-						result.add(t.hr(cls = 'page_break_after'))
-						right_page = False
-						class_counter = 0
+					result.add(t.hr(cls = 'page_break_after')) # even first time 'round, when week is None, in order to get the first detail page to be a back-side (double-sided print)
+					if not right_page and week != None:
+						result.add(t.hr(cls = 'page_break_after')) # a SECOND page-break, for a blank right page, so that starts are always on left pages
 					week = assignment['week']
-					result.add(t.div(f"{text.week} {week} - {assignment['first_name']} {assignment['last_name']}", cls = 'week_header'))
+					right_page = False
+					class_counter = 0
+					start_date, end_date = casual_date2(assignment['start_date']), casual_date2(assignment['end_date'])
+					result.add(t.div(f"{text.week} {week} ({start_date} - {end_date}) - {assignment['first_name']} {assignment['last_name']}", cls = 'week_header'))
 				result.add(t.hr(cls = 'gray'))
-				class_counter = (class_counter + 1) % assignments_const.k_classes_per_page
-				if class_counter == 0 and not right_page:
+				# Insert page-break to shift to "right page" if necessary:
+				class_counter += 1
+				if not right_page and class_counter > assignments_const.k_classes_per_page:
 					result.add(t.div(cls = 'page_break_after zero'))
 					right_page = True
 			resource_name = assignment['resource_name']
@@ -639,6 +644,19 @@ def casual_date(raw_date): # NOTE: we have an equivalent version of this in Java
 	elif today - timedelta(days = 1) < dt < today: # yesterday
 		return f"yesterday @ {dt.strftime('%I:%M %p')}"
 	else: # before yesterday
+		return dt.strftime('%m/%d/%Y')
+
+def casual_date2(raw_date):
+	zi = ZoneInfo(k_fake_localtz)
+	dt = local_date_iso(raw_date, zi)
+	now = datetime.now(timezone.utc).astimezone(zi)
+	today_zero = datetime.combine(now.date(), datetime.min.time(), now.tzinfo)
+	dt_zero = datetime.combine(dt.date(), datetime.min.time(), now.tzinfo)
+	if today_zero == dt_zero:
+		return text.today
+	elif today_zero.year == dt.year:
+		return dt.strftime('%b %d')
+	else:
 		return dt.strftime('%m/%d/%Y')
 
 
