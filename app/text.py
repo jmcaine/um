@@ -57,6 +57,8 @@ currents = 'Current'
 previouses = 'Previous'
 nexts = 'Next'
 today = 'Today'
+subject = 'Subject'
+all_subjects = 'All Subjects'
 
 
 # Label prefixes:

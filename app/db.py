@@ -777,12 +777,13 @@ async def get_enrollments(dbc, user_id):
 
 k_academic_year = 6 # TODO: KLUDGE!
 k_week = 1 # TODO: KLUDGE!
-async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Filter.current, limit = k_assignment_resultset_limit):
+async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Filter.current, subj_id = None, limit = k_assignment_resultset_limit):
 	wheres = [	'user.id = ?',
 					'assignment.deleted is NULL',
 					'enrollment.academic_year = ' + str(k_academic_year), # TODO academic_year is kludge; plus, need campus ('all' or own)
 					#'campus_period_dates.campus in (1, class.campus)', # TODO - this doesn't work; need to constrain to campus, though, somehow...
 				]
+	args = [		user_id, ]
 	week = k_week # default # TODO k_week is kludge!
 	match filt:
 		case assignments_const.Filter.current:
@@ -795,10 +796,13 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 			week = None
 			wheres.append('week >= 1') # TODO: KLUDGE!
 			wheres.append('week <= 12') # TODO: KLUDGE!
+	if subj_id:
+		wheres.append('subject.id = ?')
+		args.append(subj_id)
 	if week:
 		wheres.append('week = ' + str(week)),
-	args = [		user_id, ]
-	fields = [	'class.name as class_name',
+	fields = [	'subject.id as subject_id', 'subject.name as subject_name',
+					'class.name as class_name',
 					'start_date', 'end_date',
 					'resource.id as resource_id',
 					'resource.name as resource_name',
@@ -813,6 +817,7 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 					'resource on assignment.resource = resource.id',
 					'instruction on assignment.instruction = instruction.id',
 					'class on assignment.class = class.id',
+					'subject on class.subject = subject.id',
 					'enrollment on class.id = enrollment.class',
 					'person on enrollment.person = person.id',
 					'user on person.id = user.person',
@@ -820,7 +825,7 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 	fields = ', '.join(fields)
 	wheres = ' and '.join(wheres)
 	froms = ' join '.join(froms)
-	orders = 'assignment.week, class.subject, optional, assignment.resource, assignment.sequence'
+	orders = 'assignment.week, class.subject, class.id, assignment.resource, optional, assignment.sequence'
 	query = f'select {fields} from {froms} where {wheres} order by {orders}'
 	return await _fetchall(dbc, query, args)
 

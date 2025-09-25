@@ -152,7 +152,7 @@ def assignments_topbar():
 		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
 	return result
 
-def assignments_filter(filt):
+def assignments_filter(filt, subjects, subject_id):
 	result = t.div(cls = 'buttonbar')
 	with result:
 		filt_button = lambda title, hint, _filt: t.button(title, title = hint, cls = 'selected' if filt == _filt else '', onclick = f'assignments.filter("{_filt}")')
@@ -160,6 +160,10 @@ def assignments_filter(filt):
 		filt_button(text.previouses, text.show_previouses, assignments_const.Filter.previous)
 		filt_button(text.nexts, text.show_nexts, assignments_const.Filter.next)
 		filt_button(text.alls, text.show_all_assignments, assignments_const.Filter.all)
+	if len(subjects) > 1:
+		droplist_button(result, 'subject_chooser', text.subject, subjects, text.all_subjects, subject_id)
+	else:
+		result.add(t.button(text.all_subjects, onclick = f'assignments.subject_filter(0)'))
 	return result
 
 
@@ -415,31 +419,32 @@ def no_messages(searchtext = None):
 def assignments(assignments):
 	result = t.div(cls = 'container')
 	class_name = None
-	resource = None
+	resource_name = None
 	class_div = None
 	week = None
 	class_counter = 0
 	right_page = False
 	for assignment in assignments:
-		if assignment['class_name'] != class_name or assignment['resource_name'] != resource_name:
-			if assignment['class_name'] != class_name:
-				class_name = assignment['class_name']
-				# Insert page-break to go to new week ("left page") if we're on a new week
-				if assignment['week'] != week:
-					result.add(t.hr(cls = 'page_break_after')) # even first time 'round, when week is None, in order to get the first detail page to be a back-side (double-sided print)
-					if not right_page and week != None:
-						result.add(t.hr(cls = 'page_break_after')) # a SECOND page-break, for a blank right page, so that starts are always on left pages
-					week = assignment['week']
-					right_page = False
-					class_counter = 0
-					start_date, end_date = casual_date2(assignment['start_date']), casual_date2(assignment['end_date'])
-					result.add(t.div(f"{text.week} {week} ({start_date} - {end_date}) - {assignment['first_name']} {assignment['last_name']}", cls = 'week_header'))
-				result.add(t.hr(cls = 'gray'))
-				# Insert page-break to shift to "right page" if necessary:
-				class_counter += 1
-				if not right_page and class_counter > assignments_const.k_classes_per_page:
-					result.add(t.div(cls = 'page_break_after zero'))
-					right_page = True
+		# Insert page-break to go to new week ("left page") if we're on a new week
+		if assignment['week'] != week:
+			class_name = None # force reset of class, to make hr()s appropriate, etc.
+			result.add(t.hr(cls = 'page_break_after')) # even first time 'round, when week is None, in order to get the first detail page to be a back-side (double-sided print)
+			if not right_page and week != None:
+				result.add(t.div(cls = 'page_break_after zero')) # a SECOND page-break, for a blank right page, so that starts are always on left pages
+			week = assignment['week']
+			right_page = False
+			class_counter = 0
+			start_date, end_date = casual_date2(assignment['start_date']), casual_date2(assignment['end_date'])
+			result.add(t.div(f"{text.week} {week} ({start_date} - {end_date}) - {assignment['first_name']} {assignment['last_name']}", cls = 'week_header'))
+		if assignment['class_name'] != class_name:
+			class_name = assignment['class_name']
+			result.add(t.hr(cls = 'gray'))
+			# Insert page-break to shift to "right page" if necessary:
+			class_counter += 1
+			if not right_page and class_counter > assignments_const.k_classes_per_page:
+				result.add(t.div(cls = 'page_break_after zero'))
+				right_page = True
+		if assignment['resource_name'] != resource_name:
 			resource_name = assignment['resource_name']
 			class_div = t.div(t.div(class_name + ' - ', t.em(resource_name), cls = 'assignment_header'), cls = 'container')
 			result.add(class_div)
@@ -658,6 +663,17 @@ def casual_date2(raw_date):
 		return dt.strftime('%b %d')
 	else:
 		return dt.strftime('%m/%d/%Y')
+
+
+def droplist_button(container, id, hint, options, title = None, selected_id = None):
+	if not title:
+		title = options[0][0]
+	with container:
+		with t.button(title + ' ▾', cls = 'dropdown', title = hint, onclick = f'assignments.show_dropdown_options("{id}", this)'):
+			with t.div(id = id, cls = 'dropdown_content hide'):
+				t.div(title, onclick = 'assignments.subject_filter(0)')
+				for option_name, option_id in options:
+					t.div(option_name, onclick = f'assignments.subject_filter({option_id})')
 
 
 @dataclass(slots = True, frozen = True)
