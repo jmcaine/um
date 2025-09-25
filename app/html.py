@@ -435,7 +435,11 @@ def assignments(assignments):
 			right_page = False
 			class_counter = 0
 			start_date, end_date = casual_date2(assignment['start_date']), casual_date2(assignment['end_date'])
-			result.add(t.div(f"{text.week} {week} ({start_date} - {end_date}) - {assignment['first_name']} {assignment['last_name']}", cls = 'week_header'))
+			header = f"{text.week} {week} ({start_date} - {end_date})"
+			if False:
+				header += f"- {assignment['first_name']} {assignment['last_name']}"
+			result.add(t.div(header, cls = 'week_header'))
+
 		if assignment['class_name'] != class_name:
 			class_name = assignment['class_name']
 			result.add(t.hr(cls = 'gray'))
@@ -446,8 +450,7 @@ def assignments(assignments):
 				right_page = True
 		if assignment['resource_name'] != resource_name:
 			resource_name = assignment['resource_name']
-			class_div = t.div(t.div(class_name + ' - ', t.em(resource_name), cls = 'assignment_header'), cls = 'container')
-			result.add(class_div)
+			result.add(t.div(class_name + ' - ', t.em(resource_name), cls = 'assignment_header'))
 
 		instruction = assignment['instruction']
 		instruction = instruction.replace('{chapters}', str(assignment['chapters']))
@@ -457,7 +460,7 @@ def assignments(assignments):
 		if assignment['optional']:
 			instruction = '<b>[optional]</b> ' + instruction
 
-		class_div.add(t.div(t.label(t.input_(type = 'checkbox', onclick = f"assignments.mark_complete({assignment['assignment_id']}, this)"), raw(instruction))))
+		result.add(t.div(t.label(t.input_(type = 'checkbox', onclick = f"assignments.mark_complete({assignment['assignment_id']}, this)"), raw(instruction))))
 
 	return result
 
