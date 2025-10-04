@@ -382,6 +382,10 @@ button:hover {
 .i-download {
 	background: url(ico/download.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/144412/PNG/32/ - https://icon-icons.com/icon/cloud-download/144412 */
 }
+.i-class {
+	background: url(ico/class.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/266881/PNG/32/ - https://icon-icons.com/icon/presentation-coaching-education-class-teaching-blackboard/266881 */
+}
+
 
 
 /* ------------------------------------------------------------------------- */
@@ -431,7 +435,9 @@ button:hover {
 }
 
 /* Change color of dropdown links on hover */
-.dropdown_content div:hover {background-color: #ddd}
+.dropdown_content div:hover {
+	background-color: #ddd
+}
 
 /* ------------------------------------------------------------------------- */
 

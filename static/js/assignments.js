@@ -36,6 +36,8 @@ let assignments = {
 		element.classList.add("hide");
 	},
 
+	// From server side:
+
 	show_assignments: function(content) {
 		hide_dialog();
 		set_sub_content('assignments_container', content);
@@ -44,6 +46,13 @@ let assignments = {
 	show_assignments_print: function(content) {
 		document.body.innerHTML = content;
 	},
+
+	show_classes: function(content) {
+		hide_dialog();
+		set_sub_content('school_container', content);
+	},
+
+	// From client side:
 
 	mark_complete: function(assignment_id, checkbox) {
 		assignments.send_ws('mark_complete', {assignment_id: assignment_id, checked: (checkbox.checked == true)});

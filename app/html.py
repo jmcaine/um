@@ -95,38 +95,6 @@ def messages_topbar(admin, enrolled):
 		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
 	return result
 
-def users_tags_topbar():
-	result = t.div(cls = 'buttonbar')
-	with result:
-		t.div(cls = 'spacer')
-		#TODO: t.button('...', title = text.change_settings, onclick = _send('main', 'settings'))
-		t.button(t.i(cls = 'i i-messages'), title = text.messages, onclick = _send('messages', 'messages')) # Ξ
-		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
-	return result
-
-def _users_tags_mainbar(title, add_onclick):
-	result = t.div(t.button('+', title = title, onclick = add_onclick), cls = 'buttonbar')
-	filterbox(result, {'show_inactives': text.show_inactives, 'dont_limit': text.dont_limit})
-	with result:
-		t.div(cls = 'spacer')
-		t.button(t.i(cls = 'i i-one'), title = text.users, onclick = _send('admin', 'users')) # ☺
-		t.button(t.i(cls = 'i i-all'), title = text.tags, onclick = _send('admin', 'tags')) # #
-	return result
-
-def users_mainbar():
-	return _users_tags_mainbar(text.invite_new_user, _send('main', 'invite'))
-
-def tags_mainbar():
-	return _users_tags_mainbar(text.create_new_tag, _send('admin', 'new_tag'))
-
-
-def users_page(users):
-	return t.div(user_table(users), id = 'user_table_container')
-
-def tags_page(tags):
-	return t.div(tag_table(tags), id = 'tag_table_container')
-
-
 def messages_filter(filt):
 	result = t.div(cls = 'buttonbar')
 	with result:
@@ -139,16 +107,44 @@ def messages_filter(filt):
 		filt_button(text.pegs, text.show_pegs, messages_const.Filter.pegged)
 	return result
 
-def container(placeholder_text, id):
-	return t.div(placeholder_text, cls = 'container', id = id)
 
-
-def assignments_topbar():
+def users_tags_topbar():
 	result = t.div(cls = 'buttonbar')
-	filterbox(result, {'deep_search': text.deep_search})
+	with result:
+		t.div(cls = 'spacer')
+		#TODO: t.button('...', title = text.change_settings, onclick = _send('main', 'settings'))
+		t.button(t.i(cls = 'i i-messages'), title = text.messages, onclick = _send('messages', 'messages')) # Ξ
+		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
+	return result
+
+def users_mainbar():
+	return _mainbar(text.invite_new_user, _send('main', 'invite'), [
+			t.button(t.i(cls = 'i i-one'), title = text.users, cls = 'selected', onclick = _send('admin', 'users')), # for this one, onclick() just reloads content
+			t.button(t.i(cls = 'i i-all'), title = text.tags, onclick = _send('admin', 'tags')),
+		])
+
+def tags_mainbar():
+	return _mainbar(text.create_new_tag, _send('admin', 'new_tag'), [
+			t.button(t.i(cls = 'i i-one'), title = text.users, onclick = _send('admin', 'users')),
+			t.button(t.i(cls = 'i i-all'), title = text.tags, cls = 'selected', onclick = _send('admin', 'tags')), # for this one, onclick() just reloads content
+		])
+
+def users_page(users):
+	return t.div(user_table(users), id = 'user_table_container')
+
+def tags_page(tags):
+	return t.div(tag_table(tags), id = 'tag_table_container')
+
+
+
+def assignments_topbar(admin):
+	result = t.div(cls = 'buttonbar')
+	#filterbox(result, {'deep_search': text.deep_search})
 	with result:
 		t.div(cls = 'spacer')
 		t.button(t.i(cls = 'i i-messages'), title = text.messages, onclick = _send('messages', 'messages')) # Ξ
+		if admin:
+			t.button(t.i(cls = 'i i-class'), title = text.classes, onclick = _send('assignments', 'classes'))
 		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
 	return result
 
@@ -165,6 +161,55 @@ def assignments_filter(filt, subjects, subject_id):
 	else:
 		result.add(t.button(text.all_subjects, onclick = f'assignments.subject_filter(0)'))
 	return result
+
+
+
+def school_topbar():
+	result = t.div(cls = 'buttonbar')
+	with result:
+		t.div(cls = 'spacer')
+		t.button(t.i(cls = 'i i-messages'), title = text.messages, onclick = _send('messages', 'messages')) # Ξ
+		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
+	return result
+
+def classes_mainbar():
+	return _mainbar(text.add_new_class, _send('assignments', 'new_class'), [
+			t.button(t.i(cls = 'i i-one'), title = text.students, onclick = _send('assignments', 'students')),
+			t.button(t.i(cls = 'i i-class'), title = text.classes, cls = 'selected', onclick = _send('assignments', 'classes')), # for this one, onclick() just reloads content
+		], {'dont_limit': text.dont_limit})
+
+def students_mainbar(title):
+	return _mainbar(text.add_new_enrollment, _send('assignments', 'new_enrollment'), [
+			t.button(t.i(cls = 'i i-one'), title = text.students, onclick = _send('assignments', 'students')),
+			t.button(t.i(cls = 'i i-class'), title = text.classes, cls = 'selected', onclick = _send('assignments', 'classes')), # for this one, onclick() just reloads content
+		], {'dont_limit': text.dont_limit})
+
+def classes_page(classes):
+	return t.div(classes_table(classes), id = 'classes_table_container')
+
+def students_page(students):
+	return t.div(students_table(students), id = 'students_table_container')
+
+
+def _mainbar(add_button_title, add_onclick, right_buttons, filter_checkboxes = None): # TODO: use this for more, like user_tags, tag_users, message_tags?, etc.
+	if not filter_checkboxes:
+		filter_checkboxes = {'dont_limit': text.dont_limit}
+	bar = t.div(cls = 'buttonbar')
+	bar.add(t.button('+', title = add_button_title, onclick = add_onclick))
+	filterbox(bar, filter_checkboxes)
+	bar.add(t.div(cls = 'spacer'))
+	for button in right_buttons:
+		bar.add(button)
+	#!!!!result = t.div()
+	#!!!result.add(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages TODO: this doesn't belong here?!?!!
+	#!!!result.add(bar)
+	return t.div(bar)
+
+
+
+def container(placeholder_text, id):
+	return t.div(placeholder_text, cls = 'container', id = id)
+
 
 
 # Divs/fieldsets/partials -----------------------------------------------------
@@ -286,7 +331,7 @@ def tag_table(tags):
 			with t.tr():
 				t.td(tag['name'], cls = 'pointered', align = 'right', onclick = st)
 				t.td(_yes_or_no(int(tag['active'])), align = 'center', cls = 'pointered', onclick = st)
-				t.td(tag['num_subscribers'], cls = 'pointered', align = 'center', onclick = _send('admin', 'tag_users', tag_id = tag['id'], tag_name = f'"{tag["name"]}"'))
+				t.td(tag['num_subscribers'], cls = 'pointered', align = 'center', onclick = _send('admin', 'tag_users', tag_id = tag['id']))
 	return result
 
 
@@ -339,6 +384,68 @@ def more_person_detail(person_id, emails, phones, spouse, children):
 			t.div(t.button(text.add, onclick = _send('admin', 'child_detail', person_id = person_id, id = 0)))
 		t.div(_cancel_button(text.done)) # cancel just reverts to prior task; added/changed emails/phones are saved - those deeds are done, we're just "closing" this more_person_detail portal
 	return result
+
+
+
+
+
+
+
+def students_table(students):
+	result = t.table(cls = 'full_width')
+	with result:
+		with t.tr():
+			t.th('Name', align = 'right')
+			t.th('Classes')
+		for student in students:
+			with t.tr():
+				t.td(f"{student['first_name']} {student['last_name']}", align = 'right')
+				t.td(student['num_classes'], cls = 'pointered', align = 'center', onclick = _send('assignments', 'student_classes', person_id = student['id']))
+	return result
+
+
+def classes_table(classes):
+	result = t.table(cls = 'full_width')
+	with result:
+		with t.tr():
+			t.th('Name', align = 'right')
+			t.th('Students')
+		for clss in classes:
+			with t.tr():
+				t.td(clss['name'], align = 'right', cls = 'pointered', onclick = _send('assignments', 'class_detail', class_id = clss['id']))
+				t.td(student['num_students'], align = 'center', cls = 'pointered', onclick = _send('assignments', 'class_students', class_id = clss['id']))
+	return result
+
+def class_students(cs_table):
+	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
+	with result:
+		filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
+		t.div(cs_table, id = 'class_students_table_container')
+	return result
+
+def class_students_table(students, nons, count):
+	s_name = lambda s: f"{s['first_name']} {s['last_name']}"
+	adder = lambda id: _send('admin', 'add_student_to_class', student_id = id)
+	remover = lambda id: _send('admin', 'remove_student_from_class', student_id = id)
+	return _xaa_table(nons, students, s_name, 'NOT in class:', 'IN class:', 'assignments', 'class_students', adder, remover, count)
+
+def student_classes(sc_table):
+	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
+	with result:
+		filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
+		t.div(sc_table, id = 'student_classes_table_container')
+	return result
+
+def student_classes_table(classes, nons, count):
+	name = lambda c: c['name']
+	adder = lambda id: _send('admin', 'add_class_to_student', class_id = id)
+	remover = lambda id: _send('admin', 'remove_class_from_student', class_id = id)
+	return _xaa_table(nons, classes, name, 'student NOT in:', 'student IN:', 'assignments', 'student_classes', adder, remover, count)
+
+
+
+
+
 
 
 def tag_users_and_nonusers(tun_table):
@@ -439,7 +546,6 @@ def assignments(assignments):
 			if False:
 				header += f"- {assignment['first_name']} {assignment['last_name']}"
 			result.add(t.div(header, cls = 'week_header'))
-
 		if assignment['class_name'] != class_name:
 			class_name = assignment['class_name']
 			result.add(t.hr(cls = 'gray'))
@@ -450,7 +556,8 @@ def assignments(assignments):
 				right_page = True
 		if assignment['resource_name'] != resource_name:
 			resource_name = assignment['resource_name']
-			result.add(t.div(class_name + ' - ', t.em(resource_name), cls = 'assignment_header'))
+			full_class_name = class_name + (f'(S{assignment["section"]}) - ' if assignment['teacher'] else ' - ')
+			result.add(t.div(full_class_name, t.em(resource_name), cls = 'assignment_header'))
 
 		instruction = assignment['instruction']
 		instruction = instruction.replace('{chapters}', str(assignment['chapters']))
@@ -459,6 +566,8 @@ def assignments(assignments):
 		instruction = instruction.replace('{skips}', str(assignment['skips']) if assignment['skips'] else '')
 		if assignment['optional']:
 			instruction = '<b>[optional]</b> ' + instruction
+		if assignment['teacher']:
+			instruction = f'<b>{instruction}</b>'
 
 		result.add(t.div(t.label(t.input_(type = 'checkbox', onclick = f"assignments.mark_complete({assignment['assignment_id']}, this)"), raw(instruction))))
 

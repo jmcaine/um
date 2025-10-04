@@ -417,7 +417,7 @@ async def get_tags(dbc, active = True, like = None, get_subscriber_count = False
 		count = ', count(user_tag.tag) as num_subscribers'
 		join = 'left join user_tag on tag.id = user_tag.tag'
 	limit = f'limit {limit}' if limit else ''
-	result = await _fetchall(dbc, f'select tag.* {count} from tag {join} {where} group by tag.id order by name {limit}', args)
+	result = await _fetchall(dbc, f'select tag.* {count} from tag {join} {where} group by tag.id order by name {limit}', args) # TODO: shouldn't 'group by tag.id' be set only when get_subscriber_count is true and we set count(user_tag.tag), AND, shouldn't it be 'group by user_tag.tag'?  (See get_students())
 	return result if len(result) > 0 and result[0]['id'] != None else [] # convert weird "1-empty-record" result to an empty-list, instead; this happens in the left join case - a single record is returned with id=None and every other field = None except 'count', which = 0; we don't care about this case, so remove it.'
 
 async def new_tag(dbc, name, active):
@@ -776,10 +776,11 @@ async def get_enrollments(dbc, user_id):
 	return await _fetchall(dbc, 'select enrollment.id from enrollment join person on enrollment.person = person.id join user on user.person = person.id where user.id = ?', (user_id,))
 
 k_academic_year = 6 # TODO: KLUDGE!
-k_week = 1 # TODO: KLUDGE!
+k_week = 3 # TODO: KLUDGE!
 async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Filter.current, subj_id = None, limit = k_assignment_resultset_limit):
 	wheres = [	'user.id = ?',
 					'assignment.deleted is NULL',
+					'(assignment.teacher is null or assignment.teacher = 0 or enrollment.teacher = 1)',
 					'enrollment.academic_year = ' + str(k_academic_year), # TODO academic_year is kludge; plus, need campus ('all' or own)
 					#'campus_period_dates.campus in (1, class.campus)', # TODO - this doesn't work; need to constrain to campus, though, somehow...
 				]
@@ -803,6 +804,7 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 		wheres.append('week = ' + str(week)),
 	fields = [	'subject.id as subject_id', 'subject.name as subject_name',
 					'class.name as class_name',
+					'enrollment.section',
 					'start_date', 'end_date',
 					'resource.id as resource_id',
 					'resource.name as resource_name',
@@ -810,6 +812,7 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 					'instruction.text as instruction',
 					'person.first_name as first_name', 'person.last_name as last_name',
 					'week', 'pages', 'chapters', 'items', 'skips', 'optional', 'sequence',
+					'assignment.teacher',
 					'(select 1 from assignment_complete where enrollment = enrollment.id and assignment = assignment.id) as complete',
 				]
 	froms = [	'assignment',
@@ -845,6 +848,34 @@ async def mark_assignment_complete(dbc, user_id, assignment_id, complete):
 	else:
 		await dbc.execute('delete from assignment_complete where enrollment = ? and assignment = ?', args) # may be a no-op; fine!
 	return True
+
+
+async def get_students(dbc, like = None, get_class_count = False, limit = k_default_resultset_limit):
+	where, args = [], []
+	_add_like(like, ('name',), where, args)
+	where = 'where ' + ' and '.join(where) if where else ''
+	count, join, group = '', 'join enrollment on person.id = enrollment.person', ''
+	if get_class_count:
+		count = ', count(class.id) as num_classes'
+		join += ' left join class on enrollment.class = class.id'
+		group = 'group by class.id'
+	limit = f'limit {limit}' if limit else ''
+	result = await _fetchall(dbc, f'select person.* {count} from person {join} {where} {group} order by name {limit}', args)
+	return result
+
+async def get_classes(dbc, like = None, get_student_count = False, limit = k_default_resultset_limit):
+	where, args = [], []
+	_add_like(like, ('name',), where, args) # TODO: add subject.name to search
+	where = 'where ' + ' and '.join(where) if where else ''
+	count, join, group = '', '', ''
+	if get_student_count:
+		count = ', count(enrollment.person) as num_students'
+		join = ' left join enrollment on enrollment.class = class.id'
+		group = 'group by enrollment.person'
+	limit = f'limit {limit}' if limit else ''
+	result = await _fetchall(dbc, f'select class.id, class.name {count} from class {join} {where} {group} order by class.name {limit}', args)
+	return result
+
 
 # Utils -----------------------------------------------------------------------
 
