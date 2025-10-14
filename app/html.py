@@ -61,7 +61,7 @@ def document(ws_url: str, initial = ''):
 			t.input_(type = 'file', id = 'file_upload', multiple = 'true', hidden = 'true', accept = 'image/png, image/jpeg, video/mp4, application/pdf')
 			raw(f'''<dialog id="dialog" class="dialog" closedby="any" autofocus="dialog"><div style="float:right"> <button title="{text.download}" onclick="messages.download()"><i class="i i-download"></i></button>  <button title="{text.close}" onclick="$('dialog').close()"><i class="i i-close"></i></button></div><div id="dialog_contents"></div></dialog>''') # there's no t.dialog!
 			with t.div(id = 'content_container', cls = 'container', style = 'clear:both'):
-				t.div("Loading...")
+				t.div(text.loading)
 
 		with t.div(id = 'scripts', cls = 'container'):
 			t.script(raw(f'var ws = new WebSocket("{ws_url}");'))
@@ -176,7 +176,7 @@ def classes_mainbar():
 	return _mainbar(text.add_new_class, _send('assignments', 'new_class'), [
 			t.button(t.i(cls = 'i i-one'), title = text.students, onclick = _send('assignments', 'students')),
 			t.button(t.i(cls = 'i i-class'), title = text.classes, cls = 'selected', onclick = _send('assignments', 'classes')), # for this one, onclick() just reloads content
-		], {'dont_limit': text.dont_limit})
+		], {'show_inactives': text.show_inactives, 'dont_limit': text.dont_limit})
 
 def students_mainbar(title):
 	return _mainbar(text.add_new_enrollment, _send('assignments', 'new_enrollment'), [
@@ -185,10 +185,10 @@ def students_mainbar(title):
 		], {'dont_limit': text.dont_limit})
 
 def classes_page(classes):
-	return t.div(classes_table(classes), id = 'classes_table_container')
+	return t.div(classes_table(classes), cls = 'container center_flex', id = 'classes_table_container')
 
 def students_page(students):
-	return t.div(students_table(students), id = 'students_table_container')
+	return t.div(students_table(students), cls = 'container center_flex', id = 'students_table_container')
 
 
 def _mainbar(add_button_title, add_onclick, right_buttons, filter_checkboxes = None): # TODO: use this for more, like user_tags, tag_users, message_tags?, etc.
@@ -303,14 +303,14 @@ def user_table(users):
 	result = t.table(cls = 'full_width')
 	user_detail = lambda user: _send('admin', 'user_detail', id = user['user_id'])
 	with result:
-		with t.tr(cls = 'midlin'):
+		with t.tr():
 			t.th('Username', align = 'right')
 			t.th('Name', align = 'left')
 			t.th('Created', align = 'center')
 			t.th('Verified', align = 'center')
 			t.th('Active', align = 'center')
 		for user in users:
-			with t.tr(cls = 'midlin'):
+			with t.tr():
 				t.td(user['username'], cls = 'pointered', align = 'right', onclick = user_detail(user))
 				t.td(f"{user['first_name']} {user['last_name']}", cls = 'pointered', align = 'left', onclick = _send('admin', 'person_detail', person_id = user['person_id']))
 				t.td(datetime.fromisoformat(user['created']).strftime('%m/%d/%Y %H:%M'), align = 'center')
@@ -392,55 +392,61 @@ def more_person_detail(person_id, emails, phones, spouse, children):
 
 
 def students_table(students):
-	result = t.table(cls = 'full_width')
+	result = t.table()
 	with result:
 		with t.tr():
-			t.th('Name', align = 'right')
-			t.th('Classes')
+			t.th(text.name, align = 'right')
+			t.th(text.classes)
 		for student in students:
 			with t.tr():
 				t.td(f"{student['first_name']} {student['last_name']}", align = 'right')
-				t.td(student['num_classes'], cls = 'pointered', align = 'center', onclick = _send('assignments', 'student_classes', person_id = student['id']))
+				t.td(student['num_classes'], cls = 'pointered', align = 'left', onclick = _send('assignments', 'student_classes', person_id = student['id']))
 	return result
 
 
 def classes_table(classes):
-	result = t.table(cls = 'full_width')
+	result = t.table()
 	with result:
 		with t.tr():
-			t.th('Name', align = 'right')
-			t.th('Students')
+			t.th(text.name, align = 'right')
+			t.th(text.students, align = 'center')
+			t.th(text.teachers, align = 'center')
 		for clss in classes:
 			with t.tr():
-				t.td(clss['name'], align = 'right', cls = 'pointered', onclick = _send('assignments', 'class_detail', class_id = clss['id']))
-				t.td(student['num_students'], align = 'center', cls = 'pointered', onclick = _send('assignments', 'class_students', class_id = clss['id']))
+				t.td(clss['name'], align = 'right', cls = 'pointered', onclick = _send('assignments', 'class_detail', id = clss['id']))
+				t.td(clss['num_students'], align = 'center', cls = 'pointered', onclick = _send('assignments', 'class_students', class_id = clss['id']))
+				t.td(clss['num_teachers'], align = 'center', cls = 'pointered', onclick = _send('assignments', 'class_teachers', class_id = clss['id']))
 	return result
 
-def class_students(cs_table):
+def button_barred_table(cs_table, done_app, done_task, container_id):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
 		filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
-		t.div(cs_table, id = 'class_students_table_container')
+		t.button(text.done, onclick = _send(done_app, done_task, finished = 'true'))
+		t.div(cs_table, id = container_id)
 	return result
 
-def class_students_table(students, nons, count):
+def class_enrollments_table(enrolleds, nons, adder_task, remover_task, count):
 	s_name = lambda s: f"{s['first_name']} {s['last_name']}"
-	adder = lambda id: _send('admin', 'add_student_to_class', student_id = id)
-	remover = lambda id: _send('admin', 'remove_student_from_class', student_id = id)
-	return _xaa_table(nons, students, s_name, 'NOT in class:', 'IN class:', 'assignments', 'class_students', adder, remover, count)
+	adder = lambda id: _send('assignments', adder_task, person_id = id)
+	remover = lambda id: _send('assignments', remover_task, enrollment_id = id)
+	return _xaa_table(nons, enrolleds, s_name, text.not_in_class, text.in_class, adder, remover, count)
+
+
 
 def student_classes(sc_table):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
 		filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
+		t.button(text.done, onclick = _send('assignments', 'student_classes', finished = 'true'))
 		t.div(sc_table, id = 'student_classes_table_container')
 	return result
 
 def student_classes_table(classes, nons, count):
 	name = lambda c: c['name']
-	adder = lambda id: _send('admin', 'add_class_to_student', class_id = id)
-	remover = lambda id: _send('admin', 'remove_class_from_student', class_id = id)
-	return _xaa_table(nons, classes, name, 'student NOT in:', 'student IN:', 'assignments', 'student_classes', adder, remover, count)
+	adder = lambda id: _send('assignments', 'add_class_to_student', class_id = id)
+	remover = lambda id: _send('assignments', 'remove_class_from_student', class_id = id)
+	return _xaa_table(nons, classes, name, text.not_in_classes, text.in_classes, adder, remover, count)
 
 
 
@@ -452,6 +458,7 @@ def tag_users_and_nonusers(tun_table):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
 		filterbox(t.div(cls = 'buttonbar'), {'show_inactives': text.show_inactives, 'dont_limit': text.dont_limit})
+		t.button(text.done, onclick = _send('admin', 'tag_users', finished = 'true'))
 		t.div(tun_table, id = 'users_and_nonusers_table_container')
 	return result
 
@@ -459,16 +466,16 @@ def tag_users_table(tag_name, users, nonusers, count):
 	un_name = lambda user: user['username'] # ({user['first_name']} {user['last_name']})
 	adder = lambda id: _send('admin', 'add_user_to_tag', user_id = id)
 	remover = lambda id: _send('admin', 'remove_user_from_tag', user_id = id)
-	return _xaa_table(nonusers, users, un_name, 'NOT Subscribers:', f'Subscribers (to {tag_name}):', 'admin', 'tag_users', adder, remover, count)
+	return _xaa_table(nonusers, users, un_name, 'NOT Subscribers:', f'Subscribers (to {tag_name}):', adder, remover, count)
 
 
 def user_tags(ut_table):
-	return _x_tags(ut_table, 'user_tags_table_container')
+	return _x_tags(ut_table, 'user_tags_table_container', 'admin', 'user_tags')
 
 def user_tags_table(user_tags, available_tags, count):
 	adder = lambda id: _send('admin', 'add_tag_to_user', tag_id = id)
 	remover = lambda id: _send('admin', 'remove_tag_from_user', tag_id = id)
-	return _xaa_table(available_tags, user_tags, lambda tag: tag['name'], 'NOT Subscribed to:', 'Subscribed to:', 'admin', 'user_tags', adder, remover, count)
+	return _xaa_table(available_tags, user_tags, lambda tag: tag['name'], 'NOT Subscribed to:', 'Subscribed to:', adder, remover, count)
 
 
 def choose_message_draft(drafts):
@@ -482,7 +489,7 @@ def choose_message_draft_table(drafts):
 	result = t.table(cls = 'full_width')
 	with result:
 		for draft in drafts:
-			with t.tr(cls = 'midlin'):
+			with t.tr():
 				t.td(f"{casual_date(draft['created'])}: {draft['teaser']}", cls = 'pointered', onclick = _send('messages', 'edit_message', message_id = draft['id'])) # note, 'teaser' is already a substring - no need to chop here
 				if not draft['deleted']: # only allow "untrashed" messages to be trashed; can't "permanently" delete anything
 					t.td(t.button(t.i(cls = 'i i-trash'), title = text.trash_draft, cls = 'red_bg', onclick = f"""messages.delete_draft_in_list({draft['id']}, "{text.delete_confirmation}")"""))
@@ -569,7 +576,10 @@ def assignments(assignments):
 		if assignment['teacher']:
 			instruction = f'<b>{instruction}</b>'
 
-		result.add(t.div(t.label(t.input_(type = 'checkbox', onclick = f"assignments.mark_complete({assignment['assignment_id']}, this)"), raw(instruction))))
+		checkbox = t.input_(type = 'checkbox', onclick = f"assignments.mark_complete({assignment['assignment_id']}, this)")
+		if assignment['complete']:
+			checkbox['checked'] = 'checked'
+		result.add(t.div(t.label(checkbox, raw(instruction))))
 
 	return result
 
@@ -656,7 +666,7 @@ def message_tags(mt_table):
 def message_tags_table(message_tags, available_tags, mid, count):
 	adder = lambda id: _send('messages', 'add_tag_to_message', message_id = mid, tag_id = id)
 	remover = lambda id: _send('messages', 'remove_tag_from_message', message_id = mid, tag_id = id)
-	return _xaa_table(available_tags, message_tags, lambda tag: tag['name'],  text.not_recipients, text.recipients, 'messages', 'message_tags', adder, remover, count)
+	return _xaa_table(available_tags, message_tags, lambda tag: tag['name'],  text.not_recipients, text.recipients, adder, remover, count, 'messages', 'message_tags')
 
 def thumbnail_strip(filenames):
 	result = t.div(cls = 'thumbnail_strip')
@@ -696,21 +706,29 @@ def _ws_submit_button(title: str, field_names: list):
 	return t.button(title, id = 'submit', type = 'submit', onclick = f'submit_fields({{ {args} }})')
 
 
-def _x_tags(xt_table, div_id):
+def _x_tags(xt_table, div_id, task_app = None, task = None):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
-		filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
+		with t.div(cls = 'center_flex'):
+			filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
+			if task_app: # and task, presumably (assert?!)
+				t.button(text.done, onclick = _send(task_app, task, finished = 'true'))
 		t.div(xt_table, id = div_id)
 	return result
 
 name_fetcher = lambda a: a.get('name', '')
-def _xaa_table(availables, assigneds, name_fetcher, left_title, right_title, task_app, task, adder, remover, count):
+def _xaa_table(availables, assigneds, name_fetcher, left_title, right_title, adder, remover, count, task_app = None, task = None):
+	add_done_button = True if task_app and len(assigneds) > 0 else False
+	if add_done_button:
+		done_button = t.button(text.done, onclick = _send(task_app, task, finished = 'true'))
+	#add_cancel_button = True if task_app and len(assigneds) == 0 else False
+	#if add_cancel_button:
+	#	cancel_button = t.button(text.cancel, onclick = _send(task_app, task, finished = 'false'))
 	result = t.table(cls = 'full_width')
 	with result:
-		with t.tr(cls = 'midlin'):
-			t.th(left_title, align = 'right')
-			t.th(t.button(text.done, onclick = _send(task_app, task, finished = 'true')), colspan = 2)
-			t.th(right_title, align = 'left')
+		with t.tr():
+			t.th(left_title, t.br(), text.click_to_add, align = 'right')
+			t.th(right_title, t.br(), text.click_to_remove, align = 'left')
 		left_elide = text.filter_for_more if count and count == len(availables) else ''
 		right_elide = text.filter_for_more if count and count == len(assigneds) else ''
 		for line in range(max(len(availables), len(assigneds))):
@@ -718,21 +736,20 @@ def _xaa_table(availables, assigneds, name_fetcher, left_title, right_title, tas
 			assigned = assigneds.pop(0) if len(assigneds) > 0 else {}
 			if not assigned and not available:
 				break # done
-			with t.tr(cls = 'midlin'):
-				c1, c2 = '', ''
-				if available:
-					c1 = name_fetcher(available)
-					c2 = t.button('+', cls = 'green_bg', onclick = adder(available['id']))
-				t.td(c1, align = 'right')
-				t.td(c2, align = 'left')
-				c1, c2 = '', ''
+			with t.tr():
+				avd = t.div(name_fetcher(available), cls = 'container gray pointered', onclick = adder(available['id'])) if available else ''
+				t.td(avd, align = 'right')
 				if assigned:
-					c1 = t.button('-', cls = 'red_bg', onclick = remover(assigned['id']))
-					c2 = name_fetcher(assigned)
-				t.td(c1, align = 'right')
-				t.td(c2, align = 'left')
+					t.td(t.div(name_fetcher(assigned), cls = 'container pointered', onclick = remover(assigned['id'])), align = 'left')
+				elif add_done_button:
+					t.td(done_button)
+					add_done_button = False # just add once
+				else:
+					t.td('')
 		if left_elide or right_elide:
-			t.tr(t.td(left_elide), t.td(''),  t.td(''), t.td(right_elide), cls = 'midlin')
+			t.tr(t.td(left_elide, align = 'right'), t.td(right_elide, align = 'left'))
+		if add_done_button:
+			t.tr(t.td(), t.td(done_button))
 
 	return result
 

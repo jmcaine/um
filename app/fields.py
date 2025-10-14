@@ -101,3 +101,9 @@ TAG = {
 	'name': Field(Validator(True, valid.STRING32, 1, 32, text.Valid.tag_name), html.Input()),
 	'active': Field(None, html.Input(type_ = 'checkbox', bool_attrs = ['checked',])),
 }
+
+CLASS = {
+	'name': Field(Validator(True, valid.STRING32, 1, 32, text.Valid.tag_name), html.Input()),
+	'active': Field(None, html.Input(type_ = 'checkbox', bool_attrs = ['checked',])),
+	#TODO: add 'subject'(id)
+}

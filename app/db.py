@@ -231,7 +231,7 @@ async def get_users(dbc, active = True, persons = True, like = None, limit = k_d
 	join = ''
 	join_fields = ''
 	if active:
-		where.append('active = 1')
+		where.append('user.active = 1')
 	if like:
 		like = f'%{like}%'
 		likes = 'username like ?'
@@ -245,7 +245,7 @@ async def get_users(dbc, active = True, persons = True, like = None, limit = k_d
 		join_fields = ', person.id as person_id, first_name, last_name'
 	where = 'where ' + " and ".join(where) if where else ''
 	limit = f'limit {limit}' if limit else ''
-	return await _fetchall(dbc, f'select user.id as user_id, username, created, verified, active {join_fields} from user {join} {where} order by username {limit}', args)
+	return await _fetchall(dbc, f'select user.id as user_id, username, created, verified, user.active {join_fields} from user {join} {where} order by username {limit}', args)
 
 async def verify_new_user(dbc, username):
 	return await _update1(dbc, f'update user set verified = {k_now} where username = ? and active = 1', (username,))
@@ -376,8 +376,8 @@ async def get_other_logins(dbc, uid):
 	r = await _fetchall(dbc, 'select id, username, require_password_on_switch, color from user where active = 1 and person in ({seq})'.format(seq = ','.join(['?']*len(all_pids))), all_pids)
 	return r
 
-async def get_user_color(dbc, username):
-	r = await _fetch1(dbc, 'select color from user where username = ?', (username,))
+async def get_user_color(dbc, uid):
+	r = await _fetch1(dbc, 'select color from user where id = ?', (uid,))
 	return r['color'] if (r and r['color']) else '#ffffff'
 
 
@@ -435,8 +435,8 @@ async def set_tag(dbc, id, name, active):
 async def get_tag_users(dbc, tag_id, limit, active = True, like = None, include_unsubscribed = False):
 	return await _get_xaa(dbc,
 		select = 'user.id, user.username from user', # , person.first_name, person.last_name (before 'from user')
-		where = 'user_tag.tag = ?',
-		where_arg = tag_id,
+		wheres = ['user_tag.tag = ?'],
+		where_args = [tag_id],
 		active = active,
 		like = like,
 		likes = ('username', ), # 'first_name', 'last_name'
@@ -445,6 +445,7 @@ async def get_tag_users(dbc, tag_id, limit, active = True, like = None, include_
 		limit = limit,
 		include_others = include_unsubscribed,
 		non_join = 'user_tag where user.id = user_tag.user and user_tag.tag = ?',
+		non_join_args = [tag_id],
 	)
 
 
@@ -457,8 +458,8 @@ async def add_user_to_tag(dbc, user_id, tag_id):
 async def get_user_tags(dbc, user_id, limit, active = True, like = None, include_unsubscribed = False):
 	return await _get_xaa(dbc,
 		select = 'tag.* from tag',
-		where = 'user_tag.user = ?',
-		where_arg = user_id,
+		wheres = ['user_tag.user = ?'],
+		where_args = [user_id],
 		active = active,
 		like = like,
 		likes = ('name',),
@@ -467,6 +468,7 @@ async def get_user_tags(dbc, user_id, limit, active = True, like = None, include
 		limit = limit,
 		include_others = include_unsubscribed,
 		non_join = 'user_tag where tag.id = user_tag.tag and user_tag.user = ?',
+		non_join_args = [user_id],
 	)
 
 async def new_message(dbc, user_id, reply_to = None, reply_chain_patriarch = None):
@@ -641,8 +643,8 @@ async def get_message_tags(dbc, message_id, limit, active = True, like = None, i
 	non_join = 'message_tag where tag.id = message_tag.tag and message_tag.message = ?'
 	result = await _get_xaa(dbc,
 		select = 'tag.* from tag',
-		where = 'message_tag.message = ?',
-		where_arg = message_id,
+		wheres = ['message_tag.message = ?'],
+		where_args = [message_id],
 		active = active,
 		like = like,
 		likes = ('name',),
@@ -650,7 +652,8 @@ async def get_message_tags(dbc, message_id, limit, active = True, like = None, i
 		order = 'CASE WHEN tag.user IS NULL THEN 0 ELSE 1 END ASC, tag.name ASC',
 		limit = limit,
 		include_others = io,
-		non_join = non_join
+		non_join = non_join,
+		non_join_args = [message_id],
 	)
 	if not include_others:
 		return result
@@ -669,35 +672,36 @@ async def get_message_tags(dbc, message_id, limit, active = True, like = None, i
 	return tags, others
 
 
-async def _get_xaa(dbc, select, where, where_arg, active, like, likes, join, order, limit, include_others, non_join):
+async def _get_xaa(dbc, select, wheres, where_args, active, like, likes, join, order, limit, include_others, non_join, non_join_args, non_join_select = None):
 	'''
 	include_others can simply be True or False, to include the "nons", or it can be a (where, where, args) triplet, such as ('join user_tag on tag.id = user_tag.tag', 'user_tag.user = ?', 5) in which case the "nons" will only present if that join/where succeeds.
 	'''
-	where, args = [where,], [where_arg,]
 	if active:
-		where.append('active = 1')
-	_add_like(like, likes, where, args)
+		wheres.append('active = 1')
 	select = f'select {select}'
 	join = f'join {join}'
 	order = f'order by {order}'
-	where = " and ".join(where) if where else ''
+	where = " and ".join(wheres) if wheres else ''
 	limit = f'limit {limit}' if limit else ''
-	result = await _fetchall(dbc, f'{select} {join} where {where} {order} {limit}', args)
+	#l.debug(f'_get_xaa sql: {select} {join} where {where} {order} {limit} ... args: {where_args}')
+	result = await _fetchall(dbc, f'{select} {join} where {where} {order} {limit}', where_args)
 	if not include_others:
 		return result
 	#else:
-	where2, args2 = [f'not exists (select 1 from {non_join})',], [where_arg,]
+	nj_where = [f'not exists (select 1 from {non_join})',]
 	if active:
-		where2.append('active = 1')
+		nj_where.append('active = 1')
+	_add_like(like, likes, nj_where, non_join_args) # we only filter the "others"; normally we want to see all of the "selecteds" (shorter list, too... at least usually....?)
 	join2 = ''
 	if isinstance(include_others, (list, tuple)) and len(include_others) == 3:
 		join2 = include_others[0]
-		where2.append(include_others[1])
-		args2.append(include_others[2])
-	_add_like(like, likes, where2, args2)
-	where2 = " and ".join(where2)
-	#l.debug(f'_get_xaa sql: {select} {join2} where {where2} {order} {limit} ... args: {args2}')
-	others = await _fetchall(dbc, f'{select} {join2} where {where2} {order} {limit}', args2)
+		nj_where.append(include_others[1])
+		non_join_args.append(include_others[2])
+	nj_where = " and ".join(nj_where)
+	if non_join_select:
+		select = f'select {non_join_select}'
+	#l.debug(f'_get_xaa sql: {select} {join2} where {nj_where} {order} {limit} ... args: {non_join_args}')
+	others = await _fetchall(dbc, f'{select} {join2} where {nj_where} {order} {limit}', non_join_args)
 	return result, others
 
 
@@ -772,7 +776,7 @@ async def receive_sms(dbc, fro, message, timestamp):
 	return r2.lastrowid
 
 
-async def get_enrollments(dbc, user_id):
+async def get_user_enrollments(dbc, user_id):
 	return await _fetchall(dbc, 'select enrollment.id from enrollment join person on enrollment.person = person.id join user on user.person = person.id where user.id = ?', (user_id,))
 
 k_academic_year = 6 # TODO: KLUDGE!
@@ -858,23 +862,78 @@ async def get_students(dbc, like = None, get_class_count = False, limit = k_defa
 	if get_class_count:
 		count = ', count(class.id) as num_classes'
 		join += ' left join class on enrollment.class = class.id'
-		group = 'group by class.id'
+		group = 'group by person.id'
 	limit = f'limit {limit}' if limit else ''
 	result = await _fetchall(dbc, f'select person.* {count} from person {join} {where} {group} order by name {limit}', args)
 	return result
 
-async def get_classes(dbc, like = None, get_student_count = False, limit = k_default_resultset_limit):
-	where, args = [], []
+_is_not_teacher = '(teacher is null or teacher = 0)'
+_is_teacher = '(teacher is not null and teacher != 0)'
+async def get_classes(dbc, academic_year, active = True, like = None, get_enrollment_count = False, limit = k_default_resultset_limit):
+	where, args = ['academic_year = ?'], [academic_year,]
+	if active:
+		where.append('active = 1')
 	_add_like(like, ('name',), where, args) # TODO: add subject.name to search
 	where = 'where ' + ' and '.join(where) if where else ''
 	count, join, group = '', '', ''
-	if get_student_count:
-		count = ', count(enrollment.person) as num_students'
+	if get_enrollment_count:
+		count = f', count(iif({_is_not_teacher}, 1, NULL)) as num_students, count(iif({_is_teacher}, 1, NULL)) as num_teachers'
 		join = ' left join enrollment on enrollment.class = class.id'
-		group = 'group by enrollment.person'
+		group = 'group by class.id'
 	limit = f'limit {limit}' if limit else ''
+	#l.debug(f'get_classes SQL: select class.id, class.name {count} from class {join} {where} {group} order by class.name {limit}  | args: {args}')
 	result = await _fetchall(dbc, f'select class.id, class.name {count} from class {join} {where} {group} order by class.name {limit}', args)
 	return result
+
+async def get_class(dbc, id, fields: str | None = None):
+	if not fields:
+		fields = '*'
+	return await _fetch1(dbc, f'select {fields} from class where id = ?', (id,))
+
+async def set_class(dbc, id, name, active):
+	return await _update1(dbc, 'update class set name = ?, active = ? where id = ?', (name, active, id))
+
+async def get_enrollments(dbc, class_id, limit, teachers = False, like = None, include_others = True):
+	select = ', first_name, last_name from person'
+	return await _get_xaa(dbc,
+		select = 'enrollment.id as id' + select,
+		wheres = ['enrollment.class = ?', _is_teacher if teachers else _is_not_teacher],
+		where_args = [class_id],
+		active = None,
+		like = like,
+		likes = ('first_name', 'last_name'),
+		join = 'enrollment on enrollment.person = person.id',
+		order = 'first_name',
+		limit = limit,
+		include_others = include_others,
+		non_join = 'enrollment where enrollment.person = person.id and enrollment.class = ?',
+		non_join_args = [class_id],
+		non_join_select = 'person.id as id' + select,
+	)
+
+async def get_enrollment_person_id(dbc, enrollment_id):
+	return (await _fetch1(dbc, f'select person from enrollment where id = ?', (enrollment_id,)))['person']
+
+async def remove_enrollment(dbc, enrollment_id):
+	return await dbc.execute(f'delete from enrollment where id = ?', (enrollment_id,))
+
+async def add_enrollment(dbc, person_id, class_id, academic_year, teacher = False, section = None):
+	fields = ['person', 'class', 'academic_year']
+	values = [person_id, class_id, academic_year]
+	if teacher:
+		fields.append('teacher')
+		values.append(1)
+	if section:
+		fields.append('section')
+		values.append(section)
+	return await _insert1(dbc, f"insert into enrollment ({','.join(fields)}) values ({','.join(['?']*len(fields))})", values)
+
+async def change_enrollee_class_section(dbc, enrollment_id, section):
+	return await _update1(dbc, f'update enrollment set section = ? where id = ?', (section, enrollment_id))
+
+
+async def get_academic_years(dbc):
+	return await _fetchall(dbc, f'select * from academic_year order by end desc')
 
 
 # Utils -----------------------------------------------------------------------

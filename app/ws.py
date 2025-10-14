@@ -13,7 +13,7 @@ from random import choices as random_choices
 
 from . import db
 from . import html
-from . import shared
+from . import decorators
 from . import text
 
 
@@ -25,7 +25,7 @@ send_sub_content = lambda hd, container, content, **kwargs: send_content(hd, 'su
 
 _handlers = {}
 
-@shared.doublewrap
+@decorators.doublewrap
 def handler(func, auth_func = None):
 	@wraps(func)
 	async def inner(hd, *args, **kwargs):

@@ -47,11 +47,6 @@ let assignments = {
 		document.body.innerHTML = content;
 	},
 
-	show_classes: function(content) {
-		hide_dialog();
-		set_sub_content('school_container', content);
-	},
-
 	// From client side:
 
 	mark_complete: function(assignment_id, checkbox) {

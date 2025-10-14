@@ -9,6 +9,7 @@ import traceback
 from . import db
 from . import fields
 from . import html
+from . import shared
 from . import task
 from . import text
 from . import valid
@@ -286,20 +287,15 @@ async def new_tag(hd, reverting = False):
 		await task.finish(hd)
 		await ws.send_content(hd, 'banner', html.info(text.added_tag_success.format(name = f'"{name}"')))
 
+
+async def _tag_setter(hd, data):
+	name = data['name']
+	await db.set_tag(hd.dbc, hd.task.state['db_data']['id'], name, html.checkbox_value(data, 'active'))
+	await ws.send_content(hd, 'banner', html.info(text.change_detail_success.format(change = f'"{name}"')))
+
 @ws.handler(auth_func = authorize_admin) # TODO: change to user-level auth; users that create tags can edit those tags (perhaps only some users are even allowed to create tags; need concept of publicly-discoverable tags vs. admin-directed subscription management....)
 async def tag_detail(hd, reverting = False):
-	if task.just_started(hd, tag_detail) or reverting: # 'reverting' check is currently useless, but if sub-dialogs are added here, this is necessary to repaint the whole dialog
-		hd.task.state['tag'] = await db.get_tag(hd.dbc, int(hd.payload.get('id')))
-		await ws.send_content(hd, 'dialog', html.dialog2(text.tag, fields.TAG, hd.task.state['tag']))
-	elif not await task.finished(hd): # e.g., dialog-box could have been "canceled"
-		data = hd.payload
-		if await valid.invalids(hd, data, fields.TAG, handle_invalid, 'detail_banner'):
-			return # if there WERE invalids, bannar was already sent within
-		#else all good, move on!
-		name = data['name']
-		await db.set_tag(hd.dbc, hd.task.state['tag']['id'], name, html.checkbox_value(data, 'active'))
-		await task.finish(hd)
-		await ws.send_content(hd, 'banner', html.info(text.change_detail_success.format(change = f'"{name}"')))
+	return await shared.edit_detail(hd, tag_detail, reverting, db.get_tag, text.tag, fields.TAG, _tag_setter)
 
 
 @ws.handler(auth_func = authorize_admin)

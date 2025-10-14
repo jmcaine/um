@@ -263,6 +263,7 @@ async def identify(hd):
 		if user_id: # "persistent session" all in order, "auto log-in"... go straight to it:
 			hd.uid = user_id
 			hd.admin = await db.authorized(hd.dbc, hd.uid, 'admin')
+			await ws.send(hd, 'set_topbar_color', color = await db.get_user_color(hd.dbc, hd.uid))
 			await messages.messages(hd) # show main messages page
 		else:
 			await ws.send(hd, 'new_key')
@@ -287,7 +288,7 @@ async def login(hd, reverting = False, username = None):
 		if uid:
 			hd.uid = uid
 			hd.admin = await db.authorized(hd.dbc, hd.uid, 'admin')
-			await ws.send(hd, 'set_topbar_color', color = await db.get_user_color(hd.dbc, username))
+			await ws.send(hd, 'set_topbar_color', color = await db.get_user_color(hd.dbc, hd.uid))
 			await messages.messages(hd)
 		else:
 			await ws.send_content(hd, 'banner', html.error(text.invalid_login))
@@ -300,7 +301,7 @@ async def switch_login(hd):
 		hd.uid = uid
 		hd.admin = await db.authorized(hd.dbc, hd.uid, 'admin')
 		await db.force_login(hd.dbc, hd.idid, hd.uid)
-		await ws.send(hd, 'set_topbar_color', color = await db.get_user_color(hd.dbc, username))
+		await ws.send(hd, 'set_topbar_color', color = await db.get_user_color(hd.dbc, hd.uid))
 		await messages.messages(hd)
 	else:
 		await login(hd, username = username)

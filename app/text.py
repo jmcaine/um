@@ -60,10 +60,12 @@ today = 'Today'
 subject = 'Subject'
 all_subjects = 'All Subjects'
 students = 'Students'
+teachers = 'Teachers'
 classes = 'Classes'
 enrollments = 'Enrollments'
 add_new_enrollment = 'Add new enrollment'
 add_new_class = 'Add new class'
+clss = 'Class'
 
 # Label prefixes:
 your = 'Your'
@@ -94,7 +96,7 @@ tags = 'Tags'
 invite_new_user = 'Invite new user...'
 create_new_tag = 'Create new tag...'
 recipients = 'Recipients'
-not_recipients = 'Click "+" to add...'
+not_recipients = 'Click to add...'
 loading_messages = 'Loading messages...'
 loading_assignments = 'Loading assignments...'
 loading = 'Loading...'
@@ -124,6 +126,13 @@ pretend_password = '********'
 show_currents = "Show THIS WEEK's assignments"
 show_previouses = "Show LAST WEEK's assignments"
 show_nexts = "Show NEXT WEEK's assignments"
+
+not_in_class = 'NOT in class:'
+in_class = 'IN class:'
+not_in_classes = 'student NOT in:'
+in_classes = 'student IN:'
+click_to_add = '(click to add)'
+click_to_remove = '(click to remove)'
 
 # Fieldset legends:
 emails = 'Emails'
@@ -158,10 +167,12 @@ no_more_drafts = f'No more draft messages! Click "{brand_new_message}", below, t
 cant_send_empty_message = 'Cannot send an empty message - type some text first!'
 cant_send_message_without_recipients = 'Cannot send a message with no recipients - add some tags to designate some recipients first!'
 message_sent = 'Message sent!'
-filter_for_more = '... (filter to see more...)'
+filter_for_more = '(filter to see more...)'
 no_such_invitation_code = 'Uh oh!  No such invitation code can be found on record!  Please contact an admin.'
 not_found = 'No messages found that match the search "{searchtext}"'
 no_messages = 'No messages here!'
+added_person_to_class = 'Successfully added "{name}" to class.'
+removed_person_from_class = 'Successfully removed "{name}" from class.'
 
 reset_email_subject = 'Reset...'
 password_reset_code_email_body = "You requested a password reset code for um.openhome.school. Here it is: {code} <-- type or paste that code into your browser, where it's requested."

@@ -86,9 +86,6 @@ ws.onmessage = function(event) {
 		case "show_assignments_print":
 			assignments.show_assignments_print(payload.content);
 			break;
-		case "show_classes":
-			assignments.show_classes(payload.content);
-			break;
 		case "reload":
 			window.location.href = '/';
 			break;

@@ -3,23 +3,24 @@ __copyright__ = '2024'
 __version__ = '0.1'
 __license__ = 'MIT'
 
-from functools import wraps
+from . import html
+from . import task
+from . import valid
+from . import ws
 
-def doublewrap(f):
-	'''
-	a decorator decorator, allowing the decorator to be used as:
-	@decorator(with, arguments, and=kwargs)
-	or
-	@decorator
-	THANKS https://stackoverflow.com/users/618895/bj0
-	'''
-	@wraps(f)
-	def new_dec(*args, **kwargs):
-		if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
-			# actual decorated function
-			return f(args[0])
-		else:
-			# decorator arguments
-			return lambda realf: f(realf, *args, **kwargs)
 
-	return new_dec
+async def handle_invalid(hd, message, banner):
+	await ws.send_content(hd, banner, html.error(message))
+
+
+async def edit_detail(hd, task_fn, reverting, fetcher, title, fieldset, db_setter):
+	if task.just_started(hd, task_fn) or reverting: # 'reverting' check is currently useless, but if sub-dialogs are added here, this is necessary to repaint the whole dialog
+		hd.task.state['db_data'] = await fetcher(hd.dbc, int(hd.payload.get('id')))
+		await ws.send_content(hd, 'dialog', html.dialog2(title, fieldset, hd.task.state['db_data']))
+	elif not await task.finished(hd): # e.g., dialog-box could have been "canceled"
+		data = hd.payload
+		if await valid.invalids(hd, data, fieldset, handle_invalid, 'detail_banner'):
+			return # if there WERE invalids, bannar was already sent within
+		#else all good, move on!
+		await db_setter(hd, data)
+		await task.finish(hd)

@@ -52,7 +52,7 @@ async def messages(hd, reverting = False):
 
 	just_started = task.just_started(hd, messages) # have to do this first, before referencing hd.task.state, below
 	if just_started:
-		enrollments = await db.get_enrollments(hd.dbc, hd.uid)
+		enrollments = await db.get_user_enrollments(hd.dbc, hd.uid)
 		await ws.send_sub_content(hd, 'topbar_container', html.messages_topbar(hd.admin, len(enrollments) > 0))
 		await ws.send_content(hd, 'content', html.container(text.loading_messages, 'messages_container'))
 		# sending the above can happen almost immediately; as message lookup might take a moment longer, we'll do it only subsequently (below), even for the very first load, so that the user at least has the framework of the page to see, and the "loading messages..." to see (or, hopefully not, if things are fast enough!)
