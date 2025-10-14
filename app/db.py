@@ -780,7 +780,7 @@ async def get_user_enrollments(dbc, user_id):
 	return await _fetchall(dbc, 'select enrollment.id from enrollment join person on enrollment.person = person.id join user on user.person = person.id where user.id = ?', (user_id,))
 
 k_academic_year = 6 # TODO: KLUDGE!
-k_week = 3 # TODO: KLUDGE!
+k_week = 5 # TODO: KLUDGE!
 async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Filter.current, subj_id = None, limit = k_assignment_resultset_limit):
 	wheres = [	'user.id = ?',
 					'assignment.deleted is NULL',
