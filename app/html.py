@@ -410,27 +410,56 @@ def classes_table(classes):
 		with t.tr():
 			t.th(text.name, align = 'right')
 			t.th(text.students, align = 'center')
-			t.th(text.teachers, align = 'center')
 		for clss in classes:
 			with t.tr():
 				t.td(clss['name'], align = 'right', cls = 'pointered', onclick = _send('assignments', 'class_detail', id = clss['id']))
-				t.td(clss['num_students'], align = 'center', cls = 'pointered', onclick = _send('assignments', 'class_students', class_id = clss['id']))
-				t.td(clss['num_teachers'], align = 'center', cls = 'pointered', onclick = _send('assignments', 'class_teachers', class_id = clss['id']))
+				t.td(clss['num_enrolled'], align = 'center', cls = 'pointered', onclick = _send('assignments', 'class_students', id = clss['id']))
 	return result
 
-def button_barred_table(cs_table, done_app, done_task, container_id):
-	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
+def table_dialog(cs_table, done_app, done_task, container_id):
+	result = t.div(cls = 'container center_flex')
 	with result:
+		t.div(id = 'detail_banner_container', cls = 'container') # for later ws-delivered banner messages
 		filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
 		t.button(text.done, onclick = _send(done_app, done_task, finished = 'true'))
 		t.div(cs_table, id = container_id)
 	return result
 
-def class_enrollments_table(enrolleds, nons, adder_task, remover_task, count):
+def class_enrollments_table(enrolleds, nons, adder_task, remover_task, count, sections):
 	s_name = lambda s: f"{s['first_name']} {s['last_name']}"
 	adder = lambda id: _send('assignments', adder_task, person_id = id)
 	remover = lambda id: _send('assignments', remover_task, enrollment_id = id)
-	return _xaa_table(nons, enrolleds, s_name, text.not_in_class, text.in_class, adder, remover, count)
+	section_chooser = Chooser_Column('change_enrollment_section', text.section, 'section', sections)
+	teacher_checkboxer = Checkbox_Column('set_enrollment_teacher', text.teacher, 'teacher')
+	audit_checkboxer = Checkbox_Column('set_enrollment_audit', text.audit, 'audit')
+	return _xaa_table(nons, enrolleds, s_name, text.not_in_class, text.in_class, adder, remover, count, (section_chooser, teacher_checkboxer, audit_checkboxer))
+
+@dataclass(slots = True)
+class Chooser_Column:
+	task: str
+	column_title: str
+	field_name: str
+	options: int
+	def render(self, id, current_value):
+		result = t.select(onchange = _send('assignments', self.task, id = id, value = 'this.value'))
+		for opt in range(1, self.options + 1):
+			topt = t.option(str(opt), value = opt)
+			if opt == current_value:
+				topt['selected'] = 'selected'
+			result.add(topt)
+		return result
+
+@dataclass(slots = True)
+class Checkbox_Column:
+	task: str
+	column_title: str
+	field_name: str
+	def render(self, id, current_value):
+		result = t.input_(type = 'checkbox', onchange = _send('assignments', self.task, id = id, value = 'this.checked'))
+		if current_value:
+			result['checked'] = 'checked'
+		return result
+
 
 
 
@@ -666,7 +695,7 @@ def message_tags(mt_table):
 def message_tags_table(message_tags, available_tags, mid, count):
 	adder = lambda id: _send('messages', 'add_tag_to_message', message_id = mid, tag_id = id)
 	remover = lambda id: _send('messages', 'remove_tag_from_message', message_id = mid, tag_id = id)
-	return _xaa_table(available_tags, message_tags, lambda tag: tag['name'],  text.not_recipients, text.recipients, adder, remover, count, 'messages', 'message_tags')
+	return _xaa_table(available_tags, message_tags, lambda tag: tag['name'],  text.not_recipients, text.recipients, adder, remover, count, None, 'messages', 'message_tags')
 
 def thumbnail_strip(filenames):
 	result = t.div(cls = 'thumbnail_strip')
@@ -707,28 +736,29 @@ def _ws_submit_button(title: str, field_names: list):
 
 
 def _x_tags(xt_table, div_id, task_app = None, task = None):
-	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
+	result = t.div(cls = 'center_flex container')
 	with result:
-		with t.div(cls = 'center_flex'):
-			filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
-			if task_app: # and task, presumably (assert?!)
-				t.button(text.done, onclick = _send(task_app, task, finished = 'true'))
+		t.div(id = 'detail_banner_container', cls = 'container') # for later ws-delivered banner messages
+		filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
+		if task_app: # and task, presumably (assert?!)
+			t.button(text.done, onclick = _send(task_app, task, finished = 'true'))
 		t.div(xt_table, id = div_id)
 	return result
 
-name_fetcher = lambda a: a.get('name', '')
-def _xaa_table(availables, assigneds, name_fetcher, left_title, right_title, adder, remover, count, task_app = None, task = None):
+def _xaa_table(availables, assigneds, name_fetcher, left_title, right_title, adder, remover, count, extra_columns = None, task_app = None, task = None):
 	add_done_button = True if task_app and len(assigneds) > 0 else False
 	if add_done_button:
 		done_button = t.button(text.done, onclick = _send(task_app, task, finished = 'true'))
 	#add_cancel_button = True if task_app and len(assigneds) == 0 else False
 	#if add_cancel_button:
 	#	cancel_button = t.button(text.cancel, onclick = _send(task_app, task, finished = 'false'))
-	result = t.table(cls = 'full_width')
+	result = t.table()
 	with result:
 		with t.tr():
 			t.th(left_title, t.br(), text.click_to_add, align = 'right')
 			t.th(right_title, t.br(), text.click_to_remove, align = 'left')
+			for column in (extra_columns if extra_columns else []):
+				t.th(column.column_title)
 		left_elide = text.filter_for_more if count and count == len(availables) else ''
 		right_elide = text.filter_for_more if count and count == len(assigneds) else ''
 		for line in range(max(len(availables), len(assigneds))):
@@ -741,16 +771,15 @@ def _xaa_table(availables, assigneds, name_fetcher, left_title, right_title, add
 				t.td(avd, align = 'right')
 				if assigned:
 					t.td(t.div(name_fetcher(assigned), cls = 'container pointered', onclick = remover(assigned['id'])), align = 'left')
+					for column in (extra_columns if extra_columns else []):
+						t.td(column.render(assigned['id'], assigned[column.field_name]))
 				elif add_done_button:
 					t.td(done_button)
 					add_done_button = False # just add once
-				else:
-					t.td('')
 		if left_elide or right_elide:
 			t.tr(t.td(left_elide, align = 'right'), t.td(right_elide, align = 'left'))
 		if add_done_button:
 			t.tr(t.td(), t.td(done_button))
-
 	return result
 
 

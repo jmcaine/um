@@ -83,35 +83,24 @@ async def classes(hd, reverting = False):
 
 @ws.handler(auth_func = authorize_admin)
 async def class_students(hd, reverting = False):
-	await _enrollments(hd, class_students, class_students_table, 'enrollments_table_container', reverting)
-
-@ws.handler(auth_func = authorize_admin)
-async def class_teachers(hd, reverting = False):
-	await _enrollments(hd, class_teachers, class_teachers_table, 'enrollments_table_container', reverting)
-
-async def _enrollments(hd, fn, table, container, reverting = False):
-	if task.just_started(hd, fn, ('academic_year',)) or reverting:
-		hd.task.state['class_id'] = int(hd.payload.get('class_id'))
-		await ws.send_content(hd, 'dialog', html.button_barred_table(await table(hd), 'assignments', fn.__name__, container))
+	container = 'enrollments_table_container'
+	if task.just_started(hd, class_students, ('academic_year',)) or reverting:
+		hd.task.state['class_instance_id'] = int(hd.payload.get('id'))
+		await ws.send_content(hd, 'dialog', html.table_dialog(await class_students_table(hd), 'assignments', 'class_students', container))
 	elif not await task.finished(hd): # dialog-box could have been "closed"
-		await ws.send_content(hd, 'sub_content', await table(hd), container = container)
+		await ws.send_content(hd, 'sub_content', await class_students_table(hd), container = container)
 
 
 async def class_students_table(hd):
-	return await _class_enrollments_table(hd, False, 'add_student_enrollment', 'remove_enrollment')
-
-async def class_teachers_table(hd):
-	return await _class_enrollments_table(hd, True, 'add_teacher_enrollment', 'remove_enrollment')
-
-async def _class_enrollments_table(hd, teachers, adder_task, remover_task):
 	fs = hd.task.state.get('filtersearch', {})
 	limit = None if fs.get('dont_limit', False) else db.k_default_resultset_limit
-	enrollments, nons = await db.get_enrollments(hd.dbc, hd.task.state['class_id'],
+	cid = hd.task.state['class_instance_id']
+	enrollments, nons = await db.get_enrollments(hd.dbc, cid,
 													limit = limit,
-													teachers = teachers,
 													like = fs.get('searchtext', ''),
 													include_others = True)
-	return html.class_enrollments_table(enrollments, nons, adder_task, remover_task, limit)
+	sections = await db.get_class_sections(hd.dbc, cid)
+	return html.class_enrollments_table(enrollments, nons, 'add_enrollment', 'remove_enrollment', limit, sections)
 
 
 async def _class_setter(hd, data):
@@ -138,18 +127,29 @@ async def remove_enrollment(hd):
 	await hd.task.handler(hd) # make current handler re-draw (the table)
 
 @ws.handler(auth_func = authorize_admin)
-async def add_student_enrollment(hd):
-	await _add_student_teacher_enrollment(hd, False)
-
-@ws.handler(auth_func = authorize_admin)
-async def add_teacher_enrollment(hd):
-	await _add_student_teacher_enrollment(hd, True)
-
-async def _add_student_teacher_enrollment(hd, teacher):
+async def add_enrollment(hd):
 	pid = int(hd.payload['person_id'])
 	s = hd.task.state
-	await db.add_enrollment(hd.dbc, pid, s['class_id'], s['academic_year'], teacher)
+	await db.add_enrollment(hd.dbc, pid, s['class_instance_id'], s['academic_year'])
 	await _announce_enrollment_change(hd, text.added_person_to_class, pid)
 	await hd.task.handler(hd) # make current handler re-draw (the table)
 
+@ws.handler(auth_func = authorize_admin)
+async def change_enrollment_section(hd):
+	await _set_enrollment_x(hd, db.change_enrollment_section, text.changed_persons_class_section)
+
+@ws.handler(auth_func = authorize_admin)
+async def set_enrollment_audit(hd):
+	await _set_enrollment_x(hd, db.change_enrollment_audit, text.changed_persons_class_audit_status)
+
+@ws.handler(auth_func = authorize_admin)
+async def set_enrollment_teacher(hd):
+	await _set_enrollment_x(hd, db.change_enrollment_teacher, text.changed_persons_class_teacher_status)
+
+async def _set_enrollment_x(hd, fn, message):
+	eid = int(hd.payload['id'])
+	await fn(hd.dbc, eid, int(hd.payload['value']))
+	pid = await db.get_enrollment_person_id(hd.dbc, eid)
+	await _announce_enrollment_change(hd, message, pid)
+	# no need to redraw - change is already visible
 

@@ -133,6 +133,9 @@ not_in_classes = 'student NOT in:'
 in_classes = 'student IN:'
 click_to_add = '(click to add)'
 click_to_remove = '(click to remove)'
+section = 'Section'
+audit = 'Audit'
+teacher = 'Teacher'
 
 # Fieldset legends:
 emails = 'Emails'
@@ -173,6 +176,10 @@ not_found = 'No messages found that match the search "{searchtext}"'
 no_messages = 'No messages here!'
 added_person_to_class = 'Successfully added "{name}" to class.'
 removed_person_from_class = 'Successfully removed "{name}" from class.'
+changed_persons_class_section = 'Successfully changed class section for "{name}"'
+changed_persons_class_audit_status = 'Successfully changed class "audit" status for "{name}"'
+changed_persons_class_teacher_status = 'Successfully changed class "teacher" status for "{name}"'
+
 
 reset_email_subject = 'Reset...'
 password_reset_code_email_body = "You requested a password reset code for um.openhome.school. Here it is: {code} <-- type or paste that code into your browser, where it's requested."

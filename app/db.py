@@ -780,12 +780,12 @@ async def get_user_enrollments(dbc, user_id):
 	return await _fetchall(dbc, 'select enrollment.id from enrollment join person on enrollment.person = person.id join user on user.person = person.id where user.id = ?', (user_id,))
 
 k_academic_year = 6 # TODO: KLUDGE!
-k_week = 5 # TODO: KLUDGE!
+k_week = 6 # TODO: KLUDGE!
 async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Filter.current, subj_id = None, limit = k_assignment_resultset_limit):
 	wheres = [	'user.id = ?',
 					'assignment.deleted is NULL',
 					'(assignment.teacher is null or assignment.teacher = 0 or enrollment.teacher = 1)',
-					'enrollment.academic_year = ' + str(k_academic_year), # TODO academic_year is kludge; plus, need campus ('all' or own)
+					'class_instance.academic_year = ' + str(k_academic_year), # TODO academic_year is kludge; plus, need campus ('all' or own)
 					#'campus_period_dates.campus in (1, class.campus)', # TODO - this doesn't work; need to constrain to campus, though, somehow...
 				]
 	args = [		user_id, ]
@@ -825,7 +825,8 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 					'instruction on assignment.instruction = instruction.id',
 					'class on assignment.class = class.id',
 					'subject on class.subject = subject.id',
-					'enrollment on class.id = enrollment.class',
+					'class_instance on class_instance.class = class.id',
+					'enrollment on enrollment.class_instance = class_instance.id',
 					'person on enrollment.person = person.id',
 					'user on person.id = user.person',
 				]
@@ -867,8 +868,8 @@ async def get_students(dbc, like = None, get_class_count = False, limit = k_defa
 	result = await _fetchall(dbc, f'select person.* {count} from person {join} {where} {group} order by name {limit}', args)
 	return result
 
-_is_not_teacher = '(teacher is null or teacher = 0)'
-_is_teacher = '(teacher is not null and teacher != 0)'
+#_is_not_teacher = '(teacher is null or teacher = 0)'
+#_is_teacher = '(teacher is not null and teacher != 0)'
 async def get_classes(dbc, academic_year, active = True, like = None, get_enrollment_count = False, limit = k_default_resultset_limit):
 	where, args = ['academic_year = ?'], [academic_year,]
 	if active:
@@ -877,37 +878,42 @@ async def get_classes(dbc, academic_year, active = True, like = None, get_enroll
 	where = 'where ' + ' and '.join(where) if where else ''
 	count, join, group = '', '', ''
 	if get_enrollment_count:
-		count = f', count(iif({_is_not_teacher}, 1, NULL)) as num_students, count(iif({_is_teacher}, 1, NULL)) as num_teachers'
-		join = ' left join enrollment on enrollment.class = class.id'
-		group = 'group by class.id'
+		#count = f'count(iif({_is_not_teacher}, 1, NULL)) as num_students, count(iif({_is_teacher}, 1, NULL)) as num_teachers'
+		count = 'count(enrollment.id) as num_enrolled'
+		join = ' join class on class_instance.class = class.id left join enrollment on enrollment.class_instance = class_instance.id'
+		group = 'group by class_instance.id'
 	limit = f'limit {limit}' if limit else ''
-	#l.debug(f'get_classes SQL: select class.id, class.name {count} from class {join} {where} {group} order by class.name {limit}  | args: {args}')
-	result = await _fetchall(dbc, f'select class.id, class.name {count} from class {join} {where} {group} order by class.name {limit}', args)
+	#l.debug(f'get_classes SQL: select class_instance.id, class.name, class_instance.sections, {count} from class_instance {join} {where} {group} order by class.name {limit}  | args: {args}')
+	result = await _fetchall(dbc, f'select class_instance.id, class.name, class_instance.sections, {count} from class_instance {join} {where} {group} order by class.name {limit}', args)
 	return result
 
-async def get_class(dbc, id, fields: str | None = None):
+async def get_class(dbc, class_instance_id, fields: str | None = None):
 	if not fields:
 		fields = '*'
-	return await _fetch1(dbc, f'select {fields} from class where id = ?', (id,))
+	return await _fetch1(dbc, f'select {fields} from class_instance join class on class.id = class_instance.class where class_instance.id = ?', (class_instance_id,))
 
 async def set_class(dbc, id, name, active):
 	return await _update1(dbc, 'update class set name = ?, active = ? where id = ?', (name, active, id))
 
-async def get_enrollments(dbc, class_id, limit, teachers = False, like = None, include_others = True):
+async def get_class_sections(dbc, class_instance_id):
+	r = await _fetch1(dbc, f'select sections from class_instance where id = ?', (class_instance_id,))
+	return r['sections'] if r else 0
+
+async def get_enrollments(dbc, class_instance_id, limit, like = None, include_others = True):
 	select = ', first_name, last_name from person'
 	return await _get_xaa(dbc,
-		select = 'enrollment.id as id' + select,
-		wheres = ['enrollment.class = ?', _is_teacher if teachers else _is_not_teacher],
-		where_args = [class_id],
+		select = 'enrollment.id as id, section, audit, teacher' + select,
+		wheres = ['enrollment.class_instance = ?', ],
+		where_args = [class_instance_id],
 		active = None,
 		like = like,
 		likes = ('first_name', 'last_name'),
 		join = 'enrollment on enrollment.person = person.id',
-		order = 'first_name',
+		order = 'first_name, last_name',
 		limit = limit,
 		include_others = include_others,
-		non_join = 'enrollment where enrollment.person = person.id and enrollment.class = ?',
-		non_join_args = [class_id],
+		non_join = 'enrollment where enrollment.person = person.id and enrollment.class_instance = ?',
+		non_join_args = [class_instance_id],
 		non_join_select = 'person.id as id' + select,
 	)
 
@@ -917,9 +923,9 @@ async def get_enrollment_person_id(dbc, enrollment_id):
 async def remove_enrollment(dbc, enrollment_id):
 	return await dbc.execute(f'delete from enrollment where id = ?', (enrollment_id,))
 
-async def add_enrollment(dbc, person_id, class_id, academic_year, teacher = False, section = None):
-	fields = ['person', 'class', 'academic_year']
-	values = [person_id, class_id, academic_year]
+async def add_enrollment(dbc, person_id, class_instance_id, academic_year, teacher = False, section = None):
+	fields = ['person', 'class_instance']
+	values = [person_id, class_instance_id]
 	if teacher:
 		fields.append('teacher')
 		values.append(1)
@@ -928,9 +934,14 @@ async def add_enrollment(dbc, person_id, class_id, academic_year, teacher = Fals
 		values.append(section)
 	return await _insert1(dbc, f"insert into enrollment ({','.join(fields)}) values ({','.join(['?']*len(fields))})", values)
 
-async def change_enrollee_class_section(dbc, enrollment_id, section):
+async def change_enrollment_section(dbc, enrollment_id, section):
 	return await _update1(dbc, f'update enrollment set section = ? where id = ?', (section, enrollment_id))
 
+async def change_enrollment_audit(dbc, enrollment_id, value):
+	return await _update1(dbc, f'update enrollment set audit = ? where id = ?', (1 if value else 0, enrollment_id))
+
+async def change_enrollment_teacher(dbc, enrollment_id, value):
+	return await _update1(dbc, f'update enrollment set teacher = ? where id = ?', (1 if value else 0, enrollment_id))
 
 async def get_academic_years(dbc):
 	return await _fetchall(dbc, f'select * from academic_year order by end desc')
