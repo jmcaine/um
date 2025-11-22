@@ -189,8 +189,13 @@ async def is_guardian_of(dbc, uid, child_username):
 async def _get_guardians(dbc, person_id):
 	return await _fetchall(dbc, 'select g.* from child_guardian join person as g on child_guardian.guardian = g.id join person as c on child_guardian.child = c.id where c.id = ?', (person_id,))
 
-
-
+async def get_guardians(dbc, limit, like = None, include_inactive = False):
+	wheres, args = [], []
+	if not include_inactive:
+		wheres.append('person.active = 1')
+	_add_like(like, ('first_name', 'last_name',), wheres, args)
+	order_by = ['last_name', 'first_name']
+	return await _fetchall(dbc, _build_select(('person.id', 'first_name', 'last_name'), 'person', ('join child_guardian on child_guardian.guardian = person.id',), wheres, ('person.id',), order_by), args)
 
 async def delete_person_detail(dbc, table, id):
 	if table not in ('phone', 'email'):
@@ -813,6 +818,7 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 					'resource.id as resource_id',
 					'resource.name as resource_name',
 					'assignment.id as assignment_id',
+					'enrollment.id as enrollment_id',
 					'instruction.text as instruction',
 					'person.first_name as first_name', 'person.last_name as last_name',
 					'week', 'pages', 'chapters', 'items', 'skips', 'optional', 'sequence',
@@ -838,13 +844,9 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 	return await _fetchall(dbc, query, args)
 
 
-async def mark_assignment_complete(dbc, user_id, assignment_id, complete):
+async def mark_assignment_complete(dbc, user_id, assignment_id, enrollment_id, complete):
 	complete = 1 if complete else 0
-	enrollment = await _fetch1(dbc, 'select enrollment.id from enrollment join person on enrollment.person = person.id join user on person.id = user.person where user.id = ?', (user_id,))
-	if not enrollment:
-		return False
-	#else:
-	args = [enrollment['id'], assignment_id]
+	args = [enrollment_id, assignment_id]
 	if complete:
 		try:
 			await _insert1(dbc, 'insert into assignment_complete (enrollment, assignment) values (?, ?)', args)
@@ -868,8 +870,6 @@ async def get_students(dbc, like = None, get_class_count = False, limit = k_defa
 	result = await _fetchall(dbc, f'select person.* {count} from person {join} {where} {group} order by name {limit}', args)
 	return result
 
-#_is_not_teacher = '(teacher is null or teacher = 0)'
-#_is_teacher = '(teacher is not null and teacher != 0)'
 async def get_classes(dbc, academic_year, active = True, like = None, get_enrollment_count = False, limit = k_default_resultset_limit):
 	where, args = ['academic_year = ?'], [academic_year,]
 	if active:
@@ -946,6 +946,70 @@ async def change_enrollment_teacher(dbc, enrollment_id, value):
 async def get_academic_years(dbc):
 	return await _fetchall(dbc, f'select * from academic_year order by end desc')
 
+async def get_programs(dbc):
+	return await _fetchall(dbc, f'select * from program order by name desc')
+
+
+
+
+async def get_teachers_subs(dbc, program_id, academic_year_id, start_week = None, weeks = None, limit = k_default_resultset_limit, like = None):
+	if start_week == None:
+		start_week = max(k_week - 2, 1)
+	if not weeks:
+		weeks = 5 # default: from "back two weeks" to "forward two weeks"
+	fields = [
+			'class.id as class_id', 'class.name as class_name', 'class_teacher_sub.id as class_teacher_sub_id', 'class_teacher_sub.week',
+			'person.id as teacher_id', 'person.first_name as teacher_first_name', 'person.last_name as teacher_last_name',
+		]
+	joins = [
+			'join class_instance on class_instance.id = class_teacher_sub.class_instance',
+			'join class on class.id = class_instance.class',
+			'left join person on person.id = class_teacher_sub.teacher',
+		]
+	wheres = [
+			'week >= ?', 'week <= ?',
+		]
+	args = [start_week, start_week + weeks - 1]
+	_add_like(like, ('first_name', 'last_name', 'class_name'), wheres, args)
+	order_by = ['class.name', 'week']
+	return await _fetchall(dbc, _build_select(fields, 'class_teacher_sub', joins, wheres, None, order_by), args)
+
+async def set_teacher_sub(dbc, class_teacher_sub_id, person_id):
+	return await _update1(dbc, f'update class_teacher_sub set teacher = ? where id = ?', (person_id, class_teacher_sub_id))
+
+
+async def get_teacher_pay_so_far(dbc, program_id, academic_year_id, person_id = None, like = None):
+	fields = ['person.id as person_id', 'first_name', 'last_name', 'class.name as class_name',
+		'count(class_teacher_sub.id) as classes_taught_so_far',
+		'(select income from _highschool_enrollment_income_TOTAL) * count(class_teacher_sub.id) / (select weeks from _highschool_total_term_weeks) as pay_so_far',
+	]
+	joins = [
+		'join class_teacher_sub on class_teacher_sub.teacher = person.id',
+		'join class_instance on class_instance.id = class_teacher_sub.class_instance',
+		'join class on class.id = class_instance.class',
+	]
+	return await _get_teacher_pay(dbc, fields, joins, [], program_id, academic_year_id)
+
+async def get_teacher_pay_projected(dbc, program_id, academic_year_id, person_id = None, like = None):
+	# Note: if `person_id` is set, `like` is ignored
+	fields = ['first_name', 'last_name', 'class.name as class_name',
+		'(select income from _highschool_enrollment_income_TOTAL) * class.term / (select weeks from _highschool_total_term_weeks) as pay_projected'
+	]
+	joins = [
+		'join enrollment on enrollment.person = person.id',
+		'join class_instance on class_instance.id = enrollment.class_instance',
+		'join class on class.id = class_instance.class',
+	]
+	wheres = ['enrollment.teacher is not null', 'enrollment.teacher != 0', '(audit IS NULL or audit = 0)',]
+	return await _get_teacher_pay(dbc, fields, joins, wheres, program_id, academic_year_id)
+
+async def _get_teacher_pay(dbc, fields, joins, wheres, program_id, academic_year_id, like = None):
+	wheres += ['class.active = 1', 'program = ?', 'academic_year = ?',]
+	args = [program_id, academic_year_id]
+	_add_like(like, ('first_name', 'last_name', 'class_name'), wheres, args)
+	order_by = ['first_name', 'last_name', 'class_name']
+	return await _fetchall(dbc, _build_select(fields, 'person', joins, wheres, ('class.id',), order_by), args)
+
 
 # Utils -----------------------------------------------------------------------
 
@@ -979,5 +1043,16 @@ def _add_like(like, fields, where, args):
 		where.append(f'({likes})')
 		args.extend([f'%{like}%'] * len(fields))
 
+def _build_select(fields, table, joins, wheres, group_by, order_by):
+	f = ', '.join(fields) if fields else ''
+	j = ' '.join(joins) if joins else ''
+	w = 'where ' + ' and '.join(wheres) if wheres else ''
+	g = 'group by ' + ', '.join(group_by) if group_by else ''
+	o = 'order by ' + ', '.join(order_by) if order_by else ''
+	#l.debug(f"select {f} from {table} {j} {w} {g} {o}")
+	return f'select {f} from {table} {j} {w} {g} {o}'
+
+
 if __name__ == '__main__':
 	unittests()
+

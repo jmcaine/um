@@ -313,6 +313,9 @@ button {
 	cursor: pointer;
 	box-shadow: none;
 }
+.green {
+	background-color: #2ca12c;
+}
 
 button:hover {
 	background-color: #999999;

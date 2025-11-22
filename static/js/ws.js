@@ -27,7 +27,8 @@ ws.onmessage = function(event) {
 			set_page(payload.content);
 			break;
 		case "content":
-			set_content(payload.content, true); // TODO: rename set_content to set_main_content() or something, to keep it separate from the concept of payload.content; set_content really means: set the contents of 'content_container'
+			set_content(payload.content, false); // TODO: rename set_content to set_main_content() or something, to keep it separate from the concept of payload.content; set_content really means: set the contents of 'content_container'
+				// TODO: evaluate the 'false' (clear_banner=false) - certain use-cases want it, like assignments/choose_teacher_sub()/teachers_subs(), and this seems canonically the best, but others may wish the banner was cleared
 			break;
 		case "sub_content":
 			set_sub_content(payload.container, payload.content);

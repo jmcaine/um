@@ -23,6 +23,9 @@ l = logging.getLogger(__name__)
 async def authorize_admin(hd):
 	return hd.admin
 
+async def authorize_sub_manager(hd):
+	return hd.sub_manager
+
 async def authorize_logged_in(hd):
 	return hd.uid
 
@@ -57,13 +60,13 @@ async def main(hd, reverting = False):
 
 @ws.handler(auth_func = authorize_logged_in)
 async def mark_complete(hd):
-	await db.mark_assignment_complete(hd.dbc, hd.uid, int(hd.payload['assignment_id']), bool(hd.payload['checked'])) # TODO: handle return value (error)!
+	await db.mark_assignment_complete(hd.dbc, hd.uid, int(hd.payload['assignment_id']), int(hd.payload['enrollment_id']), bool(hd.payload['checked'])) # TODO: handle return value (error)!
 
 
 @ws.handler(auth_func = authorize_admin)
 async def classes(hd, reverting = False):
 	if task.just_started(hd, classes):
-		await ws.send_sub_content(hd, 'topbar_container', html.school_topbar())
+		await ws.send_sub_content(hd, 'topbar_container', html.common_topbar())
 		await ws.send_sub_content(hd, 'filter_container', html.classes_mainbar())
 
 	ays = await db.get_academic_years(hd.dbc)
@@ -86,7 +89,7 @@ async def class_students(hd, reverting = False):
 	container = 'enrollments_table_container'
 	if task.just_started(hd, class_students, ('academic_year',)) or reverting:
 		hd.task.state['class_instance_id'] = int(hd.payload.get('id'))
-		await ws.send_content(hd, 'dialog', html.table_dialog(await class_students_table(hd), 'assignments', 'class_students', container))
+		await ws.send_content(hd, 'dialog', html.table_dialog(await class_students_table(hd), container, 'assignments', 'class_students'))
 	elif not await task.finished(hd): # dialog-box could have been "closed"
 		await ws.send_content(hd, 'sub_content', await class_students_table(hd), container = container)
 
@@ -153,3 +156,46 @@ async def _set_enrollment_x(hd, fn, message):
 	await _announce_enrollment_change(hd, message, pid)
 	# no need to redraw - change is already visible
 
+def _get_set_state(hd, key, default = None):
+	hd.task.state[key] = hd.payload.get(key, hd.task.state.get(key, default))
+	return hd.task.state[key]
+
+
+
+@ws.handler(auth_func = authorize_sub_manager)
+async def teachers_subs(hd, reverting = False):
+	if task.just_started(hd, teachers_subs):
+		await ws.send_sub_content(hd, 'topbar_container', html.common_topbar())
+		await ws.send_sub_content(hd, 'filter_container', html.teachers_subs_mainbar()) # TODO: add academic_year, program, and week selectors!
+
+	ay = _get_set_state(hd, 'academic_year', (await db.get_academic_years(hd.dbc))[0]['id'])
+	program = _get_set_state(hd, 'program', (await db.get_programs(hd.dbc))[0]['id'])
+	fs = hd.task.state.get('filtersearch', {})
+	r = await db.get_teachers_subs(hd.dbc, program, ay, None, None,
+							limit = None if fs.get('dont_limit', False) else db.k_default_resultset_limit,
+							like = fs.get('searchtext', ''))
+	await ws.send_content(hd, 'content', html.teachers_subs_page(r, db.k_week)) # TODO: kludge with k_week!
+
+@ws.handler(auth_func = authorize_sub_manager)
+async def choose_teacher_sub(hd, reverting = False):
+	container = 'teachers_container'
+	ctsid = int(_get_set_state(hd, 'class_teacher_sub_id'))
+	if task.just_started(hd, choose_teacher_sub, ('class_teacher_sub_id',)):
+		await ws.send_content(hd, 'dialog', html.table_dialog(await guardians_table(hd), container))
+	elif not await task.finished(hd, False): # execute_finish=False because we don't want teachers_subs() to execute before we db.set_teacher_sub(), below!
+		await ws.send_content(hd, 'sub_content', await guardians_table(hd), container = container)
+	else: # finished; get new value (from client and set to db)...
+		if pid := int(hd.payload['person_id']):
+			await db.set_teacher_sub(hd.dbc, ctsid, pid)
+			person = await db.get_person(hd.dbc, pid)
+			await ws.send_content(hd, 'banner', html.info(text.teacher_sub_assignment_success.format(name = f"{person['first_name']} {person['last_name']}")))
+		await task.finish(hd) # we told finished() not to execute_finish, so we have to do it now; now it's safe, since we've now called db.set_teacher_sub()
+
+async def guardians_table(hd):
+	fs = hd.task.state.get('filtersearch', {})
+	limit = None if fs.get('dont_limit', False) else db.k_default_resultset_limit
+	guardians = await db.get_guardians(hd.dbc, limit, fs.get('searchtext', ''))
+	return html.guardians_table(guardians, 'assignments', 'choose_teacher_sub', limit)
+
+
+	

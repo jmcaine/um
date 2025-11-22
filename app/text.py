@@ -56,6 +56,8 @@ thread = 'Show whole thread'
 currents = 'Current'
 previouses = 'Previous'
 nexts = 'Next'
+two_weeks_back = '2 weeks ago'
+two_weeks = '2 weeks out'
 today = 'Today'
 subject = 'Subject'
 all_subjects = 'All Subjects'
@@ -126,6 +128,9 @@ pretend_password = '********'
 show_currents = "Show THIS WEEK's assignments"
 show_previouses = "Show LAST WEEK's assignments"
 show_nexts = "Show NEXT WEEK's assignments"
+subs = "Subs/coverage"
+sub = 'Sub'
+choose = 'Choose...'
 
 not_in_class = 'NOT in class:'
 in_class = 'IN class:'
@@ -179,7 +184,7 @@ removed_person_from_class = 'Successfully removed "{name}" from class.'
 changed_persons_class_section = 'Successfully changed class section for "{name}"'
 changed_persons_class_audit_status = 'Successfully changed class "audit" status for "{name}"'
 changed_persons_class_teacher_status = 'Successfully changed class "teacher" status for "{name}"'
-
+teacher_sub_assignment_success = 'Successfully assigned teacher/sub to {name}'
 
 reset_email_subject = 'Reset...'
 password_reset_code_email_body = "You requested a password reset code for um.openhome.school. Here it is: {code} <-- type or paste that code into your browser, where it's requested."

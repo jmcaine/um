@@ -196,6 +196,7 @@ class Hd: # handler data class; for grouping stuff more convenient to pass aroun
 	idid: str | None = None
 	uid: int | None = None
 	admin: bool = False
+	sub_manager: bool = False
 	state: dict = dataclass_field(default_factory = dict)
 	payload: dict | None = None
 	task: Task | None = None
@@ -263,6 +264,7 @@ async def identify(hd):
 		if user_id: # "persistent session" all in order, "auto log-in"... go straight to it:
 			hd.uid = user_id
 			hd.admin = await db.authorized(hd.dbc, hd.uid, 'admin')
+			hd.sub_manager = await db.authorized(hd.dbc, hd.uid, 'sub-manager')
 			await ws.send(hd, 'set_topbar_color', color = await db.get_user_color(hd.dbc, hd.uid))
 			await messages.messages(hd) # show main messages page
 		else:

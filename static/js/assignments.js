@@ -49,8 +49,8 @@ let assignments = {
 
 	// From client side:
 
-	mark_complete: function(assignment_id, checkbox) {
-		assignments.send_ws('mark_complete', {assignment_id: assignment_id, checked: (checkbox.checked == true)});
+	mark_complete: function(assignment_id, enrollment_id, checkbox) {
+		assignments.send_ws('mark_complete', {assignment_id: assignment_id, enrollment_id: enrollment_id, checked: (checkbox.checked == true)});
 	},
 
 };

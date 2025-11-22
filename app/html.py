@@ -82,7 +82,7 @@ def login_or_join():
 	)
 
 # button symbols:    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦ ►
-def messages_topbar(admin, enrolled):
+def messages_topbar(admin, enrolled, sub_manager):
 	result = t.div(t.button('+', title = 'new message', onclick = _send('messages', 'new_message')), cls = 'buttonbar')
 	filterbox(result, {'deep_search': text.deep_search})
 	with result:
@@ -92,6 +92,8 @@ def messages_topbar(admin, enrolled):
 			t.button('Ѫ', title = text.admin, onclick = _send('admin', 'users'))
 		if enrolled:
 			t.button('A', title = text.assignments, onclick = _send('assignments', 'main'))
+		if sub_manager:
+			t.button('S', title = text.subs, onclick = _send('assignments', 'teachers_subs'))
 		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
 	return result
 
@@ -164,14 +166,6 @@ def assignments_filter(filt, subjects, subject_id):
 
 
 
-def school_topbar():
-	result = t.div(cls = 'buttonbar')
-	with result:
-		t.div(cls = 'spacer')
-		t.button(t.i(cls = 'i i-messages'), title = text.messages, onclick = _send('messages', 'messages')) # Ξ
-		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
-	return result
-
 def classes_mainbar():
 	return _mainbar(text.add_new_class, _send('assignments', 'new_class'), [
 			t.button(t.i(cls = 'i i-one'), title = text.students, onclick = _send('assignments', 'students')),
@@ -190,19 +184,32 @@ def classes_page(classes):
 def students_page(students):
 	return t.div(students_table(students), cls = 'container center_flex', id = 'students_table_container')
 
+def teachers_subs_page(teachers_subs, current_week):
+	return t.div(teachers_subs_table(teachers_subs, current_week), cls = 'container center_flex', id = 'teachers_subs_table_container')
+
+
+def common_topbar():
+	result = t.div(cls = 'buttonbar')
+	with result:
+		t.div(cls = 'spacer')
+		t.button(t.i(cls = 'i i-messages'), title = text.messages, onclick = _send('messages', 'messages')) # Ξ
+		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
+	return result
+
+def teachers_subs_mainbar():
+	return _mainbar(text.add_new_class, None, [], {'show_inactives': text.show_inactives, 'dont_limit': text.dont_limit})
+
 
 def _mainbar(add_button_title, add_onclick, right_buttons, filter_checkboxes = None): # TODO: use this for more, like user_tags, tag_users, message_tags?, etc.
 	if not filter_checkboxes:
 		filter_checkboxes = {'dont_limit': text.dont_limit}
 	bar = t.div(cls = 'buttonbar')
-	bar.add(t.button('+', title = add_button_title, onclick = add_onclick))
+	if add_button_title and add_onclick:
+		bar.add(t.button('+', title = add_button_title, onclick = add_onclick))
 	filterbox(bar, filter_checkboxes)
 	bar.add(t.div(cls = 'spacer'))
 	for button in right_buttons:
 		bar.add(button)
-	#!!!!result = t.div()
-	#!!!result.add(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages TODO: this doesn't belong here?!?!!
-	#!!!result.add(bar)
 	return t.div(bar)
 
 
@@ -416,12 +423,54 @@ def classes_table(classes):
 				t.td(clss['num_enrolled'], align = 'center', cls = 'pointered', onclick = _send('assignments', 'class_students', id = clss['id']))
 	return result
 
-def table_dialog(cs_table, done_app, done_task, container_id):
+
+
+def teachers_subs_table(teachers_subs, current_week):
+	result = t.table()
+	with result:
+		with t.tr():
+			t.th(text.clss, align = 'right')
+			t.th(text.two_weeks_back, align = 'center')
+			t.th(text.previouses, align = 'center')
+			t.th(text.currents, align = 'center')
+			t.th(text.nexts, align = 'center')
+			t.th(text.two_weeks, align = 'center')
+	clss = None
+	row = None
+	row_ts = [None, None, None, None, None]
+	def _complete_row(r, rs):
+		if r:
+			for i in range(5):
+				r.add(t.td(_ts_table_button(rs[i]), align = 'center'))
+			result.add(r)
+
+	for ts in teachers_subs:
+		if ts['class_id'] != clss:
+			_complete_row(row, row_ts)
+			clss = ts['class_id']
+			row = t.tr()
+			row.add(t.td(ts['class_name'], align = 'right'))
+			row_ts = [None, None, None, None, None]
+		row_ts[ts['week'] - current_week + 2] = ts
+	_complete_row(row, row_ts)
+	return result
+
+def _ts_table_button(ts):
+	onclick = _send('assignments', 'choose_teacher_sub', class_teacher_sub_id = ts['class_teacher_sub_id'])
+	return t.button(f"{ts['teacher_first_name']} {ts['teacher_last_name']}", cls = 'green', onclick = onclick) if ts['teacher_id'] else t.button(text.choose, onclick = onclick)
+
+
+
+
+def table_dialog(cs_table, container_id, done_app = None, done_task = None):
 	result = t.div(cls = 'container center_flex')
 	with result:
 		t.div(id = 'detail_banner_container', cls = 'container') # for later ws-delivered banner messages
 		filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
-		t.button(text.done, onclick = _send(done_app, done_task, finished = 'true'))
+		if done_app and done_task:
+			t.button(text.done, onclick = _send(done_app, done_task, finished = 'true'))
+		else:
+			t.button(text.cancel, onclick = 'hide_dialog()')
 		t.div(cs_table, id = container_id)
 	return result
 
@@ -433,6 +482,16 @@ def class_enrollments_table(enrolleds, nons, adder_task, remover_task, count, se
 	teacher_checkboxer = Checkbox_Column('set_enrollment_teacher', text.teacher, 'teacher')
 	audit_checkboxer = Checkbox_Column('set_enrollment_audit', text.audit, 'audit')
 	return _xaa_table(nons, enrolleds, s_name, text.not_in_class, text.in_class, adder, remover, count, (section_chooser, teacher_checkboxer, audit_checkboxer))
+
+def guardians_table(guardians, done_app, done_task, limit):
+	result = t.table()
+	with result:
+		with t.tr():
+			t.th(text.name)
+		for guardian in guardians:
+			with t.tr():
+				t.td(f"{guardian['first_name']} {guardian['last_name']}", cls = 'pointered', onclick = _send(done_app, done_task, person_id = guardian['id'], finished = 'true'))
+	return result
 
 @dataclass(slots = True)
 class Chooser_Column:
@@ -605,7 +664,7 @@ def assignments(assignments):
 		if assignment['teacher']:
 			instruction = f'<b>{instruction}</b>'
 
-		checkbox = t.input_(type = 'checkbox', onclick = f"assignments.mark_complete({assignment['assignment_id']}, this)")
+		checkbox = t.input_(type = 'checkbox', onclick = f"assignments.mark_complete({assignment['assignment_id']}, {assignment['enrollment_id']}, this)")
 		if assignment['complete']:
 			checkbox['checked'] = 'checked'
 		result.add(t.div(t.label(checkbox, raw(instruction))))

@@ -37,14 +37,16 @@ def start(hd, handler, inherit_state_keys = None):
 		return True # just started
 	#else:
 	return False # task not just (now) started; may have been started already, in the past, though
-	
+
 def just_started(hd, handler, inherit_state_keys = None):
 	# Same as start(); that is, has the (side) effect of STARTING the task, but 'just_started' semantically helps caller understand the implications, and know that the task now "just started", or, indeed, did not (because it was already started some time in the past; in which case, this function is a no-op, other than returning that state info)
 	return start(hd, handler, inherit_state_keys)
 
-async def finished(hd):
+async def finished(hd, execute_finish = True):
+	# Note, if you set `execute_finish` to False, YOU have to call finish() yourself!
 	if hd.payload.get('finished'):
-		await finish(hd)
+		if execute_finish:
+			await finish(hd)
 		return True # yes, finished
 	return False # no, not finished
 
