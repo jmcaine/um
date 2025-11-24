@@ -536,14 +536,14 @@ def class_enrollments_table(enrolleds, nons, adder_task, remover_task, count, se
 	audit_checkboxer = Checkbox_Column('set_enrollment_audit', text.audit, 'audit')
 	return _xaa_table(nons, enrolleds, s_name, text.not_in_class, text.in_class, adder, remover, count, (section_chooser, teacher_checkboxer, audit_checkboxer))
 
-def guardians_table(guardians, done_app, done_task, limit):
+def teachers_table(teachers, done_app, done_task, limit):
 	result = t.table()
 	with result:
 		with t.tr():
 			t.th(text.name)
-		for guardian in guardians:
+		for teacher in teachers:
 			with t.tr():
-				t.td(f"{guardian['first_name']} {guardian['last_name']}", cls = 'pointered', onclick = _send(done_app, done_task, person_id = guardian['id'], finished = 'true'))
+				t.td(f"{teacher['first_name']} {teacher['last_name']}", cls = 'pointered', onclick = _send(done_app, done_task, person_id = teacher['id'], finished = 'true'))
 	return result
 
 @dataclass(slots = True)

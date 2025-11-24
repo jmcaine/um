@@ -197,6 +197,15 @@ async def get_guardians(dbc, limit, like = None, include_inactive = False):
 	order_by = ['last_name', 'first_name']
 	return await _fetchall(dbc, _build_select(('person.id', 'first_name', 'last_name'), 'person', ('join child_guardian on child_guardian.guardian = person.id',), wheres, ('person.id',), order_by), args)
 
+async def get_teachers(dbc, limit, like = None, include_inactive = False):
+	wheres, args = ['role.name = "teacher"'], []
+	if not include_inactive:
+		wheres.append('person.active = 1')
+	_add_like(like, ('first_name', 'last_name',), wheres, args)
+	joins = ['join user on user.person = person.id', 'join user_role on user_role.user = user.id', 'join role on role.id = user_role.role']
+	order_by = ['last_name', 'first_name']
+	return await _fetchall(dbc, _build_select(('person.id', 'first_name', 'last_name'), 'person', joins, wheres, ('person.id',), order_by), args)
+
 async def delete_person_detail(dbc, table, id):
 	if table not in ('phone', 'email'):
 		raise Exception(f'Unexpected table: {table} - not expecting to delete from this table with this function')
@@ -785,7 +794,7 @@ async def get_user_enrollments(dbc, user_id):
 	return await _fetchall(dbc, 'select enrollment.id from enrollment join person on enrollment.person = person.id join user on user.person = person.id where user.id = ?', (user_id,))
 
 k_academic_year = 6 # TODO: KLUDGE!
-k_week = 6 # TODO: KLUDGE!
+k_week = 10 # TODO: KLUDGE!
 async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Filter.current, subj_id = None, limit = k_assignment_resultset_limit):
 	wheres = [	'user.id = ?',
 					'assignment.deleted is NULL',

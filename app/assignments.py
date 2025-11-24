@@ -184,9 +184,9 @@ async def choose_teacher_sub(hd, reverting = False):
 	container = 'teachers_container'
 	ctsid = int(_get_set_state(hd, 'class_teacher_sub_id'))
 	if task.just_started(hd, choose_teacher_sub, ('class_teacher_sub_id',)):
-		await ws.send_content(hd, 'dialog', html.table_dialog(await guardians_table(hd), container))
+		await ws.send_content(hd, 'dialog', html.table_dialog(await teachers_table(hd), container))
 	elif not await task.finished(hd, False): # execute_finish=False because we don't want teachers_subs() to execute before we db.set_teacher_sub(), below!
-		await ws.send_content(hd, 'sub_content', await guardians_table(hd), container = container)
+		await ws.send_content(hd, 'sub_content', await teachers_table(hd), container = container)
 	else: # finished; get new value (from client and set to db)...
 		if pid := int(hd.payload['person_id']):
 			await db.set_teacher_sub(hd.dbc, ctsid, pid)
@@ -194,11 +194,11 @@ async def choose_teacher_sub(hd, reverting = False):
 			await ws.send_content(hd, 'banner', html.info(text.teacher_sub_assignment_success.format(name = f"{person['first_name']} {person['last_name']}")))
 		await task.finish(hd) # we told finished() not to execute_finish, so we have to do it now; now it's safe, since we've now called db.set_teacher_sub()
 
-async def guardians_table(hd):
+async def teachers_table(hd):
 	fs = hd.task.state.get('filtersearch', {})
 	limit = None if fs.get('dont_limit', False) else db.k_default_resultset_limit
-	guardians = await db.get_guardians(hd.dbc, limit, fs.get('searchtext', ''))
-	return html.guardians_table(guardians, 'assignments', 'choose_teacher_sub', limit)
+	teachers = await db.get_teachers(hd.dbc, limit, fs.get('searchtext', ''))
+	return html.teachers_table(teachers, 'assignments', 'choose_teacher_sub', limit)
 
 
 	
