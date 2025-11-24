@@ -38,8 +38,8 @@ async def main(hd, reverting = False):
 		await ws.send_sub_content(hd, 'topbar_container', html.assignments_topbar(hd.admin))
 		await ws.send_content(hd, 'content', html.container(text.loading_assignments, k_assignments_container_id))
 
-	filt = hd.task.state['filt'] = hd.payload.get('filt', hd.task.state.get('filt', Filter.current)) # prefer filt sent in payload, then filt already recorded, and, finally, if nothing, default to viewing `current` assignments (only)
-	subj_id = hd.task.state['subj_id'] = hd.payload.get('subj_id', hd.task.state.get('subj_id', None)) # prefer filt sent in payload, then filt already recorded, and, finally, if nothing, default to viewing `current` assignments (only)
+	filt = _get_set_state(hd, 'filt', Filter.current)
+	subj_id = _get_set_state(hd, 'subj_id')
 
 	person_id = hd.payload.get('person_id', 0) if hd.admin else None
 	uid = (await db.get_person_user(hd.dbc, person_id))['id'] if hd.admin and person_id else hd.uid
@@ -50,7 +50,7 @@ async def main(hd, reverting = False):
 							filt = filt,
 							subj_id = subj_id,
 							limit = None if fs.get('dont_limit', False) else db.k_assignment_resultset_limit)
-	subjects = set([(a['subject_name'], a['subject_id']) for a in assignments])
+	subjects = set([html.DropselOption(a['subject_name'], a['subject_id']) for a in assignments])
 	await ws.send_sub_content(hd, 'filter_container', html.assignments_filter(filt, subjects, subj_id))
 
 	tsk = 'show_assignments_print' if filt == Filter.all and hd.admin else 'show_assignments'
@@ -71,7 +71,7 @@ async def classes(hd, reverting = False):
 
 	ays = await db.get_academic_years(hd.dbc)
 
-	ay = hd.task.state['academic_year'] = hd.payload.get('academic_year', hd.task.state.get('academic_year', ays[0]['id']))
+	ay = _get_set_state(hd, 'academic_year', ays[0]['id'])
 	fs = hd.task.state.get('filtersearch', {})
 	r = await db.get_classes(hd.dbc,
 							academic_year = ay,
@@ -157,6 +157,7 @@ async def _set_enrollment_x(hd, fn, message):
 	# no need to redraw - change is already visible
 
 def _get_set_state(hd, key, default = None):
+	# prefer filt sent in payload, then filt already recorded, and, finally, if nothing, default to viewing `current` assignments (only)
 	hd.task.state[key] = hd.payload.get(key, hd.task.state.get(key, default))
 	return hd.task.state[key]
 
@@ -170,11 +171,13 @@ async def teachers_subs(hd, reverting = False):
 
 	ay = _get_set_state(hd, 'academic_year', (await db.get_academic_years(hd.dbc))[0]['id'])
 	program = _get_set_state(hd, 'program', (await db.get_programs(hd.dbc))[0]['id'])
+	week = _get_set_state(hd, 'week', db.k_week) # TODO: kludge with k_week!
+	broad = True if week == db.k_week else False # TODO: kludge with k_week!
 	fs = hd.task.state.get('filtersearch', {})
-	r = await db.get_teachers_subs(hd.dbc, program, ay, None, None,
+	r = await db.get_teachers_subs(hd.dbc, program, ay, week, broad,
 							limit = None if fs.get('dont_limit', False) else db.k_default_resultset_limit,
 							like = fs.get('searchtext', ''))
-	await ws.send_content(hd, 'content', html.teachers_subs_page(r, db.k_week)) # TODO: kludge with k_week!
+	await ws.send_content(hd, 'content', html.teachers_subs_page(r, week, broad))
 
 @ws.handler(auth_func = authorize_sub_manager)
 async def choose_teacher_sub(hd, reverting = False):

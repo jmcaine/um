@@ -11,6 +11,7 @@ from enum import Enum
 from datetime import datetime, date, timedelta, timezone
 from random import randint
 import regex as re
+from typing import Callable
 from zoneinfo import ZoneInfo
 
 from dominate import document as dominate_document
@@ -68,7 +69,6 @@ def document(ws_url: str, initial = ''):
 			t.script(raw(f'const initial = "{initial}";'))
 			for script in ('basic.js', 'ws.js', 'persistence.js', 'main.js', 'admin.js', 'submit.js', 'messages.js', 'assignments.js'): # TODO: only load admin.js if user is an admin (somehow? - dom-manipulate with $('scripts').insertAdjacentHTML("beforeend", ...) after login!)!
 				t.script(src = f'/static/js/{script}')
-
 	return d
 
 
@@ -84,7 +84,7 @@ def login_or_join():
 # button symbols:    ҉ Ѱ Ψ Ѫ Ѭ Ϯ ϖ Ξ Δ ɸ Θ Ѥ ΐ Γ Ω ¤ ¥ § Þ × ÷ þ Ħ ₪ ☼ ♀ ♂ ☺ ☻ ♠ ♣ ♥ ♦ ►
 def messages_topbar(admin, enrolled, sub_manager):
 	result = t.div(t.button('+', title = 'new message', onclick = _send('messages', 'new_message')), cls = 'buttonbar')
-	filterbox(result, {'deep_search': text.deep_search})
+	_filterbox(result, {'deep_search': text.deep_search})
 	with result:
 		t.div(cls = 'spacer')
 		#TODO: t.button('...', title = text.change_settings, onclick = _send('main', 'settings'))
@@ -141,7 +141,7 @@ def tags_page(tags):
 
 def assignments_topbar(admin):
 	result = t.div(cls = 'buttonbar')
-	#filterbox(result, {'deep_search': text.deep_search})
+	#_filterbox(result, {'deep_search': text.deep_search})
 	with result:
 		t.div(cls = 'spacer')
 		t.button(t.i(cls = 'i i-messages'), title = text.messages, onclick = _send('messages', 'messages')) # Ξ
@@ -159,9 +159,13 @@ def assignments_filter(filt, subjects, subject_id):
 		filt_button(text.nexts, text.show_nexts, assignments_const.Filter.next)
 		filt_button(text.alls, text.show_all_assignments, assignments_const.Filter.all)
 	if len(subjects) > 1:
-		droplist_button(result, 'subject_chooser', text.subject, subjects, text.all_subjects, subject_id)
+		chooser_id = 'subject_chooser'
+		_droplist_button(result, Dropsel(chooser_id, text.choose_subject, text.choose_subject_hint, subjects,
+			f"assignments.show_dropdown_options('{chooser_id}', this)",
+			lambda id: f'assignments.subject_filter({id})',
+			subject_id))
 	else:
-		result.add(t.button(text.all_subjects, onclick = f'assignments.subject_filter(0)'))
+		result.add(t.button(text.all_subjects, onclick = f'assignments.subject_filter(0)')) # click to reload with ALL subjects, again (after having filtered to show only one)
 	return result
 
 
@@ -184,8 +188,8 @@ def classes_page(classes):
 def students_page(students):
 	return t.div(students_table(students), cls = 'container center_flex', id = 'students_table_container')
 
-def teachers_subs_page(teachers_subs, current_week):
-	return t.div(teachers_subs_table(teachers_subs, current_week), cls = 'container center_flex', id = 'teachers_subs_table_container')
+def teachers_subs_page(teachers_subs, week, broad):
+	return t.div(teachers_subs_table(teachers_subs, week, broad), cls = 'container center_flex', id = 'teachers_subs_table_container')
 
 
 def common_topbar():
@@ -197,16 +201,27 @@ def common_topbar():
 	return result
 
 def teachers_subs_mainbar():
-	return _mainbar(text.add_new_class, None, [], {'show_inactives': text.show_inactives, 'dont_limit': text.dont_limit})
+	chooser_id = 'week_chooser'
+	return _mainbar(text.add_new_class, None, [],
+		filter_checkboxes = {'show_inactives': text.show_inactives, 'dont_limit': text.dont_limit}, # TODO: make a list of two-tuples, instead, to preserve ordering!
+		filter_dropselections = [
+			Dropsel(chooser_id, text.choose_week, text.choose_week_hint, DropselOption.options_from_range(range(1,29)),
+				f"assignments.show_dropdown_options('{chooser_id}', this)",
+				lambda week: f"assignments.teachers_subs_week_filter('{chooser_id}', {week})",
+				None
+			),
+		],
+	)
 
 
-def _mainbar(add_button_title, add_onclick, right_buttons, filter_checkboxes = None): # TODO: use this for more, like user_tags, tag_users, message_tags?, etc.
+def _mainbar(add_button_title, add_onclick, right_buttons, filter_checkboxes = None, filter_dropselections = None): # TODO: use this for more, like user_tags, tag_users, message_tags?, etc.
 	if not filter_checkboxes:
 		filter_checkboxes = {'dont_limit': text.dont_limit}
 	bar = t.div(cls = 'buttonbar')
 	if add_button_title and add_onclick:
 		bar.add(t.button('+', title = add_button_title, onclick = add_onclick))
-	filterbox(bar, filter_checkboxes)
+	_filterbox(bar, filter_checkboxes)
+	_filterdrops(bar, filter_dropselections)
 	bar.add(t.div(cls = 'spacer'))
 	for button in right_buttons:
 		bar.add(button)
@@ -274,11 +289,10 @@ def session_options(other_logins):
 			color = user['color'] if (user['color'] and user['color'] != '#ffffff') else '#919191'
 			t.div(t.button(user['username'], style = f'background-color: {color}', onclick = _send('main', 'switch_login', username = f'''"{user['username']}"''', require_password_on_switch = user['require_password_on_switch'])))
 		t.hr()
-
 	return result
 
 
-def filterbox(parent, filtersearch_checkboxes):
+def _filterbox(parent, filtersearch_checkboxes):
 	kwargs = dict([(name, f'$("{name}").checked') for name in filtersearch_checkboxes.keys()])
 	go = lambda searchstring: _send('main', 'filtersearch', searchtext = searchstring, **kwargs)
 	with parent:
@@ -290,6 +304,43 @@ def filterbox(parent, filtersearch_checkboxes):
 		for key, label in filtersearch_checkboxes.items():
 			Input(label, type_ = 'checkbox', attrs = {'onclick': go('$("filtersearch").value')}).build(key)
 	return parent
+
+
+@dataclass(slots = True)
+class DropselOption:
+	title: str
+	arg: str | None
+	@classmethod
+	def options_from_range(cls, range):
+		return [cls(x, x) for x in range]
+	def __eq__(self, other): # necessary for those who make a set of a list of DropselOptions, to shed duplicates
+		return self.title == other.title and self.arg == other.arg
+	def __hash__(self):
+		return hash((self.title, self.arg))
+
+@dataclass(slots = True)
+class Dropsel:
+	id: str
+	title: str
+	hint: str
+	options: list # of DropselOption elements
+	drop_onclick: str
+	choose_onclick: Callable[[str,], str]
+	selected_id: str | None
+
+def _filterdrops(parent, dropsels):
+	for ds in dropsels:
+		_droplist_button(parent, ds)
+
+def _droplist_button(container, dropsel: Dropsel):
+	title = dropsel.title or dropsel.options[0].title
+	with container:
+		with t.button(title + ' ▾', cls = 'dropdown', title = dropsel.hint, onclick = dropsel.drop_onclick):
+			with t.div(id = dropsel.id, cls = 'dropdown_content hide'):
+				for op in dropsel.options:
+					t.div(op.title, onclick = dropsel.choose_onclick(op.arg))
+
+
 
 def fieldset(title: str, html_fields: list, button: t.button, alt_button: t.button = _cancel_button(), more_funcs: tuple | None = None) -> t.fieldset:
 	result = t.fieldset()
@@ -394,10 +445,6 @@ def more_person_detail(person_id, emails, phones, spouse, children):
 
 
 
-
-
-
-
 def students_table(students):
 	result = t.table()
 	with result:
@@ -425,33 +472,39 @@ def classes_table(classes):
 
 
 
-def teachers_subs_table(teachers_subs, current_week):
+def teachers_subs_table(teachers_subs, week, broad):
 	result = t.table()
+	columns = 5 if broad else 1
 	with result:
 		with t.tr():
 			t.th(text.clss, align = 'right')
-			t.th(text.two_weeks_back, align = 'center')
-			t.th(text.previouses, align = 'center')
-			t.th(text.currents, align = 'center')
-			t.th(text.nexts, align = 'center')
-			t.th(text.two_weeks, align = 'center')
-	clss = None
+			if broad:
+				t.th(text.two_weeks_back, align = 'center')
+				t.th(text.previouses, align = 'center')
+				t.th(text.currents, align = 'center')
+				t.th(text.nexts, align = 'center')
+				t.th(text.two_weeks, align = 'center')
+			else:
+				t.th(f"{text.week} {week}")
+	clss, clss_section = None, None
 	row = None
-	row_ts = [None, None, None, None, None]
+	row_ts = [None,] * columns
 	def _complete_row(r, rs):
 		if r:
-			for i in range(5):
+			for i in range(columns):
 				r.add(t.td(_ts_table_button(rs[i]), align = 'center'))
 			result.add(r)
 
 	for ts in teachers_subs:
-		if ts['class_id'] != clss:
+		if ts['class_id'] != clss or ts['class_section'] != clss_section:
 			_complete_row(row, row_ts)
 			clss = ts['class_id']
+			clss_section = ts['class_section']
 			row = t.tr()
-			row.add(t.td(ts['class_name'], align = 'right'))
+			row.add(t.td(f"{ts['class_name']} s{ts['class_section']}", align = 'right'))
 			row_ts = [None, None, None, None, None]
-		row_ts[ts['week'] - current_week + 2] = ts
+		idx = ts['week'] - week + 2 if broad else 0
+		row_ts[idx] = ts
 	_complete_row(row, row_ts)
 	return result
 
@@ -466,7 +519,7 @@ def table_dialog(cs_table, container_id, done_app = None, done_task = None):
 	result = t.div(cls = 'container center_flex')
 	with result:
 		t.div(id = 'detail_banner_container', cls = 'container') # for later ws-delivered banner messages
-		filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
+		_filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
 		if done_app and done_task:
 			t.button(text.done, onclick = _send(done_app, done_task, finished = 'true'))
 		else:
@@ -525,7 +578,7 @@ class Checkbox_Column:
 def student_classes(sc_table):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
-		filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
+		_filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
 		t.button(text.done, onclick = _send('assignments', 'student_classes', finished = 'true'))
 		t.div(sc_table, id = 'student_classes_table_container')
 	return result
@@ -545,7 +598,7 @@ def student_classes_table(classes, nons, count):
 def tag_users_and_nonusers(tun_table):
 	result = t.div(t.div(id = 'detail_banner_container', cls = 'container')) # for later ws-delivered banner messages
 	with result:
-		filterbox(t.div(cls = 'buttonbar'), {'show_inactives': text.show_inactives, 'dont_limit': text.dont_limit})
+		_filterbox(t.div(cls = 'buttonbar'), {'show_inactives': text.show_inactives, 'dont_limit': text.dont_limit})
 		t.button(text.done, onclick = _send('admin', 'tag_users', finished = 'true'))
 		t.div(tun_table, id = 'users_and_nonusers_table_container')
 	return result
@@ -569,7 +622,7 @@ def user_tags_table(user_tags, available_tags, count):
 def choose_message_draft(drafts):
 	result = t.div(t.div(info(text.choose_message_draft), id = 'detail_banner_container', cls = 'container'))
 	with result:
-		filterbox(t.div(cls = 'buttonbar'), {})
+		_filterbox(t.div(cls = 'buttonbar'), {})
 		t.div(choose_message_draft_table(drafts), id = 'choose_message_draft_table_container')
 	return result
 
@@ -750,7 +803,7 @@ def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_fir
 
 def message_tags(mt_table):
 	return _x_tags(mt_table, 'message_tags_table_container')
-	
+
 def message_tags_table(message_tags, available_tags, mid, count):
 	adder = lambda id: _send('messages', 'add_tag_to_message', message_id = mid, tag_id = id)
 	remover = lambda id: _send('messages', 'remove_tag_from_message', message_id = mid, tag_id = id)
@@ -785,7 +838,6 @@ def _doc(css = None): # `css` expected to be a list/tuple of filenames, like ('d
 			for c in css:
 				t.link(href = f'/static/css/{c}?{cache_buster}', rel = 'stylesheet')
 		t.script(raw('let FF_FOUC_FIX;')) # trick to avoid possible FOUC complaints (https://stackoverflow.com/questions/21147149/flash-of-unstyled-content-fouc-in-firefox-only-is-ff-slow-renderer) - note that this doesn't cause the warning to go away, it seems, but may cause the problem (if it actually ever visually exhibited) to go away.
-
 	return d
 
 
@@ -798,7 +850,7 @@ def _x_tags(xt_table, div_id, task_app = None, task = None):
 	result = t.div(cls = 'center_flex container')
 	with result:
 		t.div(id = 'detail_banner_container', cls = 'container') # for later ws-delivered banner messages
-		filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
+		_filterbox(t.div(cls = 'buttonbar'), {'dont_limit': text.dont_limit})
 		if task_app: # and task, presumably (assert?!)
 			t.button(text.done, onclick = _send(task_app, task, finished = 'true'))
 		t.div(xt_table, id = div_id)
@@ -880,17 +932,6 @@ def casual_date2(raw_date):
 		return dt.strftime('%b %d')
 	else:
 		return dt.strftime('%m/%d/%Y')
-
-
-def droplist_button(container, id, hint, options, title = None, selected_id = None):
-	if not title:
-		title = options[0][0]
-	with container:
-		with t.button(title + ' ▾', cls = 'dropdown', title = hint, onclick = f'assignments.show_dropdown_options("{id}", this)'):
-			with t.div(id = id, cls = 'dropdown_content hide'):
-				t.div(title, onclick = 'assignments.subject_filter(0)')
-				for option_name, option_id in options:
-					t.div(option_name, onclick = f'assignments.subject_filter({option_id})')
 
 
 @dataclass(slots = True, frozen = True)

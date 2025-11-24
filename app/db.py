@@ -952,13 +952,9 @@ async def get_programs(dbc):
 
 
 
-async def get_teachers_subs(dbc, program_id, academic_year_id, start_week = None, weeks = None, limit = k_default_resultset_limit, like = None):
-	if start_week == None:
-		start_week = max(k_week - 2, 1)
-	if not weeks:
-		weeks = 5 # default: from "back two weeks" to "forward two weeks"
+async def get_teachers_subs(dbc, program_id, academic_year_id, week, broad, limit = k_default_resultset_limit, like = None):
 	fields = [
-			'class.id as class_id', 'class.name as class_name', 'class_teacher_sub.id as class_teacher_sub_id', 'class_teacher_sub.week',
+			'class.id as class_id', 'class.name as class_name', 'class_teacher_sub.id as class_teacher_sub_id', 'class_teacher_sub.section as class_section', 'class_teacher_sub.week',
 			'person.id as teacher_id', 'person.first_name as teacher_first_name', 'person.last_name as teacher_last_name',
 		]
 	joins = [
@@ -969,9 +965,12 @@ async def get_teachers_subs(dbc, program_id, academic_year_id, start_week = None
 	wheres = [
 			'week >= ?', 'week <= ?',
 		]
-	args = [start_week, start_week + weeks - 1]
+	args = [week, week]
+	if broad:
+		start_week = max(k_week - 2, 1)
+		args = [start_week, start_week + 5 - 1] # from "back two weeks" to "forward two weeks"
 	_add_like(like, ('first_name', 'last_name', 'class_name'), wheres, args)
-	order_by = ['class.name', 'week']
+	order_by = ['class.name', 'class_section', 'week']
 	return await _fetchall(dbc, _build_select(fields, 'class_teacher_sub', joins, wheres, None, order_by), args)
 
 async def set_teacher_sub(dbc, class_teacher_sub_id, person_id):
