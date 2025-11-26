@@ -188,8 +188,8 @@ def classes_page(classes):
 def students_page(students):
 	return t.div(students_table(students), cls = 'container center_flex', id = 'students_table_container')
 
-def teachers_subs_page(teachers_subs, week, broad):
-	return t.div(teachers_subs_table(teachers_subs, week, broad), cls = 'container center_flex', id = 'teachers_subs_table_container')
+def teachers_subs_page(week_dates, teachers_subs):
+	return t.div(teachers_subs_table(week_dates, teachers_subs), cls = 'container center_flex', id = 'teachers_subs_table_container')
 
 
 def common_topbar():
@@ -472,20 +472,21 @@ def classes_table(classes):
 
 
 
-def teachers_subs_table(teachers_subs, week, broad):
+def teachers_subs_table(week_dates, teachers_subs):
 	result = t.table()
-	columns = 5 if broad else 1
+	columns = 5 if week_dates.is_default_current else 1
 	with result:
 		with t.tr():
 			t.th(text.clss, align = 'right')
-			if broad:
+			dates = f"({casual_date2(week_dates.start_date)})"
+			if week_dates.is_default_current:
 				t.th(text.two_weeks_back, align = 'center')
 				t.th(text.previouses, align = 'center')
-				t.th(text.currents, align = 'center')
+				t.th(text.currents, t.br(), dates, align = 'center')
 				t.th(text.nexts, align = 'center')
 				t.th(text.two_weeks, align = 'center')
 			else:
-				t.th(f"{text.week} {week}")
+				t.th(f"{text.week} {week_dates.number}", t.br(), dates)
 	clss, clss_section = None, None
 	row = None
 	row_ts = [None,] * columns
@@ -503,14 +504,17 @@ def teachers_subs_table(teachers_subs, week, broad):
 			row = t.tr()
 			row.add(t.td(f"{ts['class_name']} s{ts['class_section']}", align = 'right'))
 			row_ts = [None, None, None, None, None]
-		idx = ts['week'] - week + 2 if broad else 0
+		idx = ts['week'] - week_dates.number + 2 if week_dates.is_default_current else 0
 		row_ts[idx] = ts
 	_complete_row(row, row_ts)
 	return result
 
 def _ts_table_button(ts):
-	onclick = _send('assignments', 'choose_teacher_sub', class_teacher_sub_id = ts['class_teacher_sub_id'])
-	return t.button(f"{ts['teacher_first_name']} {ts['teacher_last_name']}", cls = 'green', onclick = onclick) if ts['teacher_id'] else t.button(text.choose, onclick = onclick)
+	if ts:
+		onclick = _send('assignments', 'choose_teacher_sub', class_teacher_sub_id = ts['class_teacher_sub_id'])
+		return t.button(f"{ts['teacher_first_name']} {ts['teacher_last_name']}", cls = 'green', onclick = onclick) if ts['teacher_id'] else t.button(text.choose, onclick = onclick)
+	else:
+		return "N/A"
 
 
 
@@ -897,6 +901,8 @@ def _xaa_table(availables, assigneds, name_fetcher, left_title, right_title, add
 k_fake_localtz = 'America/Los_Angeles' # TODO - implement user-local timezones (this will be a per-user field in db)!
 def local_date_iso(raw_date, zone_info = None):
 	assert raw_date != None
+	if isinstance(raw_date, datetime) or isinstance(raw_date, date):
+		raw_date = raw_date.isoformat() # ACK?!! TODO - make datetimes more consistant!
 	zi = zone_info or ZoneInfo(k_fake_localtz) # manage all datetimes wrt/ user's local tz, so that "yesterday" means that from the local user's perspective, not from UTC or server-local
 	return datetime.fromisoformat(raw_date).astimezone(zi).astimezone(None) # no need to .replace(tzinfo = timezone.utc) on fromisoformat result because we put the trailing 'Z' on dates in the db, so this fromisoformat() will interpret the datetime not as naive, but at explicitly UTC
 

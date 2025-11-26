@@ -10,6 +10,7 @@ import string
 import unittest
 
 from copy import copy
+from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime, date, timedelta
 from enum import Enum
 from hashlib import sha256
@@ -44,11 +45,16 @@ def unittests():
 
 # -----------------------------------------------------------------------------
 
-k_now_ = '%Y-%m-%d %H:%M:%SZ'
-k_now = f"strftime('{k_now_}')" # could use datetime('now'), but that produces a result in UTC (what we want) but WITHOUT the 'Z' at the end; the problem with this is that using python datetime.fromisoformat() then interprets the datetime to be naive, rather than explicitly UTC, which results in the need to do a .replace(tzinfo = timezone.utc) in order to proceed with timezone shifts.  This use of sqlite's strftime(), where we explicitly append the Z, results in python calls to fromisoformat() returning UTC-specific datetime objects automatically.
+k_datetime_format = '%Y-%m-%d %H:%M:%SZ'
+k_date_format = '%Y-%m-%d'
+k_now = f"strftime('{k_datetime_format}')" # could use datetime('now'), but that produces a result in UTC (what we want) but WITHOUT the 'Z' at the end; the problem with this is that using python datetime.fromisoformat() then interprets the datetime to be naive, rather than explicitly UTC, which results in the need to do a .replace(tzinfo = timezone.utc) in order to proceed with timezone shifts.  This use of sqlite's strftime(), where we explicitly append the Z, results in python calls to fromisoformat() returning UTC-specific datetime objects automatically.
 
 k_default_resultset_limit = 10
 k_assignment_resultset_limit = 50
+
+k_campus = 2 # TODO: kludge!
+k_academic_year = 6 # TODO: KLUDGE!
+
 
 async def connect(filename):
 	result = await aiosqlite.connect(filename, isolation_level = None, detect_types = PARSE_DECLTYPES) # "isolation_level = None disables the Python wrapper's automatic handling of issuing BEGIN etc. for you. What's left is the underlying C library, which does do "autocommit" by default. That autocommit, however, is disabled when you do a BEGIN (b/c you're signaling a transaction with that statement" - from https://stackoverflow.com/questions/15856976/transactions-with-python-sqlite3 - thanks Thanatos
@@ -81,6 +87,20 @@ async def commit(dbc):
 async def rollback(dbc):
 	await dbc.execute('rollback')
 
+@dataclass(slots = True, frozen = True)
+class Week:
+	number: int
+	start_date: datetime.date
+	end_date: datetime.date
+	is_default_current: bool
+async def get_week(dbc, week_number = None, campus_id = k_campus, academic_year_id = k_academic_year):
+	if not week_number:
+		nowish = datetime.utcnow() - timedelta(hours = 4) # TODO: this would be 8PM before midnight of the changeover, but since we don't have timezones worked out aright, yet, this is about midnight, since UTC is +8 over Pacific time... kludge...
+		w = await _fetch1(dbc, f'select week, date from academic_calendar where date < ? and campus = ? and academic_year = ? order by date desc limit 1', (nowish.strftime(k_date_format), campus_id, academic_year_id))
+	else:
+		w = await _fetch1(dbc, f'select week, date from academic_calendar where week = ? and campus = ? and academic_year = ?', (week_number, campus_id, academic_year_id))
+	d = datetime.strptime(w['date'], k_date_format)
+	return Week(w['week'], d, d + timedelta(days = 7), week_number == None)
 
 async def add_idid_key(dbc, idid, key):
 	r = await dbc.execute(f'insert into id_key (idid, key, login_timestamp) values (?, ?, {k_now})', (idid, key))
@@ -540,7 +560,7 @@ async def send_message(dbc, user_id, message_id) -> Send_Message_Result | dict:
 		sets.append('deleted = null') # un-delete the message if it's now being sent
 	if not message['sent']: # don't mess with an already set 'sent' value (i.e., message being edited, after sent)
 		sets.append(f'sent = {k_now}')
-		message['sent'] = datetime.utcnow().strftime(k_now_) # kludge - parties using the return from this function (the message) sometimes need that 'sent' field, but it's not actually set upon update, in the message object itself, and it seems needless to do a fetch; so, just set the date the same as it is in the DB... (NOTE: # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!)
+		message['sent'] = datetime.utcnow().strftime(k_datetime_format) # kludge - parties using the return from this function (the message) sometimes need that 'sent' field, but it's not actually set upon update, in the message object itself, and it seems needless to do a fetch; so, just set the date the same as it is in the DB... (NOTE: # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!)
 	else:
 		message['edited'] = 1 # kludge - parties using the return from this function (the message) need that 'edited' field, and, in fact, need it to be meaningful for a wide audience, such as: in order to "deliver" (inject) the message to all live clients, in real time.  This value for message['edited'] (1) makes the most sense if the message was ALREADY ['sent'], before, and yet here we are in send_message (obviously "re-sending", e.g., an edit). In another arc, e.g., when a user loads new messages, this ['edited'] value gets set to 1, for that user alone, fetching the message(s), when it lands in his "unstashed" (which only happens if it was previously in his "stashed").
 	if message['reply_chain_patriarch'] == message['id']: # if this is the patriarch of the thread, update its thread_updated
@@ -793,8 +813,6 @@ async def receive_sms(dbc, fro, message, timestamp):
 async def get_user_enrollments(dbc, user_id):
 	return await _fetchall(dbc, 'select enrollment.id from enrollment join person on enrollment.person = person.id join user on user.person = person.id where user.id = ?', (user_id,))
 
-k_academic_year = 6 # TODO: KLUDGE!
-k_week = 10 # TODO: KLUDGE!
 async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Filter.current, subj_id = None, limit = k_assignment_resultset_limit):
 	wheres = [	'user.id = ?',
 					'assignment.deleted is NULL',
@@ -803,14 +821,15 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 					#'campus_period_dates.campus in (1, class.campus)', # TODO - this doesn't work; need to constrain to campus, though, somehow...
 				]
 	args = [		user_id, ]
-	week = k_week # default # TODO k_week is kludge!
+	current_week = await get_week(dbc)
+	week = current_week.number
 	match filt:
 		case assignments_const.Filter.current:
-			week = k_week # TODO k_week is kludge!
+			week = current_week
 		case assignments_const.Filter.previous:
-			week = k_week - 1
+			week = current_week - 1
 		case assignments_const.Filter.next:
-			week = k_week + 1
+			week = current_week + 1
 		case _: # assignments_const.Filter.all
 			week = None
 			wheres.append('week >= 1') # TODO: KLUDGE!
@@ -961,7 +980,7 @@ async def get_programs(dbc):
 
 
 
-async def get_teachers_subs(dbc, program_id, academic_year_id, week, broad, limit = k_default_resultset_limit, like = None):
+async def get_teachers_subs(dbc, program_id, academic_year_id, week = None, limit = k_default_resultset_limit, like = None):
 	fields = [
 			'class.id as class_id', 'class.name as class_name', 'class_teacher_sub.id as class_teacher_sub_id', 'class_teacher_sub.section as class_section', 'class_teacher_sub.week',
 			'person.id as teacher_id', 'person.first_name as teacher_first_name', 'person.last_name as teacher_last_name',
@@ -974,13 +993,14 @@ async def get_teachers_subs(dbc, program_id, academic_year_id, week, broad, limi
 	wheres = [
 			'week >= ?', 'week <= ?',
 		]
-	args = [week, week]
-	if broad:
-		start_week = max(k_week - 2, 1)
+	week_dates = await get_week(dbc, week)
+	args = [week_dates.number, week_dates.number] # default, unless...
+	if week_dates.is_default_current:
+		start_week = max(week_dates.number - 2, 1)
 		args = [start_week, start_week + 5 - 1] # from "back two weeks" to "forward two weeks"
 	_add_like(like, ('first_name', 'last_name', 'class_name'), wheres, args)
 	order_by = ['class.name', 'class_section', 'week']
-	return await _fetchall(dbc, _build_select(fields, 'class_teacher_sub', joins, wheres, None, order_by), args)
+	return [week_dates, await _fetchall(dbc, _build_select(fields, 'class_teacher_sub', joins, wheres, None, order_by), args)]
 
 async def set_teacher_sub(dbc, class_teacher_sub_id, person_id):
 	return await _update1(dbc, f'update class_teacher_sub set teacher = ? where id = ?', (person_id, class_teacher_sub_id))

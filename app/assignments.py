@@ -171,13 +171,12 @@ async def teachers_subs(hd, reverting = False):
 
 	ay = _get_set_state(hd, 'academic_year', (await db.get_academic_years(hd.dbc))[0]['id'])
 	program = _get_set_state(hd, 'program', (await db.get_programs(hd.dbc))[0]['id'])
-	week = _get_set_state(hd, 'week', db.k_week) # TODO: kludge with k_week!
-	broad = True if week == db.k_week else False # TODO: kludge with k_week!
+	week = _get_set_state(hd, 'week')
 	fs = hd.task.state.get('filtersearch', {})
-	r = await db.get_teachers_subs(hd.dbc, program, ay, week, broad,
+	week_dates, tss = await db.get_teachers_subs(hd.dbc, program, ay, week,
 							limit = None if fs.get('dont_limit', False) else db.k_default_resultset_limit,
 							like = fs.get('searchtext', ''))
-	await ws.send_content(hd, 'content', html.teachers_subs_page(r, week, broad))
+	await ws.send_content(hd, 'content', html.teachers_subs_page(week_dates, tss))
 
 @ws.handler(auth_func = authorize_sub_manager)
 async def choose_teacher_sub(hd, reverting = False):
