@@ -123,13 +123,13 @@ def users_mainbar():
 	return _mainbar(text.invite_new_user, _send('main', 'invite'), [
 			t.button(t.i(cls = 'i i-one'), title = text.users, cls = 'selected', onclick = _send('admin', 'users')), # for this one, onclick() just reloads content
 			t.button(t.i(cls = 'i i-all'), title = text.tags, onclick = _send('admin', 'tags')),
-		])
+		], {'dont_limit': text.dont_limit})
 
 def tags_mainbar():
 	return _mainbar(text.create_new_tag, _send('admin', 'new_tag'), [
 			t.button(t.i(cls = 'i i-one'), title = text.users, onclick = _send('admin', 'users')),
 			t.button(t.i(cls = 'i i-all'), title = text.tags, cls = 'selected', onclick = _send('admin', 'tags')), # for this one, onclick() just reloads content
-		])
+		], {'dont_limit': text.dont_limit})
 
 def users_page(users):
 	return t.div(user_table(users), id = 'user_table_container')
@@ -200,23 +200,23 @@ def common_topbar():
 		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
 	return result
 
-def teachers_subs_mainbar():
-	chooser_id = 'week_chooser'
+def teachers_subs_mainbar(programs):
+	week_did = 'week_chooser'
+	program_did = 'program_chooser'
 	return _mainbar(text.add_new_class, None, [],
-		filter_checkboxes = {'show_inactives': text.show_inactives, 'dont_limit': text.dont_limit}, # TODO: make a list of two-tuples, instead, to preserve ordering!
+		filter_checkboxes = None, #{'show_inactives': text.show_inactives, 'dont_limit': text.dont_limit}, # TODO: make a list of two-tuples, instead, to preserve ordering!
 		filter_dropselections = [
-			Dropsel(chooser_id, text.choose_week, text.choose_week_hint, DropselOption.options_from_range(range(1,29)),
-				f"assignments.show_dropdown_options('{chooser_id}', this)",
-				lambda week: f"assignments.teachers_subs_week_filter('{chooser_id}', {week})",
-				None
-			),
+			Dropsel(week_did, text.choose_week, text.choose_week_hint, DropselOption.options_from_range(range(1,29)),
+				f"assignments.show_dropdown_options('{week_did}', this)",
+				lambda week: f"assignments.teachers_subs_week_filter('{week_did}', {week})"),
+			Dropsel(program_did, text.choose_program, text.choose_program_hint, [DropselOption(p['name'], p['id']) for p in programs],
+				f"assignments.show_dropdown_options('{program_did}', this)",
+				lambda prog: f"assignments.teachers_subs_program_filter('{program_did}', {prog})"),
 		],
 	)
 
 
 def _mainbar(add_button_title, add_onclick, right_buttons, filter_checkboxes = None, filter_dropselections = None): # TODO: use this for more, like user_tags, tag_users, message_tags?, etc.
-	if not filter_checkboxes:
-		filter_checkboxes = {'dont_limit': text.dont_limit}
 	bar = t.div(cls = 'buttonbar')
 	if add_button_title and add_onclick:
 		bar.add(t.button('+', title = add_button_title, onclick = add_onclick))
@@ -293,7 +293,7 @@ def session_options(other_logins):
 
 
 def _filterbox(parent, filtersearch_checkboxes):
-	kwargs = dict([(name, f'$("{name}").checked') for name in filtersearch_checkboxes.keys()])
+	kwargs = dict([(name, f'$("{name}").checked') for name in filtersearch_checkboxes.keys()]) if filtersearch_checkboxes else {}
 	go = lambda searchstring: _send('main', 'filtersearch', searchtext = searchstring, **kwargs)
 	with parent:
 		t.div(Input(text.filtersearch, type_ = 'search', autofocus = True, attrs = { # NOTE: autofocus = True is the supposed cause of Firefox FOUC https://bugzilla.mozilla.org/show_bug.cgi?id=1404468 - but it does NOT cause the warning in FF console to go away AND we don't see any visual blink evidence, so we're leaving autofocus=True, but an alternative would be to set autofocus in the JS that loads the header content
@@ -301,8 +301,9 @@ def _filterbox(parent, filtersearch_checkboxes):
 			'oninput': go('this.value'),
 		}).build('filtersearch')) # TODO: does the Input() really need to go in a t.div container?!!!
 		t.button(t.i(cls = 'i i-clear'), title = text.clear, style = 'max-height: 10px', onclick = f'''(function() {{ clear_filtersearch(); {go('""')}; }})()''') # Ξ
-		for key, label in filtersearch_checkboxes.items():
-			Input(label, type_ = 'checkbox', attrs = {'onclick': go('$("filtersearch").value')}).build(key)
+		if filtersearch_checkboxes:
+			for key, label in filtersearch_checkboxes.items():
+				Input(label, type_ = 'checkbox', attrs = {'onclick': go('$("filtersearch").value')}).build(key)
 	return parent
 
 
@@ -326,7 +327,7 @@ class Dropsel:
 	options: list # of DropselOption elements
 	drop_onclick: str
 	choose_onclick: Callable[[str,], str]
-	selected_id: str | None
+	selected_id: str | None = None
 
 def _filterdrops(parent, dropsels):
 	for ds in dropsels:
@@ -527,7 +528,7 @@ def table_dialog(cs_table, container_id, done_app = None, done_task = None):
 		if done_app and done_task:
 			t.button(text.done, onclick = _send(done_app, done_task, finished = 'true'))
 		else:
-			t.button(text.cancel, onclick = 'hide_dialog()')
+			_cancel_button()
 		t.div(cs_table, id = container_id)
 	return result
 

@@ -25,10 +25,18 @@ let assignments = {
 		assignments._placehold();
 	},
 
-	teachers_subs_week_filter: function(id, week) {
-		assignments.send_ws('teachers_subs', {week: week});
+	_teachers_subs_filter: function(id, vals) {
+		assignments.send_ws('teachers_subs', vals);
 		setTimeout(assignments.hide_dropdown_options, 100, $(id)); // must delay a bit, so that a selection click (which brings us to this function we're in) doesn't subsequently result in a show_... immediately after we hide_...
 		assignments._placehold();
+	},
+
+	teachers_subs_week_filter: function(id, week) {
+		assignments._teachers_subs_filter(id, {week: week});
+	},
+
+	teachers_subs_program_filter: function(id, program) {
+		assignments._teachers_subs_filter(id, {program: program});
 	},
 
 	show_dropdown_options: function(id, btn) {

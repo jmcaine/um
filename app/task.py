@@ -57,6 +57,7 @@ async def finish(hd):
 		await ws.send(hd, 'hide_dialog') # always hide_dialog here; if we're reverting to another dialog-based task, it's going to need to re-paint the whole dialog-box again (as if re-starting) anyway, because this (finishing) task's dialog is surely not what the reverted-to-task needs/wants; alternately, if we're reverting to a full page, then the dialog needs to be hidden no matter what.  Alas, hid_dialog happens here.
 		#l.debug(f'!!! finish()ing <{hd.task}>; and resuming <{hd.prior_tasks[-1]}> -- uid: {hd.uid}')
 		hd.task = hd.prior_tasks.pop() # actually ASSIGN hd.task to the prior task here; thus, when the prior task is actually invoked (one line below), it'll enter with its old state all in-tact... INCLUDING the 'started' state - that is, the (usually) top call to just_started() will return False, since, indeed, this prior-task started long ago, in fact.  A reversion is not equivalent to a new (from scratch) start.  Tasks should, thus, check the 'reverting' flag (in addition to the return of just_started()) in order to decide how to proceed properly
+		#l.debug(f'finishing; reverting to task: {hd.task}')
 		# Run prior task handler:
 		await hd.task.handler(hd, True)
 	#otherwise - nothing left to be done

@@ -165,16 +165,19 @@ def _get_set_state(hd, key, default = None):
 
 @ws.handler(auth_func = authorize_sub_manager)
 async def teachers_subs(hd, reverting = False):
-	if task.just_started(hd, teachers_subs):
+	js = task.just_started(hd, teachers_subs)
+	programs = await db.get_programs(hd.dbc)
+	if js:
 		await ws.send_sub_content(hd, 'topbar_container', html.common_topbar())
-		await ws.send_sub_content(hd, 'filter_container', html.teachers_subs_mainbar()) # TODO: add academic_year, program, and week selectors!
+		await ws.send_sub_content(hd, 'filter_container', html.teachers_subs_mainbar(programs)) # TODO: add academic_year, program, and week selectors! (underway! above!)
 
-	ay = _get_set_state(hd, 'academic_year', (await db.get_academic_years(hd.dbc))[0]['id'])
-	program = _get_set_state(hd, 'program', (await db.get_programs(hd.dbc))[0]['id'])
+
+	program = _get_set_state(hd, 'program', programs[0]['id'])
+	ay = _get_set_state(hd, 'academic_year', (await db.get_academic_years(hd.dbc))[0]['id']) #TODO: use user's school config....
 	week = _get_set_state(hd, 'week')
 	fs = hd.task.state.get('filtersearch', {})
 	week_dates, tss = await db.get_teachers_subs(hd.dbc, program, ay, week,
-							limit = None if fs.get('dont_limit', False) else db.k_default_resultset_limit,
+							limit = None, #if fs.get('dont_limit', False) else db.k_default_resultset_limit,
 							like = fs.get('searchtext', ''))
 	await ws.send_content(hd, 'content', html.teachers_subs_page(week_dates, tss))
 

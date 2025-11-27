@@ -975,12 +975,12 @@ async def get_academic_years(dbc):
 	return await _fetchall(dbc, f'select * from academic_year order by end desc')
 
 async def get_programs(dbc):
-	return await _fetchall(dbc, f'select * from program order by name desc')
+	return await _fetchall(dbc, f'select * from program order by name asc')
 
 
 
 
-async def get_teachers_subs(dbc, program_id, academic_year_id, week = None, limit = k_default_resultset_limit, like = None):
+async def get_teachers_subs(dbc, program_id, academic_year_id, week = None, limit = None, like = None):
 	fields = [
 			'class.id as class_id', 'class.name as class_name', 'class_teacher_sub.id as class_teacher_sub_id', 'class_teacher_sub.section as class_section', 'class_teacher_sub.week',
 			'person.id as teacher_id', 'person.first_name as teacher_first_name', 'person.last_name as teacher_last_name',
@@ -999,8 +999,17 @@ async def get_teachers_subs(dbc, program_id, academic_year_id, week = None, limi
 		start_week = max(week_dates.number - 2, 1)
 		args = [start_week, start_week + 5 - 1] # from "back two weeks" to "forward two weeks"
 	_add_like(like, ('first_name', 'last_name', 'class_name'), wheres, args)
+	if not program_id:
+		program_id = (await get_programs(dbc))[0]['id']
+	wheres.append('class.program = ?')
+	args.append(program_id)
+	if not academic_year_id:
+		academic_year_id = (await get_academic_years(dbc))[0]['id']
+	wheres.append('class_instance.academic_year = ?')
+	args.append(academic_year_id)
 	order_by = ['class.name', 'class_section', 'week']
-	return [week_dates, await _fetchall(dbc, _build_select(fields, 'class_teacher_sub', joins, wheres, None, order_by), args)]
+	limit = f'limit {limit}' if limit else ''
+	return [week_dates, await _fetchall(dbc, _build_select(fields, 'class_teacher_sub', joins, wheres, None, order_by, limit), args)]
 
 async def set_teacher_sub(dbc, class_teacher_sub_id, person_id):
 	return await _update1(dbc, f'update class_teacher_sub set teacher = ? where id = ?', (person_id, class_teacher_sub_id))
@@ -1071,14 +1080,15 @@ def _add_like(like, fields, where, args):
 		where.append(f'({likes})')
 		args.extend([f'%{like}%'] * len(fields))
 
-def _build_select(fields, table, joins, wheres, group_by, order_by):
+def _build_select(fields, table, joins, wheres, group_by, order_by, limit = None):
 	f = ', '.join(fields) if fields else ''
 	j = ' '.join(joins) if joins else ''
 	w = 'where ' + ' and '.join(wheres) if wheres else ''
 	g = 'group by ' + ', '.join(group_by) if group_by else ''
 	o = 'order by ' + ', '.join(order_by) if order_by else ''
+	l = limit if limit else ''
 	#l.debug(f"select {f} from {table} {j} {w} {g} {o}")
-	return f'select {f} from {table} {j} {w} {g} {o}'
+	return f'select {f} from {table} {j} {w} {g} {o} {l}'
 
 
 if __name__ == '__main__':
