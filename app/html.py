@@ -330,8 +330,9 @@ class Dropsel:
 	selected_id: str | None = None
 
 def _filterdrops(parent, dropsels):
-	for ds in dropsels:
-		_droplist_button(parent, ds)
+	if dropsels:
+		for ds in dropsels:
+			_droplist_button(parent, ds)
 
 def _droplist_button(container, dropsel: Dropsel):
 	title = dropsel.title or dropsel.options[0].title

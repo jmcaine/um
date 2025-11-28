@@ -822,14 +822,13 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 				]
 	args = [		user_id, ]
 	current_week = await get_week(dbc)
-	week = current_week.number
 	match filt:
 		case assignments_const.Filter.current:
-			week = current_week
+			week = current_week.number
 		case assignments_const.Filter.previous:
-			week = current_week - 1
+			week = current_week.number - 1
 		case assignments_const.Filter.next:
-			week = current_week + 1
+			week = current_week.number + 1
 		case _: # assignments_const.Filter.all
 			week = None
 			wheres.append('week >= 1') # TODO: KLUDGE!
