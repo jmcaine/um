@@ -135,6 +135,7 @@ async def add_enrollment(hd):
 	s = hd.task.state
 	await db.add_enrollment(hd.dbc, pid, s['class_instance_id'], s['academic_year'])
 	await _announce_enrollment_change(hd, text.added_person_to_class, pid)
+	hd.task.state['filtersearch']['searchtext'] = '' # reset for next filter query
 	await hd.task.handler(hd) # make current handler re-draw (the table)
 
 @ws.handler(auth_func = authorize_admin)

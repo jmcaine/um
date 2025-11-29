@@ -73,4 +73,9 @@ let assignments = {
 		assignments.send_ws('mark_complete', {assignment_id: assignment_id, enrollment_id: enrollment_id, checked: (checkbox.checked == true)});
 	},
 
+	add_person_to_class: function(adder_task, person_id) {
+		clear_filtersearch();
+		assignments.send_ws(adder_task, {person_id: person_id});
+	},
+
 };

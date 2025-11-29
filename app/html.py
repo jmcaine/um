@@ -172,13 +172,13 @@ def assignments_filter(filt, subjects, subject_id):
 
 def classes_mainbar():
 	return _mainbar(text.add_new_class, _send('assignments', 'new_class'), [
-			t.button(t.i(cls = 'i i-one'), title = text.students, onclick = _send('assignments', 'students')),
+			t.button(t.i(cls = 'i i-one'), title = text.enrolleds, onclick = _send('assignments', 'students')),
 			t.button(t.i(cls = 'i i-class'), title = text.classes, cls = 'selected', onclick = _send('assignments', 'classes')), # for this one, onclick() just reloads content
 		], {'show_inactives': text.show_inactives, 'dont_limit': text.dont_limit})
 
 def students_mainbar(title):
 	return _mainbar(text.add_new_enrollment, _send('assignments', 'new_enrollment'), [
-			t.button(t.i(cls = 'i i-one'), title = text.students, onclick = _send('assignments', 'students')),
+			t.button(t.i(cls = 'i i-one'), title = text.enrolleds, onclick = _send('assignments', 'students')),
 			t.button(t.i(cls = 'i i-class'), title = text.classes, cls = 'selected', onclick = _send('assignments', 'classes')), # for this one, onclick() just reloads content
 		], {'dont_limit': text.dont_limit})
 
@@ -465,7 +465,7 @@ def classes_table(classes):
 	with result:
 		with t.tr():
 			t.th(text.name, align = 'right')
-			t.th(text.students, align = 'center')
+			t.th(text.enrolleds, align = 'center')
 		for clss in classes:
 			with t.tr():
 				t.td(clss['name'], align = 'right', cls = 'pointered', onclick = _send('assignments', 'class_detail', id = clss['id']))
@@ -535,7 +535,8 @@ def table_dialog(cs_table, container_id, done_app = None, done_task = None):
 
 def class_enrollments_table(enrolleds, nons, adder_task, remover_task, count, sections):
 	s_name = lambda s: f"{s['first_name']} {s['last_name']}"
-	adder = lambda id: _send('assignments', adder_task, person_id = id)
+	#adder = lambda id: _send('assignments', adder_task, person_id = id)
+	adder = lambda id: f'assignments.add_person_to_class("{adder_task}", {id})'
 	remover = lambda id: _send('assignments', remover_task, enrollment_id = id)
 	section_chooser = Chooser_Column('change_enrollment_section', text.section, 'section', sections)
 	teacher_checkboxer = Checkbox_Column('set_enrollment_teacher', text.teacher, 'teacher')
