@@ -17,7 +17,7 @@ select tag.name, count(message.id) as count
     join user_tag on tag.id = user_tag.tag
     join user on user_tag.user = user.id
     where not exists (select 1 from message_stashed where message.id = message_stashed.message and user.id = message_stashed.stashed_by)
-    and user.id = ? and message.deleted is null
+    and user.id = ? and message.deleted is null and message.sent is not null
 ''' # group by tag.name (unnecessary, implied)
 
 unstashed_by_others_sql = '''
