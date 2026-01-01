@@ -3,7 +3,7 @@ from datetime import datetime
 
 import sqlite3
 
-dbc = sqlite3.connect('um_13.db', isolation_level = None)
+dbc = sqlite3.connect('um.db', isolation_level = None)
 dbc.row_factory = sqlite3.Row
 
 users = '''
