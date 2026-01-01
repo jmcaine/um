@@ -39,6 +39,12 @@ let assignments = {
 		assignments._teachers_subs_filter(id, {program: program});
 	},
 
+	finances: function(id, guardian) {
+		assignments.send_ws('finances', {guardian: guardian});
+		setTimeout(assignments.hide_dropdown_options, 100, $(id)); // must delay a bit, so that a selection click (which brings us to this function we're in) doesn't subsequently result in a show_... immediately after we hide_...
+		assignments._placehold();
+	},
+
 	show_dropdown_options: function(id, btn) {
 		let e = $(id);
 		if (e.classList.contains("hide")) {

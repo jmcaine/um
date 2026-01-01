@@ -94,6 +94,7 @@ def messages_topbar(admin, enrolled, sub_manager):
 			t.button('A', title = text.assignments, onclick = _send('assignments', 'main'))
 		if sub_manager:
 			t.button('S', title = text.subs, onclick = _send('assignments', 'teachers_subs'))
+		t.button('$', title = text.financial, onclick = _send('assignments', 'finances'))
 		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
 	return result
 
@@ -192,11 +193,106 @@ def teachers_subs_page(week_dates, teachers_subs):
 	return t.div(teachers_subs_table(week_dates, teachers_subs), cls = 'container center_flex', id = 'teachers_subs_table_container')
 
 
+def financials_page(week, enrollments, costs, guardian, spouse):
+	#TODO: make thinner, implementing most of the below in financials_table, as others model
+	_dollar = lambda amount: f'${(amount / 100):.2f}'
+	result = t.div()
+	total_costs = 0 # enrollments and direct costs (fees, book-purchases, etc.) (positive number)
+	total_payments = 0 # positive values are payments client made; negative values are payments TO client
+	total_projected_earnings = 0 # projected earnings (offsets), at year's end' (positive number)
+	total_earned_earnings = 0 # to-date accrued earnings (offsets) - UNpaid (positive number)
+	wip = None
+	with result:
+		with t.table():
+			t.tr(t.th(t.h2(t.strong('Enrollments')), cls = 'left', colspan = '2'))
+			accrued = 0
+			for enrollment in enrollments:
+				name = f"{enrollment['first_name']} {enrollment['last_name']} ({casual_date2(enrollment['birth_date'])})"
+				if name != wip:
+					wip = name
+					with t.tr():
+						t.td(t.strong(wip), cls = 'left', colspan = '2')
+				with t.tr():
+					t.td(enrollment['class_name'], cls = 'right')
+					t.td(_dollar(enrollment['cost']))
+					accrued += enrollment['cost']
+			with t.tr():
+				t.td(t.strong('TOTAL:'))
+				t.td(_dollar(accrued))
+			total_costs += accrued
+
+			t.tr(t.th(t.h2(t.strong('Costs')), cls = 'left', colspan = '2'))
+			wip = None
+			accrued = 0
+			for cost in costs:
+				name = f"{cost['first_name']} {cost['last_name']}"
+				if name != wip:
+					wip = name
+					with t.tr():
+						t.td(t.strong(wip), cls = 'left', colspan = '2')
+				with t.tr():
+					t.td(cost['cost_name'], cls = 'right')
+					t.td(_dollar(cost['cost']))
+					accrued += cost['cost']
+			with t.tr():
+				t.td(t.strong('TOTAL:'))
+				t.td(_dollar(accrued))
+			total_costs += accrued
+
+			t.tr(t.th(t.h2(t.strong('Offsets (Tutoring)')), cls = 'left', colspan = '2')) # "earnings"
+			for person in (guardian, spouse):
+				if person and (person['pay_projected'] or person['pay_so_far']):
+					t.tr(t.td(t.strong(f"{person['first_name']} {person['last_name']}")))
+					if person['pay_projected']:
+						t.tr(t.td(t.strong('Projected:'), cls = 'right'))
+						accrued = 0
+						for rec in person['pay_projected']:
+							with t.tr():
+								t.td(rec['class_name'], cls = 'right')
+								t.td(_dollar(rec['pay_projected']))
+								accrued += rec['pay_projected']
+						with t.tr():
+							t.td(t.strong('TOTAL (projected)'), cls = 'right')
+							t.td(_dollar(accrued))
+						total_projected_earnings += accrued
+					if person['pay_so_far']:
+						t.tr(t.td(t.em(t.strong('Accrued to date:')), cls = 'right'))
+						accrued = 0
+						for rec in person['pay_so_far']:
+							with t.tr():
+								t.td(t.em(f"{rec['class_name']} ({rec['classes_taught_so_far']} classes)"), cls = 'right')
+								t.td(t.em(_dollar(rec['pay_so_far'])))
+								accrued += rec['pay_so_far']
+						with t.tr():
+							t.td(t.em(t.strong('TOTAL (accrued)')), cls = 'right')
+							t.td(t.em(_dollar(accrued)))
+						total_earned_earnings += accrued
+
+			#TODO: PAYMENTS
+
+			t.tr(t.th(t.h2(t.strong('Grand Totals')), cls = 'left'))
+			eoy_projection = total_costs - total_projected_earnings
+			_dollar_total = lambda amount: f"{_dollar(amount)} " if amount >= 0 else f"INCOME: {_dollar(-amount)} "
+			_check_followup = lambda amount: '(make checks to CCLSC)' if amount >= 0 else '(check will be mailed to you....)'
+			with t.tr():
+				t.td(t.strong('EOY Projection'), cls = 'right top')
+				t.td(t.strong(_dollar_total(eoy_projection)))
+			t.tr(t.td(_check_followup(eoy_projection), cls = 'right', colspan = '2'))
+			accrued_so_far = (total_costs * week.number / 28) - total_earned_earnings # TODO: 28 (week year) is hardcode here!!!
+			with t.tr():
+				t.td(t.strong('Accrued to date'), cls = 'right top')
+				t.td(t.strong(_dollar_total(accrued_so_far)))
+			t.tr(t.td(_check_followup(accrued_so_far), cls = 'right', colspan = '2'))
+
+	return result
+
+
 def common_topbar():
 	result = t.div(cls = 'buttonbar')
 	with result:
 		t.div(cls = 'spacer')
 		t.button(t.i(cls = 'i i-messages'), title = text.messages, onclick = _send('messages', 'messages')) # Ξ
+		t.button('$', title = text.financial, onclick = _send('assignments', 'finances'))
 		t.button('Θ', title = text.session_account_details, onclick = _send('admin', 'session'))
 	return result
 
@@ -215,6 +311,17 @@ def teachers_subs_mainbar(programs):
 		],
 	)
 
+def financials_mainbar(parents):
+	# TODO: add week[wip?!] and academic_year selectors, and maybe guardian selector, for admin?
+	week_did = 'week_chooser'
+	guardian_did = 'guardian_chooser'
+	return _mainbar(None, None,[], None,
+		filter_dropselections = [
+			Dropsel(guardian_did, text.choose_family, text.choose_family_hint, [DropselOption(f"{p['first_name']} {p['last_name']}", p['id']) for p in parents],
+				f"assignments.show_dropdown_options('{guardian_did}', this)",
+				lambda guard: f"assignments.finances('{guardian_did}', {guard})"),
+		] if parents else [],
+	)
 
 def _mainbar(add_button_title, add_onclick, right_buttons, filter_checkboxes = None, filter_dropselections = None): # TODO: use this for more, like user_tags, tag_users, message_tags?, etc.
 	bar = t.div(cls = 'buttonbar')

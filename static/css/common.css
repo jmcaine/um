@@ -124,6 +124,24 @@ th:last-child, td:last-child {
 	border-right: none; /* interior lines only */
 }
 
+td.top {
+	vertical-align: top;
+}
+td.right {
+	text-align: right;
+}
+td.left {
+	text-align: left;
+}
+th.top {
+	vertical-align: top;
+}
+th.right {
+	text-align: right;
+}
+th.left {
+	text-align: left;
+}
 
 /* bordered content */
 

@@ -204,4 +204,23 @@ async def teachers_table(hd):
 	return html.teachers_table(teachers, 'assignments', 'choose_teacher_sub', limit)
 
 
-	
+
+@ws.handler(auth_func = authorize_logged_in)
+async def finances(hd, reverting = False):
+	if task.just_started(hd, finances):
+		await ws.send_sub_content(hd, 'topbar_container', html.common_topbar())
+		parents = await db.get_teachers(hd.dbc) if hd.admin or (await db.authorized(hd.dbc, hd.uid, 'accountant')) else None
+		await ws.send_sub_content(hd, 'filter_container', html.financials_mainbar(parents))
+
+	ay = _get_set_state(hd, 'academic_year', (await db.get_academic_years(hd.dbc))[0]['id']) #TODO: use user's school config....
+	guardian_id = int(_get_set_state(hd, 'guardian', (await db.get_user_person(hd.dbc, hd.uid))['id']))
+	guardian = await db.get_person(hd.dbc, guardian_id)
+	enrollments = await db.get_family_enrollments(hd.dbc, guardian_id)
+	costs = await db.get_family_costs(hd.dbc, guardian_id)
+	guardian['pay_projected'] = await db.get_teacher_pay_projected(hd.dbc, ay, guardian_id)
+	guardian['pay_so_far'] = await db.get_teacher_pay_so_far(hd.dbc, ay, guardian_id)
+	if spouse := await db.get_person_spouse(hd.dbc, guardian_id):
+		spouse['pay_projected'] = await db.get_teacher_pay_projected(hd.dbc, ay, spouse['id'])
+		spouse['pay_so_far'] = await db.get_teacher_pay_so_far(hd.dbc, ay, spouse['id'])
+	week = await db.get_week(hd.dbc)
+	await ws.send_content(hd, 'content', html.financials_page(week, enrollments, costs, guardian, spouse))

@@ -195,7 +195,7 @@ async def orphan_child(dbc, child_person_id, guardian_person_id): # i.e., "delet
 
 
 async def get_person_spouse(dbc, person_id):
-	return await _fetch1(dbc, 'select first_name, last_name from person !!!')
+	return await _fetch1(dbc, 'select spouse.id, spouse.first_name, spouse.last_name from person as spouse join person on person.spouse = spouse.id where person.id = ?', (person_id,))
 
 async def is_a_guardian(dbc, person_id):
 	return True if await _fetch1(dbc, 'select 1 from child_guardian where guardian = ? limit 1', (person_id,)) else False
@@ -217,14 +217,15 @@ async def get_guardians(dbc, limit, like = None, include_inactive = False):
 	order_by = ['last_name', 'first_name']
 	return await _fetchall(dbc, _build_select(('person.id', 'first_name', 'last_name'), 'person', ('join child_guardian on child_guardian.guardian = person.id',), wheres, ('person.id',), order_by), args)
 
-async def get_teachers(dbc, limit, like = None, include_inactive = False):
+async def get_teachers(dbc, limit = None, like = None, include_inactive = False):
 	wheres, args = ['role.name = "teacher"'], []
 	if not include_inactive:
 		wheres.append('person.active = 1')
 	_add_like(like, ('first_name', 'last_name',), wheres, args)
 	joins = ['join user on user.person = person.id', 'join user_role on user_role.user = user.id', 'join role on role.id = user_role.role']
 	order_by = ['last_name', 'first_name']
-	return await _fetchall(dbc, _build_select(('person.id', 'first_name', 'last_name'), 'person', joins, wheres, ('person.id',), order_by), args)
+	limit = f'limit {limit}' if limit else ''
+	return await _fetchall(dbc, _build_select(('person.id', 'first_name', 'last_name'), 'person', joins, wheres, ('person.id',), order_by, limit), args)
 
 async def delete_person_detail(dbc, table, id):
 	if table not in ('phone', 'email'):
@@ -1014,38 +1015,82 @@ async def set_teacher_sub(dbc, class_teacher_sub_id, person_id):
 	return await _update1(dbc, f'update class_teacher_sub set teacher = ? where id = ?', (person_id, class_teacher_sub_id))
 
 
-async def get_teacher_pay_so_far(dbc, program_id, academic_year_id, person_id = None, like = None):
-	fields = ['person.id as person_id', 'first_name', 'last_name', 'class.name as class_name',
+_teacher_pay_fields = ['person.id as person_id', 'first_name', 'last_name', 'class.name as class_name', ]
+_teacher_pay_joins = [
+	'join class on class.id = class_instance.class',
+	'join program_income on program_income.program = class.program',
+	'join program_term_weeks on program_term_weeks.program = class.program',
+]
+_teacher_pay_wheres = ['class_instance.academic_year = ?', 'program_income.academic_year = ?', 'program_term_weeks.academic_year = ?', 'class.active = 1', ]
+_teacher_pay_order_by = ['first_name', 'last_name', 'class_name', ]
+
+async def get_teacher_pay_so_far(dbc, academic_year_id, person_id = None):
+	fields = _teacher_pay_fields + [
 		'count(class_teacher_sub.id) as classes_taught_so_far',
-		'(select income from _highschool_enrollment_income_TOTAL) * count(class_teacher_sub.id) / (select weeks from _highschool_total_term_weeks) as pay_so_far',
+		'program_income.income * count(class_teacher_sub.id) * class.multiplier / 100 / program_term_weeks.weeks as pay_so_far',
 	]
 	joins = [
 		'join class_teacher_sub on class_teacher_sub.teacher = person.id',
 		'join class_instance on class_instance.id = class_teacher_sub.class_instance',
-		'join class on class.id = class_instance.class',
-	]
-	return await _get_teacher_pay(dbc, fields, joins, [], program_id, academic_year_id)
+	] + _teacher_pay_joins
+	wheres = _teacher_pay_wheres + [f"class_teacher_sub.week <= {(await get_week(dbc)).number}"] # must do this in case there are subs/teachers already assigned "in advance", for the future; don't want to count them in a "so_far" tally
+	args = [academic_year_id, ] * 3 # all three of the instances of academic_year in _teacher_pay_wheres
+	if person_id:
+		wheres.append('person.id = ?')
+		args.append(person_id)
+	#l.debug(f"{_build_select(fields, 'person', joins, wheres, ('class.id',), _teacher_pay_order_by)} --- {args}")
+	return await _fetchall(dbc, _build_select(fields, 'person', joins, wheres, ('class.id',), _teacher_pay_order_by), args)
 
-async def get_teacher_pay_projected(dbc, program_id, academic_year_id, person_id = None, like = None):
-	# Note: if `person_id` is set, `like` is ignored
-	fields = ['first_name', 'last_name', 'class.name as class_name',
-		'(select income from _highschool_enrollment_income_TOTAL) * class.term / (select weeks from _highschool_total_term_weeks) as pay_projected'
+async def get_teacher_pay_projected(dbc, academic_year_id, person_id = None):
+	fields = _teacher_pay_fields + [
+		'program_income.income * class.term * class.multiplier / 100 / program_term_weeks.weeks as pay_projected',
 	]
 	joins = [
 		'join enrollment on enrollment.person = person.id',
 		'join class_instance on class_instance.id = enrollment.class_instance',
+	] + _teacher_pay_joins
+	wheres = _teacher_pay_wheres + ['enrollment.teacher is not null', 'enrollment.teacher != 0', '(audit IS NULL or audit = 0)', ]
+	args = [academic_year_id, ] * 3 # all three of the instances of academic_year in _teacher_pay_wheres
+	if person_id:
+		wheres.append('person.id = ?')
+		args.append(person_id)
+	#l.debug(f"{_build_select(fields, 'person', joins, wheres, ('class.id',), _teacher_pay_order_by)} --- {args}")
+	return await _fetchall(dbc, _build_select(fields, 'person', joins, wheres, ('class.id',), _teacher_pay_order_by), args)
+
+
+
+async def get_family_enrollments(dbc, guardian_id):
+	fields = ['first_name', 'last_name', 'birth_date', 'class.name as class_name', 'class_cost.cost * class.term / class_cost.term as cost', 'class_cost.term']
+	joins = [
+		'join person as student on enrollment.person = student.id',
+		'join child_guardian on child_guardian.child = student.id',
+		'join class_instance on class_instance.id = enrollment.class_instance',
 		'join class on class.id = class_instance.class',
+		'join class_cost on class_cost.id = class_instance.cost',
 	]
-	wheres = ['enrollment.teacher is not null', 'enrollment.teacher != 0', '(audit IS NULL or audit = 0)',]
-	return await _get_teacher_pay(dbc, fields, joins, wheres, program_id, academic_year_id)
+	wheres = ['child_guardian.guardian = ?',]
+	args = [guardian_id,]
+	return await _fetchall(dbc, _build_select(fields, 'enrollment', joins, wheres, None, ['birth_date', 'class_name']), args)
 
-async def _get_teacher_pay(dbc, fields, joins, wheres, program_id, academic_year_id, like = None):
-	wheres += ['class.active = 1', 'program = ?', 'academic_year = ?',]
-	args = [program_id, academic_year_id]
-	_add_like(like, ('first_name', 'last_name', 'class_name'), wheres, args)
-	order_by = ['first_name', 'last_name', 'class_name']
-	return await _fetchall(dbc, _build_select(fields, 'person', joins, wheres, ('class.id',), order_by), args)
+async def get_children(dbc, guardian_ids):
+	if not type(guardian_ids) in (list, tuple):
+		guardian_ids = [guardian_ids,]
+		if spouse := await get_person_spouse(dbc, guardian_ids[0]):
+			guardian_ids.append(spouse['id'])
+	return guardian_ids, [r['child'] for r in (await _fetchall(dbc, 'select child from child_guardian where guardian in ({seq})'.format(seq = ','.join(['?']*len(guardian_ids))), guardian_ids))]
 
+async def get_family_costs(dbc, guardian_id):
+	guardian_ids, child_ids = await get_children(dbc, guardian_id)
+	person_ids = guardian_ids + child_ids
+	fields = ['first_name', 'last_name', 'cost.name as cost_name', 'cost.cost']
+	joins = [
+		'join person on person.id = person_cost.person',
+		'join cost on cost.id = person_cost.cost',
+	]
+	wheres = ['person.id in ({seq})'.format(seq = ','.join(['?']*len(person_ids)))]
+	args = person_ids
+	#l.debug(f"{_build_select(fields, 'person_cost', joins, wheres, None, ['birth_date', 'cost_name'])} --- {args}")
+	return await _fetchall(dbc, _build_select(fields, 'person_cost', joins, wheres, None, ['birth_date', 'cost_name']), args)
 
 # Utils -----------------------------------------------------------------------
 
@@ -1056,6 +1101,7 @@ async def _fetch1(dbc, sql, args = None):
 
 async def _fetchall(dbc, sql, args = None):
 	r = await dbc.execute(sql, args)
+	#l.debug(f"{sql} ... {args}")
 	return await r.fetchall()
 
 async def _update1(dbc, sql, args):
@@ -1085,9 +1131,9 @@ def _build_select(fields, table, joins, wheres, group_by, order_by, limit = None
 	w = 'where ' + ' and '.join(wheres) if wheres else ''
 	g = 'group by ' + ', '.join(group_by) if group_by else ''
 	o = 'order by ' + ', '.join(order_by) if order_by else ''
-	l = limit if limit else ''
-	#l.debug(f"select {f} from {table} {j} {w} {g} {o}")
-	return f'select {f} from {table} {j} {w} {g} {o} {l}'
+	lim = limit if limit else ''
+	#l.debug(f"select {f} from {table} {j} {w} {g} {o} {lim}")
+	return f'select {f} from {table} {j} {w} {g} {o} {lim}'
 
 
 if __name__ == '__main__':
