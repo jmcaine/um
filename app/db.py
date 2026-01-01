@@ -96,7 +96,7 @@ class Week:
 async def get_week(dbc, week_number = None, campus_id = k_campus, academic_year_id = k_academic_year):
 	if not week_number:
 		nowish = datetime.utcnow() - timedelta(hours = 4) # TODO: this would be 8PM before midnight of the changeover, but since we don't have timezones worked out aright, yet, this is about midnight, since UTC is +8 over Pacific time... kludge...
-		w = await _fetch1(dbc, f'select week, date from academic_calendar where date < ? and campus = ? and academic_year = ? order by date desc limit 1', (nowish.strftime(k_date_format), campus_id, academic_year_id))
+		w = await _fetch1(dbc, f'select week, date from academic_calendar where date <= ? and campus = ? and academic_year = ? order by date desc limit 1', (nowish.strftime(k_date_format), campus_id, academic_year_id))
 	else:
 		w = await _fetch1(dbc, f'select week, date from academic_calendar where week = ? and campus = ? and academic_year = ?', (week_number, campus_id, academic_year_id))
 	d = datetime.strptime(w['date'], k_date_format)
