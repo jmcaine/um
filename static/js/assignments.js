@@ -66,7 +66,7 @@ let assignments = {
 
 	show_assignments: function(content) {
 		hide_dialog();
-		set_sub_content('assignments_container', content);
+		set_sub_content('content_container', content);
 	},
 
 	show_assignments_print: function(content) {

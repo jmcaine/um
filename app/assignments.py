@@ -30,7 +30,7 @@ async def authorize_logged_in(hd):
 	return hd.uid
 
 
-k_assignments_container_id = 'assignments_container'
+k_assignments_container_id = 'assignments_container' # NOTE: this is not used at all anymore, in fact; content_container is used directly (except maybe after the very first setup); investigate and refactor
 
 @ws.handler(auth_func = authorize_logged_in)
 async def main(hd, reverting = False):
