@@ -52,7 +52,7 @@ def run():
 		unstashed_by_others = dbc.execute(unstashed_by_others_sql, (u['id'],)).fetchone()
 		unstashed_by_others_lines = [f"""Your message: "{unstashed['teaser']}" - the following have not yet read: {unstashed['users']}""" for unstashed in unstashed_by_others] if unstashed_by_others else []
 		unsent_count = dbc.execute(unsent_count_sql, (u['id'],))
-		unsents = f" and {unsent_count[0]['count']} message drafts that you haven't pushed 'SEND' on" if (unsent_count and unsent_count['count'] > 0) else ''
+		unsents = f" and {unsent_count[0]['count']} message drafts that you haven't pushed 'SEND' on" if (unsent_count and unsent_count[0]['count'] > 0) else ''
 		paragraphs = [
 			f"{u['first_name']} {u['last_name']},",
 			f"You currently have {unstashed_total_count} unstashed messages{unsents}." + ('  Go to <a href="https://um.openhome.school/">https://um.openhome.school/</a> to stash some messages!' if unstashed_total_count else ""),
