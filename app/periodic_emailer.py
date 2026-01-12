@@ -51,7 +51,7 @@ def run():
 		unstashed_total_count = sum([count['count'] for count in unstashed_counts]) if unstashed_counts else 0
 		unstashed_by_others = dbc.execute(unstashed_by_others_sql, (u['id'],)).fetchone()
 		unstashed_by_others_lines = [f"""Your message: "{unstashed['teaser']}" - the following have not yet read: {unstashed['users']}""" for unstashed in unstashed_by_others] if unstashed_by_others else []
-		unsent_count = dbc.execute(unsent_count_sql, (u['id'],))
+		unsent_count = dbc.execute(unsent_count_sql, (u['id'],)).fetchone()
 		unsents = f" and {unsent_count[0]['count']} message drafts that you haven't pushed 'SEND' on" if (unsent_count and unsent_count[0]['count'] > 0) else ''
 		paragraphs = [
 			f"{u['first_name']} {u['last_name']},",
