@@ -18,7 +18,8 @@ select tag.name, count(message.id) as count
     join user on user_tag.user = user.id
     where not exists (select 1 from message_stashed where message.id = message_stashed.message and user.id = message_stashed.stashed_by)
     and user.id = ? and message.deleted is null and message.sent is not null
-''' # group by tag.name (unnecessary, implied)
+	 group by tag.name
+'''
 
 unsent_count_sql = 'select count(message.id) as count from message where sent is null and message.author = ? and message.deleted is null'
 
@@ -45,7 +46,7 @@ users = '''
 def run():
 	for u in dbc.execute(users, ()):
 		print(f"{u['first_name']} {u['last_name']} -- {u['id']}")
-		unstashed_counts = dbc.execute(unstashed_count_sql, (u['id'],))
+		unstashed_counts = dbc.execute(unstashed_count_sql, (u['id'],)).fetchall()
 		unstashed_counts = [{'name': item['name'], 'count': item['count']} for item in unstashed_counts] if unstashed_counts else []
 		unstashed_count_lines = [f"{count['name']} - {count['count']} unstashed messages" for count in unstashed_counts] if unstashed_counts else []
 		unstashed_total_count = sum([count['count'] for count in unstashed_counts]) if unstashed_counts else 0
