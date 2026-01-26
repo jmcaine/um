@@ -902,13 +902,13 @@ def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_fir
 			recipients = ', '.join(all_recipients[0:max_recipients]) # NOTE: would be nice if, in db.py, we could use GROUP_CONCAT(DISTINCT tag.name, ', '), to avoid this replace(',', ', '), but DISTINCT requires one arg only - can't provide a delimiter in that case, unfortunately
 			if len(all_recipients) > max_recipients:
 				recipients += ', ...'
-			edit_button = t.button(t.i(cls = 'i i-all'), title = text.recipients,
+			edit_recips_button = t.button(t.i(cls = 'i i-all'), title = text.recipients,
 								onclick = f"messages.change_recipients({msg['id']})") if editable else ''
 			thread_button = t.button(t.i(cls = 'i i-thread'), title = text.thread,
 								onclick = _send('messages', 'show_whole_thread', message_id = msg['id'], patriarch_id = msg['reply_chain_patriarch'])) if not whole_thread else '' # no thread-button when whole-thread is already expanded
 			isodate = local_date_iso(msg["sent"]).isoformat()[:-6] # [:-6] to trim offset from end, as javascript code will expect a naive iso variant, and will interpret as "local"
 			t.div(cls = 'spacer')
-			t.span(t.b(' to '), edit_button, recipients, thread_button, ' · ')
+			t.span(t.b(' to '), edit_recips_button, recipients, thread_button, ' · ')
 			t.span(text.just_now if injection else '...', cls = 'time_updater', data_isodate = isodate) # 'sent' date/time
 			if editable:
 				t.button(t.i(cls = 'i i-trash'), title = text.delete_message, onclick = f"messages.delete_message({msg['id']}, false)")

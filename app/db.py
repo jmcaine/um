@@ -458,6 +458,10 @@ async def get_tags(dbc, active = True, like = None, get_subscriber_count = False
 async def new_tag(dbc, name, active):
 	return await _insert1(dbc, 'insert into tag (name, active) values (?, ?)', (name, active))
 
+async def duplicate_tag_users(dbc, source_tag_id, new_tag_id):
+	#TODO: hook this up and actually test it!!!
+	return await dbc.execute(f'insert into user_tag (user, tag) select user, ? from user_tag where tag = ?', (new_tag_id, source_tag_id))
+
 async def get_tag(dbc, id, fields: str | None = None):
 	if not fields:
 		fields = '*'
@@ -832,8 +836,8 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 			week = current_week.number + 1
 		case _: # assignments_const.Filter.all
 			week = None
-			wheres.append('week >= 1') # TODO: KLUDGE!
-			wheres.append('week <= 12') # TODO: KLUDGE!
+			wheres.append('week >= 13') # TODO: KLUDGE!
+			wheres.append('week <= 18') # TODO: KLUDGE!
 	if subj_id:
 		wheres.append('subject.id = ?')
 		args.append(subj_id)
@@ -992,6 +996,7 @@ async def get_teachers_subs(dbc, program_id, academic_year_id, week = None, limi
 		]
 	wheres = [
 			'week >= ?', 'week <= ?',
+			'class.start_week <= week', 'week <= class.start_week + class.term - 1',
 		]
 	week_dates = await get_week(dbc, week)
 	args = [week_dates.number, week_dates.number] # default, unless...
