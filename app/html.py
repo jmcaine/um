@@ -887,11 +887,10 @@ def message(msg, user_id, is_admin, stashable, deferrable, thread_patriarch = No
 				t.button(t.i(cls = 'i i-ok'), title = text.stash, onclick = f"messages.stash({msg['id']})") # '▼'
 			if deferrable:
 				t.button(t.i(cls = 'i i-defer'), title = text.defer, onclick = f"messages.defer({msg['id']})")
-			t.button(t.i(cls = 'i i-reply'), title = text.reply, onclick = _send('messages', 'compose_reply', message_id = msg['id'])) # '◄'
 			if msg['pinned']:
 				t.button(t.i(cls = 'i i-pin'), title = text.unpin, cls = 'selected', onclick = f"messages.unpin({msg['id']}, this)") # 'Ϯ'
 			else:
-				t.button(t.i(cls = 'i i-pin'), title = text.pin, onclick = f"messages.pin({msg['id']}, this)") # 'Ϯ'
+				t.button(t.i(cls = 'i i-pin'), title = text.pin, onclick = f"messages.pin({msg['id']}, this, {'true' if stashable else 'false'})") # 'Ϯ'
 			if editable:
 				t.button(t.i(cls = 'i i-edit'), title = text.edit_message, onclick = _send('messages', 'edit_message', message_id = msg['id']))
 			t.div(cls = 'spacer')
@@ -909,6 +908,7 @@ def message(msg, user_id, is_admin, stashable, deferrable, thread_patriarch = No
 								onclick = _send('messages', 'show_whole_thread', message_id = msg['id'], patriarch_id = msg['reply_chain_patriarch'])) if not whole_thread else '' # no thread-button when whole-thread is already expanded
 			isodate = local_date_iso(msg["sent"]).isoformat()[:-6] # [:-6] to trim offset from end, as javascript code will expect a naive iso variant, and will interpret as "local"
 			t.div(cls = 'spacer')
+			t.button(t.i(cls = 'i i-reply'), title = text.reply, onclick = _send('messages', 'compose_reply', message_id = msg['id'])) # '◄'
 			t.span(t.b(' to '), edit_recips_button, recipients, thread_button, ' · ')
 			t.span(text.just_now if injection else '...', cls = 'time_updater', data_isodate = isodate) # 'sent' date/time
 			if editable:

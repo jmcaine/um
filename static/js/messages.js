@@ -3,11 +3,13 @@
 const t_loading_messages = 'Loading messages...'
 const t_message_stashed = 'Message acknowledged (and available in "All")';
 const t_message_deferred = 'Message marked "UNREAD" (and moved to "Unread")';
+const t_message_pinned = 'Message PINNED (find in "Pins" now)';
 const t_pin = 'Pin this message' // TODO: this has a duplicate in text.py
 const t_unpin = 'UNpin this message' // TODO: this has a duplicate in text.py
 
 const h_message_stashed = '<div class="info fadeout_short">' + t_message_stashed + '</div>';
 const h_message_deferred = '<div class="info fadeout_short">' + t_message_deferred + '</div>';
+const h_message_pinned = '<div class="info fadeout_short">' + t_message_pinned + '</div>';
 
 let g_playing = null;
 
@@ -191,11 +193,16 @@ let messages = {
 		}
 	},
 
-	pin: function(message_id, button) {
+	pin: function(message_id, button, stash) {
 		messages.send_ws('pin', {message_id: message_id});
-		button.classList.add('selected');
-		button.setAttribute('title', t_unpin);
-		button.setAttribute('onclick', "messages.unpin(" + message_id + ", this)");
+		if (stash) {
+			messages.send_ws('stash', {message_id: message_id});
+			messages._extract_from_thread(message_id, h_message_pinned);
+		} else {
+			button.classList.add('selected');
+			button.setAttribute('title', t_unpin);
+			button.setAttribute('onclick', "messages.unpin(" + message_id + ", this)");
+		}
 	},
 
 	unpin: function(message_id, button) {
