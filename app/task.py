@@ -19,6 +19,7 @@ l = logging.getLogger(__name__)
 class Task:
 	handler: Callable[[], None]
 	state: dict = dataclass_field(default_factory = dict)
+	restart: bool = False
 	def __repr__(self):
 		return f'TASK: {self.handler.__name__} with state: {self.state}'
 
@@ -27,6 +28,10 @@ def start(hd, handler, inherit_state_keys = None):
 		hd.task = Task(handler)
 		#l.debug(f'!!! just start()ed (first) <{hd.task}> -- uid: {hd.uid}')
 		return True # just started
+	elif hd.task.restart:
+		hd.task.restart = False # reset
+		assert(hd.task.handler == handler)
+		return True
 	elif hd.task.handler != handler:
 		hd.prior_tasks.append(hd.task)
 		hd.task = Task(handler)

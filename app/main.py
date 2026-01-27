@@ -59,6 +59,7 @@ rt = web.RouteTableDef()
 async def _init(app):
 	l.info('Initializing...')
 	app['hds'] = []
+	app['hd_backups'] = {}
 	app['active_module'] = 'app.main' # default to ourselves
 	await _init_db(app)
 	l.info('...initialization complete')
@@ -265,8 +266,28 @@ async def identify(hd):
 			hd.uid = user_id
 			hd.admin = await db.authorized(hd.dbc, hd.uid, 'admin')
 			hd.sub_manager = await db.authorized(hd.dbc, hd.uid, 'sub-manager')
-			await ws.send(hd, 'set_topbar_color', color = await db.get_user_color(hd.dbc, hd.uid))
-			await messages.messages(hd) # show main messages page
+			app = hd.rq.app
+			if idid in app['hd_backups'].keys():
+				#l.debug('BACKUP exists; loading from it...')
+				backup = app['hd_backups'][idid]
+				assert(hd.uid == backup.uid) # TODO: more than assert, here!
+				hd.state = backup.state
+				hd.payload = backup.payload
+				hd.task = backup.task
+				hd.prior_tasks = backup.prior_tasks
+				app['hd_backups'][idid] = hd # re-assign to the new hd
+				if hd.task:
+					hd.task.restart = True
+					await hd.task.handler(hd) # show whatever page we were on last
+				else:
+					# TODO: DRY - these two lines are also below!
+					await ws.send(hd, 'set_topbar_color', color = await db.get_user_color(hd.dbc, hd.uid))
+					await messages.messages(hd) # show main messages page
+			else:
+				#l.debug('NO backup; loading new hd...')
+				app['hd_backups'][idid] = hd
+				await ws.send(hd, 'set_topbar_color', color = await db.get_user_color(hd.dbc, hd.uid))
+				await messages.messages(hd) # show main messages page
 		else:
 			await ws.send(hd, 'new_key')
 
