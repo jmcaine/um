@@ -19,7 +19,7 @@ g_main_pane.addEventListener('scroll', () => {
 		if (g_main_pane.scrollTop + g_main_pane.clientHeight >= g_main_pane.scrollHeight) {
 			messages.send_ws('more_new_messages');
 		}
-		else if (g_main_pane.scrollTop == 0){
+		else if (g_main_pane.scrollTop <= g_main_pane.clientHeight){
 			messages.send_ws('more_old_messages');
 		}
 	}
@@ -322,8 +322,6 @@ let messages = {
 	show_messages: function(content, scroll_to_bottom) {
 		hide_dialog();
 		set_sub_content('messages_container', content);
-		
-		//TODO: DEPRECATE (unused?!?): const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
 		if (g_main_pane.scrollTop + g_main_pane.clientHeight >= g_main_pane.scrollHeight) {
 			// the bottom is visible!  
 			if (scroll_to_bottom == 1) {
@@ -354,9 +352,10 @@ let messages = {
 	},
 
 	show_more_old_messages: function(content) {
-		let old_scroll_height = g_main_pane.scrollHeight;
+		const old_scroll_height = g_main_pane.scrollHeight;
+		const old_scroll_top = g_main_pane.scrollTop;
 		$('messages_container').insertAdjacentHTML("afterbegin", content);
-		g_main_pane.scrollTo(0, g_main_pane.scrollHeight - old_scroll_height); // scroll back to where user was before the inserted (which also caused a scroll-up)
+		g_main_pane.scrollTo(0, g_main_pane.scrollHeight - old_scroll_height + old_scroll_top); // scroll back to where user was before the inserted (which also caused a scroll-up)
 		messages._update_times();
 	},
 
