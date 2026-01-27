@@ -168,6 +168,10 @@ fieldset, .info, .warning, .error {
 	background-color: #cacaf5;
 }
 
+.bumper {
+	width: 8px;
+}
+
 /* dynamics */
 
 .show {
@@ -321,7 +325,7 @@ button {
 	min-width: 20px;
 	min-height: 20px;
 	margin: 1px 1px;
-	padding: 1px 4px;
+	padding: 2px 4px;
 	font-size: 1em;
 	border: 2px;
 	border-radius: 5px;
