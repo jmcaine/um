@@ -757,8 +757,11 @@ def edit_message(message_id, content):
 		t.div(id = f'attachments_for_message_{message_id}')
 		with t.div(cls = 'buttonbar'):
 			t.button(t.i(cls = 'i i-attach'), title = text.attach, onclick = f"messages.attach_upload({message_id})")
+			t.div(cls = 'bumper')
 			t.button(t.i(cls = 'i i-all'), title = text.recipients, onclick = _send('messages', 'message_tags', message_id = message_id)),
+			t.div(cls = 'bumper')
 			t.button(t.i(cls = 'i i-folder'), title = text.save_draft, onclick = f'messages.save_draft({message_id})') # ▼
+			t.div(cls = 'bumper')
 			t.button(t.i(cls = 'i i-send'), title = text.send_message, onclick = f"messages.send_message({message_id})") # ►
 			t.div(cls = 'spacer')
 			t.button(t.i(cls = 'i i-trash'), title = text.delete_message, onclick = f"messages.delete_message({message_id}, true)")
@@ -772,8 +775,11 @@ def inline_reply_box(message_id, parent_mid, content = None):
 		t.div(id = f'attachments_for_message_{message_id}')
 		with t.div(cls = 'buttonbar'):
 			t.button(t.i(cls = 'i i-attach'), title = text.attach, onclick = f"messages.attach_upload({message_id})")
+			t.div(cls = 'bumper')
 			t.button(t.i(cls = 'i i-all'), id = f"rr_all_{message_id}", title = text.reply_all, onclick = f'messages.reply_recipient_one({message_id})')
+			t.div(cls = 'bumper')
 			t.button(t.i(cls = 'i i-one'), id = f"rr_one_{message_id}", cls = 'hide', title = text.reply_one, onclick = f'messages.reply_recipient_all({message_id})')
+			t.div(cls = 'bumper')
 			t.button(t.i(cls = 'i i-send'), title = text.send_message,
 				onclick = f'''messages.send_reply({message_id}, {parent_mid}, $('reply_recipient_{message_id}').dataset.replyrecipient)''') # ►
 			t.div(cls = 'spacer')
@@ -885,14 +891,19 @@ def message(msg, user_id, is_admin, stashable, deferrable, thread_patriarch = No
 		with t.div(cls = 'buttonbar'):
 			if stashable:
 				t.button(t.i(cls = 'i i-ok'), title = text.stash, onclick = f"messages.stash({msg['id']})") # '▼'
+				t.div(cls = 'bumper')
 			if deferrable:
 				t.button(t.i(cls = 'i i-defer'), title = text.defer, onclick = f"messages.defer({msg['id']})")
+				t.div(cls = 'bumper')
 			if msg['pinned']:
 				t.button(t.i(cls = 'i i-pin'), title = text.unpin, cls = 'selected', onclick = f"messages.unpin({msg['id']}, this)") # 'Ϯ'
+				t.div(cls = 'bumper')
 			else:
 				t.button(t.i(cls = 'i i-pin'), title = text.pin, onclick = f"messages.pin({msg['id']}, this, {'true' if stashable else 'false'})") # 'Ϯ'
+				t.div(cls = 'bumper')
 			if editable:
 				t.button(t.i(cls = 'i i-edit'), title = text.edit_message, onclick = _send('messages', 'edit_message', message_id = msg['id']))
+				t.div(cls = 'bumper')
 			t.div(cls = 'spacer')
 			with t.div():
 				t.span(t.b('by '), msg['sender'])
