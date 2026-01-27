@@ -607,7 +607,7 @@ def test_strip_tags(self):
 	t('<div>hello</div><div>', 'hello...')
 	t('<div>hello</div><div>oh', 'hello...oh')
 
-_mega_message_select = lambda message: f"select message.id, {message}, message.deleted, GROUP_CONCAT(DISTINCT attachment.filename) as attachments, message.reply_chain_patriarch, message.teaser, parent.teaser as parent_teaser, sender.username as sender, sender.id as sender_id, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(DISTINCT tag.name) as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_peg where message = message.id) as pegged,  (select 1 from message_stashed where stashed_by = ? and message = message.id) as stashed, (select 1 from message_unstashed where unstashed_for = ? and message = message.id) as edited  from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id left join message_attachment on message.id = message_attachment.message left join attachment on attachment.id = message_attachment.attachment" # NOTE that GROUP_CONCAT(DISTINCT tag.name) is the only way to get singles (not multiple copies) of group names - using GROUP_CONCAT(tag.name, ', ') would be nice, since the default doesn't place a space after the comma, but providing the ', ' argument only works if you do NOT use DISTINCT, which isn't an option for us.  Similar goes for attachment.filename
+_mega_message_select = lambda message: f"select message.id, {message}, message.deleted, GROUP_CONCAT(DISTINCT attachment.filename) as attachments, message.reply_chain_patriarch, message.teaser, parent.teaser as parent_teaser, sender.username as sender, sender.id as sender_id, message.reply_to, message.sent as sent, message.deleted, patriarch.thread_updated as thread_updated, GROUP_CONCAT(DISTINCT tag.name) as tags, (select 1 from message_pin where user = ? and message = message.id) as pinned, (select 1 from message_peg where message = message.id) as pegged, (select 1 from message_stashed where stashed_by = ? and message = message.id) as stashed, (select 1 from message_deferred where deferred_by = ? and message = message.id) as deferred, (select 1 from message_unstashed where unstashed_for = ? and message = message.id) as edited  from message join user as sender on message.author = sender.id join message as patriarch on message.reply_chain_patriarch = patriarch.id left join message as parent on message.reply_to = parent.id left join message_attachment on message.id = message_attachment.message left join attachment on attachment.id = message_attachment.attachment" # NOTE that GROUP_CONCAT(DISTINCT tag.name) is the only way to get singles (not multiple copies) of group names - using GROUP_CONCAT(tag.name, ', ') would be nice, since the default doesn't place a space after the comma, but providing the ', ' argument only works if you do NOT use DISTINCT, which isn't an option for us.  Similar goes for attachment.filename
 
 
 _message_tag_join = 'left join message_tag on message.id = message_tag.message left join tag on message_tag.tag = tag.id'
@@ -615,11 +615,11 @@ _message_tag_join = 'left join message_tag on message.id = message_tag.message l
 _user_tag_join = 'left join user_tag on tag.id = user_tag.tag'
 
 async def get_message(dbc, user_id, message_id):
-	return await _fetch1(dbc, f'{_mega_message_select("message.message")} {_message_tag_join} where message.id = ?', (user_id, user_id, user_id, message_id,))
+	return await _fetch1(dbc, f'{_mega_message_select("message.message")} {_message_tag_join} where message.id = ?', (user_id, user_id, user_id, user_id, message_id,))
 
 async def get_whole_thread(dbc, user_id, patriarch_id):
 	where = ['((message.sent is not null and user_tag.user = ?) or (message.author = ? and (message.reply_to is not null or message.sent is not null)))', 'message.reply_chain_patriarch = ?']
-	args = [user_id, user_id, user_id, user_id, user_id, patriarch_id] # first three user_ids are for sub-selects in _mega_message_select; third is for our 'where user.id = ?' (see line above)
+	args = [user_id, user_id, user_id, user_id, user_id, user_id, patriarch_id] # first four user_ids are for sub-selects in _mega_message_select; fifth and fifth are for our 'where user.id = ?' and 'where message.author = ?' (see line above)
 	where = 'where ' + ' and '.join(where)
 	group_by = 'group by message.id' # query produces many rows for a message, one per tag for that message; this is required to consolidate to one row, but allows GROUP_CONCAT() to properly build the list of tags that match
 	asc_order = f'order by thread_updated asc, sent asc nulls last' # "nulls last" is for unsent messages, which don't yet have 'sent' set (so, it's null) - those should be "lowest" in the list
@@ -630,7 +630,7 @@ async def get_whole_thread(dbc, user_id, patriarch_id):
 
 async def get_messages(dbc, user_id, include_trashed = False, deep = False, like = None, filt = messages_const.Filter.new, ignore = None, limit = k_default_resultset_limit):
 	where = ['message.message != ""' ]
-	args = [user_id, user_id, user_id, ] # three user_ids are for sub-selects in _mega_message_select
+	args = [user_id, user_id, user_id, user_id ] # four user_ids are for sub-selects in _mega_message_select
 	if not include_trashed:
 		where.append('message.deleted is null')
 	if like:
@@ -641,16 +641,20 @@ async def get_messages(dbc, user_id, include_trashed = False, deep = False, like
 	match filt:
 		case messages_const.Filter.new:
 			where.append('message.id not in (select message from message_stashed where stashed_by = ?)')
+			where.append('message.id not in (select message from message_deferred where deferred_by = ?)')
+			args.extend((user_id, user_id))
+		case messages_const.Filter.deferred:
+			where.append('message.id in (select message from message_deferred where deferred_by = ?)')
 			args.append(user_id)
 		case messages_const.Filter.pinned:
 			where.append(f'message.id in (select message from message_pin where user = ?)')
 			args.append(user_id)
 		case messages_const.Filter.pegged:
 			where.append(f'message.id in (select message from message_peg)')
-		case messages_const.Filter.day:
-			where.append(f'message.sent >= "{(datetime.utcnow() - timedelta(days=2)).isoformat()}Z"') # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!
-		case messages_const.Filter.this_week: # we'll interpret as "7 days back"
-			where.append(f'message.sent >= "{(datetime.combine(datetime.utcnow().date(), datetime.min.time()) - timedelta(days=7)).isoformat()}Z"') # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!
+		#case messages_const.Filter.day:
+		#	where.append(f'message.sent >= "{(datetime.utcnow() - timedelta(days=2)).isoformat()}Z"') # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!
+		#case messages_const.Filter.this_week: # we'll interpret as "7 days back"
+		#	where.append(f'message.sent >= "{(datetime.combine(datetime.utcnow().date(), datetime.min.time()) - timedelta(days=7)).isoformat()}Z"') # yes, utcnow() generates a tz-unaware datetime and that's exactly right; utcnow() only has to return the current utc time, but without tz info is FINE!
 	if ignore:
 		where.append('message.id not in ({seq})'.format(seq = ','.join(['?']*len(ignore))))
 		args.extend(ignore)
@@ -771,16 +775,13 @@ async def set_reply_message_tags(dbc, message_id):
 
 async def stash_message(dbc, message_id, user_id):
 	if not await _fetch1(dbc, 'select 1 from message_stashed where message = ? and stashed_by = ?', (message_id, user_id)):
-		try:
-			await begin(dbc)
-			await _insert1(dbc, 'insert into message_stashed (message, stashed_by) values (?, ?)', (message_id, user_id))
-			await dbc.execute('delete from message_unstashed where message = ? and unstashed_for = ?', (message_id, user_id)) # may be no-op, of course!
-			await commit(dbc)
-		except:
-			await rollback(dbc)
-			raise
-		return True
-	return False
+		await _insert1(dbc, 'insert into message_stashed (message, stashed_by) values (?, ?)', (message_id, user_id))
+	await dbc.execute('delete from message_unstashed where message = ? and unstashed_for = ?', (message_id, user_id)) # may be no-op, of course!
+	await dbc.execute('delete from message_deferred where message = ? and deferred_by = ?', (message_id, user_id)) # may be no-op, of course!
+
+async def defer_message(dbc, message_id, user_id):
+	if not await _fetch1(dbc, 'select 1 from message_deferred where message = ? and deferred_by = ?', (message_id, user_id)):
+		await _insert1(dbc, 'insert into message_deferred (message, deferred_by) values (?, ?)', (message_id, user_id))
 
 async def unstash_message(dbc, message_id, user_id):
 	return await dbc.execute('delete from message_stashed where message = ? and stashed_by = ?', (message_id, user_id))

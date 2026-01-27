@@ -7,10 +7,11 @@ NewMessageNotify = StrEnum('NewMessageNotify', [
 ])
 
 Filter = StrEnum('Filter', [
-	'new', # DEPRECATED: 'unarchived'
+	'new',
+	'deferred',
 	'all',
 	'pinned',
 	'pegged',
-	'day',
-	'this_week',
+	#'day',
+	#'this_week',
 ])

@@ -103,9 +103,8 @@ def messages_filter(filt):
 	with result:
 		filt_button = lambda title, hint, _filt: t.button(title, title = hint, cls = 'selected' if filt == _filt else '', onclick = f'messages.filter(id, "{_filt}")')
 		filt_button(text.news, text.show_news, messages_const.Filter.new)
+		filt_button(text.unread, text.show_unreads, messages_const.Filter.deferred)
 		filt_button(text.alls, text.show_alls, messages_const.Filter.all)
-		filt_button(text.days, text.show_days, messages_const.Filter.day)
-		filt_button(text.this_weeks, text.show_this_weeks, messages_const.Filter.this_week)
 		filt_button(text.pins, text.show_pins, messages_const.Filter.pinned)
 		filt_button(text.pegs, text.show_pegs, messages_const.Filter.pegged)
 	return result
@@ -838,7 +837,7 @@ def assignments(assignments):
 
 	return result
 
-def messages(msgs, user_id, is_admin, stashable, last_thread_patriarch = None, skip_first_hr = False, searchtext = None, whole_thread = False):
+def messages(msgs, user_id, is_admin, stashable, deferrable, last_thread_patriarch = None, skip_first_hr = False, searchtext = None, whole_thread = False):
 	top = t.div(cls = 'container')
 	parents = {None: top}
 	for msg in msgs:
@@ -846,13 +845,13 @@ def messages(msgs, user_id, is_admin, stashable, last_thread_patriarch = None, s
 			last_thread_patriarch = msg['reply_chain_patriarch']
 			html_message = inline_reply_box(msg['id'], msg['reply_to'], msg['message'])
 		elif msg['sent']: # this test ensures we don't try to present draft messages that aren't replies - user has to re-engage with those in a different way ("new message", then select among drafts)... note that the data (msgs) DO include (or MAY include) non-reply (top-level parent) draft messages; we don't want those messages in our message list here
-			last_thread_patriarch, html_message = message(msg, user_id, is_admin, stashable, last_thread_patriarch, skip_first_hr, searchtext = searchtext, whole_thread = whole_thread)
+			last_thread_patriarch, html_message = message(msg, user_id, is_admin, stashable, deferrable, last_thread_patriarch, skip_first_hr, searchtext = searchtext, whole_thread = whole_thread)
 		parent = parents.get(msg['reply_to'], top)
 		parent.add(html_message)
 		parents[msg['id']] = html_message
 	return top
 
-def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_first_hr = False, injection = False, searchtext = None, whole_thread = False):
+def message(msg, user_id, is_admin, stashable, deferrable, thread_patriarch = None, skip_first_hr = False, injection = False, searchtext = None, whole_thread = False):
 	editable = msg['sender_id'] == user_id or is_admin
 	cls = 'container'
 	if injection:
@@ -884,8 +883,10 @@ def message(msg, user_id, is_admin, stashable, thread_patriarch = None, skip_fir
 				thumbnail_strip(msg['attachments'].split(','))
 
 		with t.div(cls = 'buttonbar'):
-			if stashable and not msg['stashed']: # the second test is a check; if not checked and the stash button is presented, and the user uses it on an already-stashed message, it would result in a db UNIQUE integrity error upon insert into message_stashed table
-				t.button(t.i(cls = 'i i-stash'), title = text.stash, onclick = f"messages.stash({msg['id']})") # '▼'
+			if stashable:
+				t.button(t.i(cls = 'i i-ok'), title = text.stash, onclick = f"messages.stash({msg['id']})") # '▼'
+			if deferrable:
+				t.button(t.i(cls = 'i i-defer'), title = text.defer, onclick = f"messages.defer({msg['id']})")
 			t.button(t.i(cls = 'i i-reply'), title = text.reply, onclick = _send('messages', 'compose_reply', message_id = msg['id'])) # '◄'
 			if msg['pinned']:
 				t.button(t.i(cls = 'i i-pin'), title = text.unpin, cls = 'selected', onclick = f"messages.unpin({msg['id']}, this)") # 'Ϯ'

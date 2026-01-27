@@ -62,8 +62,9 @@ async def messages(hd, reverting = False):
 	await ws.send_sub_content(hd, 'filter_container', html.messages_filter(filt))
 	searchtext, ms = await _get_messages(hd)
 	news = filt == Filter.new
+	stashable = filt == Filter.new or filt == Filter.deferred
 	if ms:
-		await ws.send_content(hd, 'messages', html.messages(ms, hd.uid, hd.admin, news, None, news, searchtext = searchtext), scroll_to_bottom = 0 if news else 1)
+		await ws.send_content(hd, 'messages', html.messages(ms, hd.uid, hd.admin, stashable, news, None, news, searchtext = searchtext), scroll_to_bottom = 0 if news else 1)
 	else:
 		await ws.send_content(hd, 'messages', html.no_messages(searchtext))
 
@@ -78,7 +79,7 @@ async def more_new_messages(hd): # inspired by "down-scroll" below "bottom", or 
 	#else:
 	searchtext, ms = await _get_messages(hd)
 	if len(ms) > 0:
-		await ws.send_content(hd, 'show_more_new_messages', html.messages(ms, hd.uid, hd.admin, True, hd.task.state['last_thread_patriarch'], searchtext = searchtext))
+		await ws.send_content(hd, 'show_more_new_messages', html.messages(ms, hd.uid, hd.admin, True, True, hd.task.state['last_thread_patriarch'], searchtext = searchtext))
 		hd.task.state['last_thread_patriarch'] = ms[-1]['reply_chain_patriarch']
 	else:
 		await ws.send(hd, 'no_more_new_messages')
@@ -97,7 +98,8 @@ async def more_old_messages(hd): # inspired by "up-scroll" above "top"
 	#else:
 	searchtext, ms = await _get_messages(hd)
 	if len(ms) > 0:
-		await ws.send_content(hd, 'show_more_old_messages', html.messages(ms, hd.uid, hd.admin, False, hd.task.state['last_thread_patriarch'], searchtext = searchtext))
+		stashable = filt == Filter.deferred # or Filter.new, technically, but if we're in this method (more_old_messages), then filt is NOT Filter.new'
+		await ws.send_content(hd, 'show_more_old_messages', html.messages(ms, hd.uid, hd.admin, stashable, False, hd.task.state['last_thread_patriarch'], searchtext = searchtext))
 		hd.task.state['last_thread_patriarch'] = ms[0]['reply_chain_patriarch']
 	#else: nothing more to do - don't ws.send() anything or update anything!  User has scrolled to the very top of the available messages for the given filter
 
@@ -186,8 +188,10 @@ async def send_reply(hd):
 	if message == db.Send_Message_Result.EmptyMessage:
 		await ws.send(hd, 'remove_reply_container', message_id = mid)
 	else:
-		stashable = hd.task.state.get('filt') == Filter.new
-		_, html_message = html.message(message, hd.uid, hd.admin, stashable, message['reply_chain_patriarch'], injection = True)
+		filt = hd.task.state.get('filt')
+		stashable = filt == Filter.new or filt == Filter.deferred
+		deferrable = filt == Filter.new
+		_, html_message = html.message(message, hd.uid, hd.admin, stashable, deferrable, message['reply_chain_patriarch'], injection = True)
 		await ws.send_content(hd, 'post_completed_reply', html_message, message_id = mid)
 		hd.state['active_reply'] = None # reset; no longer in active reply (until user starts or resumes another reply)
 		for each_hd in hd.rq.app['hds']:
@@ -255,8 +259,10 @@ async def deliver_message(hd, message):
 						placement = 'beforebegin'
 					#else: just take the defaults set above - the injection can go wherever it belongs, even if it's off screen
 				#NOTE: we DON'T add(mid) to state['loaded_msg_ids'] here, prematurely - within inject_deliver_new_message, client-side, decision may be made to NOT add the message to the DOM! (see injected_message() signal)
-				stashable = hd.task.state.get('filt') == Filter.new
-				_, html_message = html.message(message, hd.uid, hd.admin, stashable, injection = True) # NOTE: do NOT send message['reply_chain_patriarch'] as `thread_patriarch` arg - that would be a misunderstanding; that assignment will be made within html.message(), anyway, but the `thread_patriarch` arg is really for tracking a patriarch when painting message after message, not for injecting a message like this, right now, without any knowledge of the messages that are immediately above in the user's window'
+				filt = hd.task.state.get('filt')
+				stashable = filt == Filter.new or filt == Filter.deferred
+				deferrable = filt == Filter.new
+				_, html_message = html.message(message, hd.uid, hd.admin, stashable, deferrable, injection = True) # NOTE: do NOT send message['reply_chain_patriarch'] as `thread_patriarch` arg - that would be a misunderstanding; that assignment will be made within html.message(), anyway, but the `thread_patriarch` arg is really for tracking a patriarch when painting message after message, not for injecting a message like this, right now, without any knowledge of the messages that are immediately above in the user's window'
 				await ws.send_content(hd, 'inject_deliver_new_message', html_message, new_mid = mid, reference_mid = reference_mid or 0, placement = placement)
 
 @ws.handler
@@ -336,6 +342,10 @@ async def stash(hd):
 	await db.stash_message(hd.dbc, hd.payload['message_id'], hd.uid)
 
 @ws.handler # TODO: also confirm user is owner of this message (or admin)!
+async def defer(hd):
+	await db.defer_message(hd.dbc, hd.payload['message_id'], hd.uid)
+
+@ws.handler # TODO: also confirm user is owner of this message (or admin)!
 async def pin(hd):
 	await db.pin_message(hd.dbc, hd.payload['message_id'], hd.uid)
 
@@ -346,7 +356,7 @@ async def unpin(hd):
 @ws.handler
 async def show_whole_thread(hd):
 	ms = await db.get_whole_thread(hd.dbc, hd.uid, hd.payload['patriarch_id'])
-	await ws.send_content(hd, 'show_whole_thread', html.messages(ms, hd.uid, hd.admin, False, None, False, whole_thread = True), message_id = hd.payload['message_id'])
+	await ws.send_content(hd, 'show_whole_thread', html.messages(ms, hd.uid, hd.admin, False, False, None, False, whole_thread = True), message_id = hd.payload['message_id'])
 
 
 @ws.handler # TODO: also confirm user is owner of this message (or admin)!

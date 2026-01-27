@@ -219,7 +219,7 @@ fieldset, .info, .warning, .error {
 }
 
 .fadeout_short {
-	animation: fadeout 2s;
+	animation: fadeout 5s;
 }
 .fadeout_mid {
 	animation: fadeout_delayed 10s;
@@ -319,9 +319,9 @@ div.yellow_border {
 
 button {
 	min-width: 20px;
-	min-height: 25px;
-	margin: 1px 2px;
-	padding: 1px 5px;
+	min-height: 20px;
+	margin: 1px 1px;
+	padding: 1px 4px;
 	font-size: 1em;
 	border: 2px;
 	border-radius: 5px;
@@ -362,66 +362,74 @@ button:hover {
 
 
 .i {
-	 width: 12px; /* YES, must do this (width and height AND set the same info inline, below, in the background: line!) */
-	 height: 12px;
+	 width: 16px; /* YES, must do this (width and height AND set the same info inline, below, in the background: line!) */
+	 height: 16px;
 	 display: block;
 	 filter: invert(100%);
 }
 /* most from dripicons - https://icon-icons.com/users/PHEoYFqoi7DZt6BnC1SoR/icon-sets/ */
 .i-stash {
-    background: url(ico/stash.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87541/PNG/32/ - https://icon-icons.com/icon/download-folder/87541 */
+    background: url(ico/stash.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/87541/PNG/32/ - https://icon-icons.com/icon/download-folder/87541 */
 }
 .i-reply {
-    background: url(ico/reply.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87524/PNG/32/ */
+    background: url(ico/reply.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/87524/PNG/32/ */
 }
 .i-pin {
-    background: url(ico/pin.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/259178/PNG/32/ */
+    background: url(ico/pin.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/259178/PNG/32/ */
 }
 .i-trash {
-	background: url(ico/trash.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87481/PNG/32/ - https://icon-icons.com/icon/trash-container-side/87481 */
+	background: url(ico/trash.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/87481/PNG/32/ - https://icon-icons.com/icon/trash-container-side/87481 */
 }
 .i-one {
-	background: url(ico/one.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87493/PNG/32/ - https://icon-icons.com/icon/user/87493 */
+	background: url(ico/one.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/87493/PNG/32/ - https://icon-icons.com/icon/user/87493 */
 }
 .i-all {
-	background: url(ico/group.png) center center/12px 12px no-repeat; /* https://icon-icons.com/icon/user-group/87485 */
+	background: url(ico/group.png) center center/16px 16px no-repeat; /* https://icon-icons.com/icon/user-group/87485 */
 }
 .i-edit {
-	background: url(ico/edit.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87517/PNG/32/ - https://icon-icons.com/icon/edit-document-button/87517 */
+	background: url(ico/edit.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/87517/PNG/32/ - https://icon-icons.com/icon/edit-document-button/87517 */
 }
 .i-send {
-	background: url(ico/send.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87506/PNG/32/ - https://icon-icons.com/icon/mice-pointer/87506 */
+	background: url(ico/send.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/87506/PNG/32/ - https://icon-icons.com/icon/mice-pointer/87506 */
 }
 .i-messages {
-	background: url(ico/messages.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87519/PNG/32/ - https://icon-icons.com/icon/conversation-bubbles/87519 */
+	background: url(ico/messages.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/87519/PNG/32/ - https://icon-icons.com/icon/conversation-bubbles/87519 */
 }
 .i-folder {
-	background: url(ico/folder.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87547/PNG/32/ - https://icon-icons.com/icon/computer-folder/87547 */
+	background: url(ico/folder.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/87547/PNG/32/ - https://icon-icons.com/icon/computer-folder/87547 */
 }
 .i-attach {
-	background: url(ico/attach.png) center center/12px 12px no-repeat; /*  */
+	background: url(ico/attach.png) center center/16px 16px no-repeat; /*  */
 }
 .i-downvote {
-	background: url(ico/downvote.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87539/PNG/32/ - https://icon-icons.com/icon/thumb-down/87539 */
+	background: url(ico/downvote.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/87539/PNG/32/ - https://icon-icons.com/icon/thumb-down/87539 */
 }
 .i-upvote {
-	background: url(ico/upvote.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/87486/PNG/32/ - https://icon-icons.com/icon/thumb-up/87486 */
+	background: url(ico/upvote.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/87486/PNG/32/ - https://icon-icons.com/icon/thumb-up/87486 */
 }
 .i-close {
-	background: url(ico/close.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/105037/PNG/32/ - https://icon-icons.com/icon/close-cross-circular-interface-button/105037 */
+	background: url(ico/close.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/105037/PNG/32/ - https://icon-icons.com/icon/close-cross-circular-interface-button/105037 */
 }
 .i-clear {
-	background: url(ico/clear.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/180808/PNG/32/ - https://icon-icons.com/icon/edit-clear/180808 */
+	background: url(ico/clear.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/180808/PNG/32/ - https://icon-icons.com/icon/edit-clear/180808 */
 }
 .i-thread {
-	background: url(ico/thread.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/3121/PNG/32/ - https://icon-icons.com/icon/needle/3121 */
+	background: url(ico/thread.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/3121/PNG/32/ - https://icon-icons.com/icon/needle/3121 */
 }
 .i-download {
-	background: url(ico/download.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/144412/PNG/32/ - https://icon-icons.com/icon/cloud-download/144412 */
+	background: url(ico/download.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/144412/PNG/32/ - https://icon-icons.com/icon/cloud-download/144412 */
 }
 .i-class {
-	background: url(ico/class.png) center center/12px 12px no-repeat; /* https://icon-icons.com/download/266881/PNG/32/ - https://icon-icons.com/icon/presentation-coaching-education-class-teaching-blackboard/266881 */
+	background: url(ico/class.png) center center/16px 16px no-repeat; /* https://icon-icons.com/download/266881/PNG/32/ - https://icon-icons.com/icon/presentation-coaching-education-class-teaching-blackboard/266881 */
 }
+.i-defer {
+	background: url(ico/defer.png) center center/16px 16px no-repeat; /* https://icon-icons.com/icon/delay-circle-clock/259182 */
+}
+.i-ok {
+	background: url(ico/ok3.png) center center/16px 16px no-repeat; /* https://icon-icons.com/icon/ok-hand-gestures/246119 */
+}
+
+
 
 
 

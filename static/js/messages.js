@@ -1,11 +1,13 @@
 
 // TODO: i18n; see equivalent text. strings
 const t_loading_messages = 'Loading messages...'
-const t_message_stashed = 'Message stashed!';
+const t_message_stashed = 'Message acknowledged (and available in "All")';
+const t_message_deferred = 'Message marked "UNREAD" (and moved to "Unread")';
 const t_pin = 'Pin this message' // TODO: this has a duplicate in text.py
 const t_unpin = 'UNpin this message' // TODO: this has a duplicate in text.py
 
 const h_message_stashed = '<div class="info fadeout_short">' + t_message_stashed + '</div>';
+const h_message_deferred = '<div class="info fadeout_short">' + t_message_deferred + '</div>';
 
 let g_playing = null;
 
@@ -164,6 +166,15 @@ let messages = {
 
 	stash: function(message_id) {
 		messages.send_ws('stash', {message_id: message_id});
+		messages._extract_from_thread(message_id, h_message_stashed);
+	},
+
+	defer: function(message_id) {
+		messages.send_ws('defer', {message_id: message_id});
+		messages._extract_from_thread(message_id, h_message_deferred);
+	},
+
+	_extract_from_thread: function(message_id, msg) {
 		message_element = $('message_' + message_id);
 		let replies = document.querySelectorAll('#message_' + message_id + ' > div.container');
 		if (replies) {
@@ -172,8 +183,8 @@ let messages = {
 				message_element.insertAdjacentElement("afterend", reply);
 			});
 		}
-		message_element.innerHTML = h_message_stashed;
-		setTimeout(messages._remove_element, 1800, message_element); // slightly less than the 2-second fadeout_short (see common.css), so the thing doesn't pop back into view before disappearing entirely
+		message_element.innerHTML = msg;
+		setTimeout(messages._remove_element, 4800, message_element); // slightly less than the 5-second fadeout_short (see common.css), so the thing doesn't pop back into view before disappearing entirely
 
 		if (g_main_pane.scrollTop + g_main_pane.clientHeight >= g_main_pane.scrollHeight) {
 			messages.send_ws('more_new_messages');
