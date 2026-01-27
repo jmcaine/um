@@ -88,18 +88,14 @@ async def more_new_messages(hd): # inspired by "down-scroll" below "bottom", or 
 async def more_old_messages(hd): # inspired by "up-scroll" above "top"
 	if hd.task.handler != messages:
 		return # nothing to do - we're not handling messages right now; a scroll event must have called this, but not within a messages window (TODO: re-consider this....)
-	#!!!DEBUG
-	if 'filt' not in hd.task.state:
-		l.error(f'more_old_messages hd.task.state[filt] failed for {hd.uid}! Handler: {hd.task.handler} ... Traceback:')
-		l.error(traceback.format_exc())
-	#!!!
-	if hd.task.state.get('filt') == Filter.new:
+	#else:
+	filt = hd.task.state.get('filt')
+	if filt == Filter.new:
 		return # nothing to do - 'new' load always starts with the "oldest new" messages; scrolling "down" loads "newer new" messages but scrolling to the top never needs to invoke any lookups, as there's nothing more to load above the "oldest new" on top
 	#else:
 	searchtext, ms = await _get_messages(hd)
 	if len(ms) > 0:
-		stashable = filt == Filter.deferred # or Filter.new, technically, but if we're in this method (more_old_messages), then filt is NOT Filter.new'
-		await ws.send_content(hd, 'show_more_old_messages', html.messages(ms, hd.uid, hd.admin, stashable, False, hd.task.state['last_thread_patriarch'], searchtext = searchtext))
+		await ws.send_content(hd, 'show_more_old_messages', html.messages(ms, hd.uid, hd.admin, filt == Filter.deferred, False, hd.task.state['last_thread_patriarch'], searchtext = searchtext))
 		hd.task.state['last_thread_patriarch'] = ms[0]['reply_chain_patriarch']
 	#else: nothing more to do - don't ws.send() anything or update anything!  User has scrolled to the very top of the available messages for the given filter
 
