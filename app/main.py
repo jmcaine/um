@@ -267,7 +267,8 @@ async def identify(hd):
 			hd.admin = await db.authorized(hd.dbc, hd.uid, 'admin')
 			hd.sub_manager = await db.authorized(hd.dbc, hd.uid, 'sub-manager')
 			app = hd.rq.app
-			if idid in app['hd_backups'].keys():
+			if false: # idid in app['hd_backups'].keys():
+				#TEMPORARILY disabling, due to troubles (blank screen/no-load problems)
 				#l.debug('BACKUP exists; loading from it...')
 				backup = app['hd_backups'][idid]
 				assert(hd.uid == backup.uid) # TODO: more than assert, here!
