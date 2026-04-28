@@ -242,21 +242,9 @@ def financials_page(week, enrollments, costs, guardian, spouse):
 			for person in (guardian, spouse):
 				if person and (person['pay_projected'] or person['pay_so_far']):
 					t.tr(t.td(t.strong(f"{person['first_name']} {person['last_name']}")))
-					if person['pay_projected']:
-						t.tr(t.td(t.strong('Projected:'), cls = 'right'))
-						accrued = 0
-						for rec in person['pay_projected']:
-							with t.tr():
-								t.td(rec['class_name'], cls = 'right')
-								t.td(_dollar(rec['pay_projected']))
-								accrued += rec['pay_projected']
-						with t.tr():
-							t.td(t.strong('TOTAL (projected)'), cls = 'right')
-							t.td(_dollar(accrued))
-						total_projected_earnings += accrued
 					if person['pay_so_far']:
-						t.tr(t.td(t.em(t.strong('Accrued to date:')), cls = 'right'))
 						accrued = 0
+						t.tr(t.td(t.em(t.strong('Accrued to date:')), cls = 'right'))
 						for rec in person['pay_so_far']:
 							with t.tr():
 								t.td(t.em(f"{rec['class_name']} ({rec['classes_taught_so_far']} classes)"), cls = 'right')
@@ -266,22 +254,44 @@ def financials_page(week, enrollments, costs, guardian, spouse):
 							t.td(t.em(t.strong('TOTAL (accrued)')), cls = 'right')
 							t.td(t.em(_dollar(accrued)))
 						total_earned_earnings += accrued
+					if person['pay_projected']:
+						accrued = 0
+						t.tr(t.td(t.strong('Projected:'), cls = 'right'))
+						for rec in person['pay_projected']:
+							with t.tr():
+								t.td(rec['class_name'], cls = 'right')
+								t.td(_dollar(rec['pay_projected']))
+								accrued += rec['pay_projected']
+						with t.tr():
+							t.td(t.strong('TOTAL (projected)'), cls = 'right')
+							t.td(_dollar(accrued))
+						total_projected_earnings += accrued
 
 			#TODO: PAYMENTS
+			total_payments = 0
+			t.tr(t.th(t.h2(t.strong('Payments')), cls = 'left'))
+			for person in (guardian, spouse):
+				if person and person['payments']:
+					for payment in person['payments']:
+						total_payments += payment['amount']
+						t.tr(
+							t.td(f"{payment['check_number']} ({casual_date2(payment['date'])})", cls = 'right'),
+							t.td(_dollar(payment['amount'])),
+						)
 
 			t.tr(t.th(t.h2(t.strong('Grand Totals')), cls = 'left'))
-			eoy_projection = total_costs - total_projected_earnings
+			eoy_projection = total_costs - total_payments - total_projected_earnings - total_earned_earnings
 			_dollar_total = lambda amount: f"{_dollar(amount)} " if amount >= 0 else f"INCOME: {_dollar(-amount)} "
 			_check_followup = lambda amount: '(make checks to CCLSC)' if amount >= 0 else '(check will be mailed to you....)'
-			with t.tr():
-				t.td(t.strong('EOY Projection'), cls = 'right top')
-				t.td(t.strong(_dollar_total(eoy_projection)))
-			t.tr(t.td(_check_followup(eoy_projection), cls = 'right', colspan = '2'))
-			accrued_so_far = (total_costs * week.number / 28) - total_earned_earnings # TODO: 28 (week year) is hardcode here!!!
+			accrued_so_far = (total_costs * week.number / 28) - total_payments - total_earned_earnings # TODO: 28 (week year) is hardcode here!!!
 			with t.tr():
 				t.td(t.strong('Accrued to date'), cls = 'right top')
 				t.td(t.strong(_dollar_total(accrued_so_far)))
 			t.tr(t.td(_check_followup(accrued_so_far), cls = 'right', colspan = '2'))
+			with t.tr():
+				t.td(t.strong('EOY Projection'), cls = 'right top')
+				t.td(t.strong(_dollar_total(eoy_projection)))
+			t.tr(t.td(_check_followup(eoy_projection), cls = 'right', colspan = '2'))
 
 	return result
 

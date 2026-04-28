@@ -1,4 +1,39 @@
 
+message_deferred
+	(and note: can never have a message in message_unread AND message_stashed simultaneously - meaningless)
+assignment
+instruction
+
+program_income
+- Sarah Gonnella owns all 4 quarters of Afternoon Variable... ???
+* books ARE (NOT ALL) in (check! Latin should still be missing (see still-pinned um message))
+* Zion only HALF of Physics... how to support this?!  (maybe direct discount)
+~ Math tutors - lower $?
+* Susanna - NOTHING is showing $$ for all your nursery work
+* Liz Neveau's tutor/subs don't seem to be "in" - showing nothing on the tutoring front.
+~ Double-check Laurna's against what we just paid her
+* Cynthia - afternoon tutor?
+
+
+!!! fix week problem (classes that start on week 13) for subs!!!
+	done, but problem with w1-12 classes continuing to increment!?!! (e.g., gov't)
+
+
+fix cts cancel - DONE?!
+check week-change(?) in Assignments (broken by work in cts) - WORKING now?!
+
+change all 'filter_container' references to 'mainbar_container' - MAYBE DONE?!
+
+change "assignments" to "school"
+
+views (don't forget some older ones are in um_6b or so)
+
+now, when adding a new family, have to add parent(s) to role "teacher", so they're available as subs
+
+AND, make sub-assignment (person) button color different for a sub assignment, for Sarah
+
+-----------------------
+
 SQL...
 
 show recent logins:
@@ -6,19 +41,12 @@ show recent logins:
 
 -------------------------
 
-campus(?)
-academic_year
-assignment
-assignment_complete
-class
-class_resource
-enrollment
-instruction
-resource
-subject
-
 
 -------------------------
+
+user-made tags (Laura's request)
+
+pinning should make message disappear (auto-stash) if in 'news'
 
 MAKE a button to set the default reply-to initial state, so that replies will go to the original sender or whole group, by default, based on your setting when you send the message.
 
@@ -37,7 +65,11 @@ SEARCH - replace found terms, in messages, with highlighted versions thereof (ht
 when pinning a message in "New" - make it disappear (fade) just like stashing does - they're both kinds of acknowledgment
 
 BUGS:
+	it doesn't work to search/filter "http:" or any portion of a url - that is "found", and in-line-wrapped with <span cls="highlighted">, so that the link is no longer right!
+
 	ws.py, line 34 -- need to make bannering of message more robust, to succeed in dialogs!
+
+	replace ". " with "." in usernames typed - some phone keyboards are auto-spacing-after-periods.
 
 	no audio on iphones, for some movies -- always make mkvs to avoid this!  No mp4s!
 
@@ -117,10 +149,16 @@ Consider other css animations, like "animation-name: slide-in" (https://develope
 (auto/optional) down-scaling images attached/pasted before upload
 
 
----
+------------
 
-TEST MULTIPLE open reply drafts - does auto-saving move properly!?
-	A: YES! it does!
+When adding classes/teachers (not until week 10, 2025!)
+
+sqlite> insert into class_teacher_sub (class_instance, week, engagement, teacher, section) 
+select 36, id, 1, 10, 1
+from _twenty_eight where id<=10;
+sqlite> insert into class_teacher_sub (class_instance, week, engagement, teacher, section) 
+select 36, id, 1, null, 1
+from _twenty_eight where id>10;
 
 ------------
 

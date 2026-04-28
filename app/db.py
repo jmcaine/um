@@ -89,7 +89,7 @@ async def rollback(dbc):
 
 @dataclass(slots = True, frozen = True)
 class Week:
-	number: int
+	number: int # first week is 1 (not 0)
 	start_date: datetime.date
 	end_date: datetime.date
 	is_default_current: bool
@@ -101,6 +101,9 @@ async def get_week(dbc, week_number = None, campus_id = k_campus, academic_year_
 		w = await _fetch1(dbc, f'select week, date from academic_calendar where week = ? and campus = ? and academic_year = ?', (week_number, campus_id, academic_year_id))
 	d = datetime.strptime(w['date'], k_date_format)
 	return Week(w['week'], d, d + timedelta(days = 7), week_number == None)
+async def get_weeks(dbc, campus_id = k_campus, academic_year_id = k_academic_year):
+	w = await _fetch1(dbc, f'select week from academic_calendar where campus = ? and academic_year = ? order by date desc limit 1', (campus_id, academic_year_id))
+	return w['week']
 
 async def add_idid_key(dbc, idid, key):
 	r = await dbc.execute(f'insert into id_key (idid, key, login_timestamp) values (?, ?, {k_now})', (idid, key))
@@ -832,13 +835,13 @@ async def get_assignments(dbc, user_id, like = None, filt = assignments_const.Fi
 		case assignments_const.Filter.current:
 			week = current_week.number
 		case assignments_const.Filter.previous:
-			week = current_week.number - 1
+			week = min(0, current_week.number - 1)
 		case assignments_const.Filter.next:
-			week = current_week.number + 1
+			week = max(28, current_week.number + 1) # 28 is KLUDGE hardcode!
 		case _: # assignments_const.Filter.all
 			week = None
-			wheres.append('week >= 13') # TODO: KLUDGE!
-			wheres.append('week <= 18') # TODO: KLUDGE!
+			wheres.append(f'week >= {current_week.number}') # TODO: KLUDGE!
+			wheres.append('week <= 28') # TODO: 28 is KLUDGE hardcode!
 	if subj_id:
 		wheres.append('subject.id = ?')
 		args.append(subj_id)
@@ -1048,8 +1051,11 @@ async def get_teacher_pay_so_far(dbc, academic_year_id, person_id = None):
 	return await _fetchall(dbc, _build_select(fields, 'person', joins, wheres, ('class.id',), _teacher_pay_order_by), args)
 
 async def get_teacher_pay_projected(dbc, academic_year_id, person_id = None):
+	week_number = (await get_week(dbc)).number
+	weeks = await get_weeks(dbc) # !: this gets academic_calendar's last 'week' entry... what if there's a difference between this and program_term_weeks?  And what about program.term? TODO: consolidate
+	projected = '0' if week_number == weeks else f'program_income.income * class.term * class.multiplier / 100 / (program_term_weeks.weeks - {week_number})'
 	fields = _teacher_pay_fields + [
-		'program_income.income * class.term * class.multiplier / 100 / program_term_weeks.weeks as pay_projected',
+		f'{projected} as pay_projected',
 	]
 	joins = [
 		'join enrollment on enrollment.person = person.id',
@@ -1063,7 +1069,13 @@ async def get_teacher_pay_projected(dbc, academic_year_id, person_id = None):
 	#l.debug(f"{_build_select(fields, 'person', joins, wheres, ('class.id',), _teacher_pay_order_by)} --- {args}")
 	return await _fetchall(dbc, _build_select(fields, 'person', joins, wheres, ('class.id',), _teacher_pay_order_by), args)
 
-
+async def get_payments(dbc, academic_year_id, person_id = None):
+	wheres = ['academic_year = ?',]
+	args = [academic_year_id,]
+	if person_id:
+		wheres.append('person = ?')
+		args.append(person_id)
+	return await _fetchall(dbc, _build_select(None, 'payment', None, wheres, None, ('date',)), args)
 
 async def get_family_enrollments(dbc, guardian_id):
 	fields = ['first_name', 'last_name', 'birth_date', 'class.name as class_name', 'class_cost.cost * class.term / class_cost.term as cost', 'class_cost.term']
@@ -1132,7 +1144,7 @@ def _add_like(like, fields, where, args):
 		args.extend([f'%{like}%'] * len(fields))
 
 def _build_select(fields, table, joins, wheres, group_by, order_by, limit = None):
-	f = ', '.join(fields) if fields else ''
+	f = ', '.join(fields) if fields else '*'
 	j = ' '.join(joins) if joins else ''
 	w = 'where ' + ' and '.join(wheres) if wheres else ''
 	g = 'group by ' + ', '.join(group_by) if group_by else ''
