@@ -14,7 +14,6 @@ from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime, date, timedelta
 from enum import Enum
 from hashlib import sha256
-from random import choices as random_choices
 from string import ascii_uppercase
 from uuid import uuid4
 
@@ -345,7 +344,7 @@ async def get_user_emails(dbc, user_id):
 
 k_reset_code_length = 6
 async def generate_password_reset_code(dbc, user_id):
-	code = ''.join(random_choices(ascii_uppercase, k = k_reset_code_length))
+	code = ''.join(random.choices(ascii_uppercase, k = k_reset_code_length))
 	await dbc.execute(f'insert into reset_code (code, user, timestamp) values (?, ?, {k_now})', (code, user_id))
 	return code
 
@@ -512,6 +511,9 @@ async def get_user_tags(dbc, user_id, limit, active = True, like = None, include
 		non_join = 'user_tag where tag.id = user_tag.tag and user_tag.user = ?',
 		non_join_args = [user_id],
 	)
+
+
+# -----------------------------------------------------------------------------
 
 async def new_message(dbc, user_id, reply_to = None, reply_chain_patriarch = None):
 	fields = ['message', 'author', 'created',]
@@ -719,9 +721,7 @@ async def get_message_tags(dbc, message_id, limit, active = True, like = None, i
 
 
 async def _get_xaa(dbc, select, wheres, where_args, active, like, likes, join, order, limit, include_others, non_join, non_join_args, non_join_select = None):
-	'''
-	include_others can simply be True or False, to include the "nons", or it can be a (where, where, args) triplet, such as ('join user_tag on tag.id = user_tag.tag', 'user_tag.user = ?', 5) in which case the "nons" will only present if that join/where succeeds.
-	'''
+	# include_others can simply be True or False, to include the "nons", or it can be a (where, where, args) triplet, such as ('join user_tag on tag.id = user_tag.tag', 'user_tag.user = ?', 5) in which case the "nons" will only present if that join/where succeeds.
 	if active:
 		wheres.append('active = 1')
 	select = f'select {select}'
@@ -1053,7 +1053,10 @@ async def get_teacher_pay_so_far(dbc, academic_year_id, person_id = None):
 async def get_teacher_pay_projected(dbc, academic_year_id, person_id = None):
 	week_number = (await get_week(dbc)).number
 	weeks = await get_weeks(dbc) # !: this gets academic_calendar's last 'week' entry... what if there's a difference between this and program_term_weeks?  And what about program.term? TODO: consolidate
-	projected = '0' if week_number == weeks else f'program_income.income * class.term * class.multiplier / 100 / (program_term_weeks.weeks - {week_number})'
+	if week_number == weeks:
+		return [] # nothing more to earn at end of term
+	#else:
+	projected = f'program_income.income * class.term * class.multiplier / 100 / (program_term_weeks.weeks - {week_number})'
 	fields = _teacher_pay_fields + [
 		f'{projected} as pay_projected',
 	]
@@ -1078,7 +1081,7 @@ async def get_payments(dbc, academic_year_id, person_id = None):
 	return await _fetchall(dbc, _build_select(None, 'payment', None, wheres, None, ('date',)), args)
 
 async def get_family_enrollments(dbc, guardian_id):
-	fields = ['first_name', 'last_name', 'birth_date', 'class.name as class_name', 'class_cost.cost * class.term / class_cost.term as cost', 'class_cost.term']
+	fields = ['first_name', 'last_name', 'birth_date', 'class.name as class_name', 'class_cost.cost * class.term / class_cost.term * class.multiplier / 100 as cost', 'class_cost.term']
 	joins = [
 		'join person as student on enrollment.person = student.id',
 		'join child_guardian on child_guardian.child = student.id',
@@ -1098,17 +1101,23 @@ async def get_children(dbc, guardian_ids):
 	return guardian_ids, [r['child'] for r in (await _fetchall(dbc, 'select child from child_guardian where guardian in ({seq})'.format(seq = ','.join(['?']*len(guardian_ids))), guardian_ids))]
 
 async def get_family_costs(dbc, guardian_id):
+	return await _get_family_costs_credits(dbc, guardian_id, 'cost')
+
+async def get_family_credits(dbc, guardian_id):
+	return await _get_family_costs_credits(dbc, guardian_id, 'credit')
+
+async def _get_family_costs_credits(dbc, guardian_id, which):
 	guardian_ids, child_ids = await get_children(dbc, guardian_id)
 	person_ids = guardian_ids + child_ids
-	fields = ['first_name', 'last_name', 'cost.name as cost_name', 'cost.cost']
+	fields = ['first_name', 'last_name', f'{which}.name as {which}_name', f'{which}.{which}']
 	joins = [
-		'join person on person.id = person_cost.person',
-		'join cost on cost.id = person_cost.cost',
+		f'join person on person.id = person_{which}.person',
+		f'join {which} on {which}.id = person_{which}.{which}',
 	]
 	wheres = ['person.id in ({seq})'.format(seq = ','.join(['?']*len(person_ids)))]
 	args = person_ids
 	#l.debug(f"{_build_select(fields, 'person_cost', joins, wheres, None, ['birth_date', 'cost_name'])} --- {args}")
-	return await _fetchall(dbc, _build_select(fields, 'person_cost', joins, wheres, None, ['birth_date', 'cost_name']), args)
+	return await _fetchall(dbc, _build_select(fields, f'person_{which}', joins, wheres, None, ['birth_date', f'{which}_name']), args)
 
 # Utils -----------------------------------------------------------------------
 

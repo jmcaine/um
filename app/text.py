@@ -92,13 +92,6 @@ show_inactives = 'Incl. inactives'
 dont_limit = 'Show all'
 change_settings = 'Settings'
 admin = 'Administrative tools'
-messages = 'Messages'
-trash_draft = 'Trash this draft message'
-draft_trashed = 'Draft successfully trashed'
-draft_saved = 'Draft successfully saved (to send later)'
-show_trashed = 'Show only my "trashed" messages' # TODO: UNUSED, at present; but should be a checkbox in a retrieval interface (for accidentally-deleted messages... note, change "trashed" to "deleted")
-delete_confirmation = 'Are you sure you want to delete that draft?'
-attach = 'Attach/upload picture, etc.'
 session_account_details = 'Session / Account Details'
 account_details = 'Edit Account Details'
 logout = 'Log Out'
@@ -107,11 +100,25 @@ deep_search = 'Search "deep"'
 tags = 'Tags'
 invite_new_user = 'Invite new user...'
 create_new_tag = 'Create new tag...'
+loading = 'Loading...'
+child_password = 'Provide a "password" to enable sub-account for child; blank out to disable'
+pretend_password = '********'
+choose = 'Choose...'
+click_to_add = '(click to add)'
+click_to_remove = '(click to remove)'
+section = 'Section'
+
+messages = 'Messages'
+trash_draft = 'Trash this draft message'
+draft_trashed = 'Draft successfully trashed'
+draft_saved = 'Draft successfully saved (to send later)'
+show_trashed = 'Show only my "trashed" messages' # TODO: UNUSED, at present; but should be a checkbox in a retrieval interface (for accidentally-deleted messages... note, change "trashed" to "deleted")
+delete_confirmation = 'Are you sure you want to delete that draft?'
+attach = 'Attach/upload picture, etc.'
 recipients = 'Recipients'
 not_recipients = 'Click to add...'
 loading_messages = 'Loading messages...'
 loading_assignments = 'Loading assignments...'
-loading = 'Loading...'
 assignments = 'Assignments'
 stash = 'Mark as READ'
 defer = 'Read LATER'
@@ -135,22 +142,15 @@ view_newer = 'View newer messages'
 reply_one = 'Reply to sender only'
 reply_all = 'Reply to entire group'
 just_now = 'just now'
-child_password = 'Provide a "password" to enable sub-account for child; blank out to disable'
-pretend_password = '********'
 show_currents = "Show THIS WEEK's assignments"
 show_previouses = "Show LAST WEEK's assignments"
 show_nexts = "Show NEXT WEEK's assignments"
 subs = "Subs/coverage"
 sub = 'Sub'
-choose = 'Choose...'
-
 not_in_class = 'NOT in class:'
 in_class = 'IN class:'
 not_in_classes = 'student NOT in:'
 in_classes = 'student IN:'
-click_to_add = '(click to add)'
-click_to_remove = '(click to remove)'
-section = 'Section'
 audit = 'Audit'
 teacher = 'Teacher'
 
@@ -180,6 +180,12 @@ added_user_to_tag = 'Successfully subscribed {username} to tag "{tag_name}".'
 internal_error = 'Internal error; please refer to with this error ID: {reference}'
 removed_tag_from_user = 'Successfully UNsubscribed from tag "{name}".'
 added_tag_to_user = 'Successfully subscribed to tag "{name}".'
+reset_email_subject = 'Reset...'
+password_reset_code_email_body = "You requested a password reset code for um.openhome.school. Here it is: {code} <-- type or paste that code into your browser, where it's requested."
+email_invite_subject = 'Invitation link - openhome.school messenger'
+email_invite_body = "This is your invite email to um.openhome.school - go to https://um.openhome.school/invite/{code} to accept...."
+email_invite_body_html = """<html><body>This is your invite email to um.openhome.school - click on <a href="https://um.openhome.school/invite/{code}">this link to accept....</a></body></html>"""
+
 removed_tag_from_message = 'Successfully removed tag "{name}" from message.'
 added_tag_to_message = 'Successfully added tag "{name}" to message.'
 choose_message_draft = f'Choose a draft message, below, to finish, or click "{brand_new_message}" to start a brand new message.  You may also delete any drafts you no longer care about.'
@@ -198,11 +204,6 @@ changed_persons_class_audit_status = 'Successfully changed class "audit" status 
 changed_persons_class_teacher_status = 'Successfully changed class "teacher" status for "{name}"'
 teacher_sub_assignment_success = 'Successfully assigned teacher/sub to {name}'
 
-reset_email_subject = 'Reset...'
-password_reset_code_email_body = "You requested a password reset code for um.openhome.school. Here it is: {code} <-- type or paste that code into your browser, where it's requested."
-email_invite_subject = 'Invitation link - openhome.school messenger'
-email_invite_body = "This is your invite email to um.openhome.school - go to https://um.openhome.school/invite/{code} to accept...."
-email_invite_body_html = """<html><body>This is your invite email to um.openhome.school - click on <a href="https://um.openhome.school/invite/{code}">this link to accept....</a></body></html>"""
 
 # Hover / validation "title" hints:
 class Title:

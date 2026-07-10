@@ -15,13 +15,15 @@ import asyncio
 
 from aiohttp import web, WSMsgType, WSCloseCode
 
-from . import admin # must import all modules that have @ws.handlers, so that code is run at init
-from . import assignments # must import all modules that have @ws.handlers, so that code is run at init
+# must import all modules that have @ws.handlers, so that code is run at init:
+from . import admin
+from . import assignments
+from . import messages
+
 from . import db
 from . import emailer
 from . import fields
 from . import html
-from . import messages # must import all modules that have @ws.handlers, so that code is run at init
 from . import settings
 from . import task
 from .task import Task
@@ -41,7 +43,7 @@ logging.getLogger('aiosqlite').setLevel(logging.ERROR)
 logging.getLogger('asyncio').setLevel(logging.ERROR)
 logging.getLogger('aiohttp').setLevel(logging.ERROR if settings.debug else logging.ERROR) # ERROR and INFO will dump tracebacks on console upon "500 Internal Server Error" failures - essential to development; INFO will add informational lines re: GETs and such; DEBUG would be fine here, but aiohttp internal debug info not necessarily useful; probably just noisy
 
-logging.basicConfig(format = '%(asctime)s - %(levelname)s : %(name)s:%(lineno)d -- %(message)s', level = logging.DEBUG if settings.debug else logging.CRITICAL)
+logging.basicConfig(format = '%(asctime)s - %(levelname)s : %(name)s:%(lineno)d -- %(message)s', level = logging.DEBUG if settings.debug else logging.ERROR)
 l = logging.getLogger(__name__)
 
 
@@ -124,7 +126,7 @@ async def main(rq):
 	return hr(html.document(_ws_url(rq)).render())
 
 @rt.get('/invite/{code}')
-async def redeem_invite(rq):
+async def accept_invite(rq):
 	code = rq.match_info['code'][:db.k_reset_code_length].replace('"', '') # simple sanitation; sufficient
 	return hr(html.document(_ws_url(rq), f'code:{code}').render())
 

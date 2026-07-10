@@ -192,7 +192,7 @@ def teachers_subs_page(week_dates, teachers_subs):
 	return t.div(teachers_subs_table(week_dates, teachers_subs), cls = 'container center_flex', id = 'teachers_subs_table_container')
 
 
-def financials_page(week, enrollments, costs, guardian, spouse):
+def financials_page(week, enrollments, costs, credits, guardian, spouse):
 	#TODO: make thinner, implementing most of the below in financials_table, as others model
 	_dollar = lambda amount: f'${(amount / 100):.2f}'
 	result = t.div()
@@ -238,6 +238,26 @@ def financials_page(week, enrollments, costs, guardian, spouse):
 				t.td(_dollar(accrued))
 			total_costs += accrued
 
+
+			t.tr(t.th(t.h2(t.strong('Credits')), cls = 'left', colspan = '2'))
+			wip = None
+			accrued = 0
+			for credit in credits:
+				name = f"{credit['first_name']} {credit['last_name']}"
+				if name != wip:
+					wip = name
+					with t.tr():
+						t.td(t.strong(wip), cls = 'left', colspan = '2')
+				with t.tr():
+					t.td(credit['credit_name'], cls = 'right')
+					t.td(_dollar(credit['credit']))
+					accrued += credit['credit']
+			with t.tr():
+				t.td(t.strong('TOTAL:'))
+				t.td(_dollar(accrued))
+			total_costs -= accrued
+
+
 			t.tr(t.th(t.h2(t.strong('Offsets (Tutoring)')), cls = 'left', colspan = '2')) # "earnings"
 			for person in (guardian, spouse):
 				if person and (person['pay_projected'] or person['pay_so_far']):
@@ -258,10 +278,11 @@ def financials_page(week, enrollments, costs, guardian, spouse):
 						accrued = 0
 						t.tr(t.td(t.strong('Projected:'), cls = 'right'))
 						for rec in person['pay_projected']:
-							with t.tr():
-								t.td(rec['class_name'], cls = 'right')
-								t.td(_dollar(rec['pay_projected']))
-								accrued += rec['pay_projected']
+							if rec['pay_projected'] > 0:
+								with t.tr():
+									t.td(rec['class_name'], cls = 'right')
+									t.td(_dollar(rec['pay_projected']))
+									accrued += rec['pay_projected']
 						with t.tr():
 							t.td(t.strong('TOTAL (projected)'), cls = 'right')
 							t.td(_dollar(accrued))

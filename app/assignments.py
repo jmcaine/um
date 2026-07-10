@@ -217,6 +217,7 @@ async def finances(hd, reverting = False):
 	guardian = await db.get_person(hd.dbc, guardian_id)
 	enrollments = await db.get_family_enrollments(hd.dbc, guardian_id)
 	costs = await db.get_family_costs(hd.dbc, guardian_id)
+	credits = await db.get_family_credits(hd.dbc, guardian_id)
 	guardian['pay_so_far'] = await db.get_teacher_pay_so_far(hd.dbc, ay, guardian_id)
 	guardian['pay_projected'] = await db.get_teacher_pay_projected(hd.dbc, ay, guardian_id)
 	guardian['payments'] = await db.get_payments(hd.dbc, ay, guardian_id)
@@ -225,4 +226,4 @@ async def finances(hd, reverting = False):
 		spouse['pay_projected'] = await db.get_teacher_pay_projected(hd.dbc, ay, spouse['id'])
 		spouse['payments'] = await db.get_payments(hd.dbc, ay, spouse['id'])
 	week = await db.get_week(hd.dbc)
-	await ws.send_content(hd, 'content', html.financials_page(week, enrollments, costs, guardian, spouse))
+	await ws.send_content(hd, 'content', html.financials_page(week, enrollments, costs, credits, guardian, spouse))

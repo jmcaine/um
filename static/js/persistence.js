@@ -30,7 +30,7 @@ function sha256(ascii) { // THANK YOU https://geraintluff.github.io/sha256/
 	function rightRotate(value, amount) {
 		return (value>>>amount) | (value<<(32 - amount));
 	};
-	
+
 	var mathPow = Math.pow;
 	var maxWord = mathPow(2, 32);
 	var lengthProperty = 'length'
@@ -39,7 +39,7 @@ function sha256(ascii) { // THANK YOU https://geraintluff.github.io/sha256/
 
 	var words = [];
 	var asciiBitLength = ascii[lengthProperty]*8;
-	
+
 	//* caching results is optional - remove/add slash from front of this line to toggle
 	// Initial hash value: first 32 bits of the fractional parts of the square roots of the first 8 primes
 	// (we actually calculate the first 64, but extra values are just ignored)
@@ -62,7 +62,7 @@ function sha256(ascii) { // THANK YOU https://geraintluff.github.io/sha256/
 			k[primeCounter++] = (mathPow(candidate, 1/3)*maxWord)|0;
 		}
 	}
-	
+
 	ascii += '\x80' // Append Ƈ' bit (plus zero padding)
 	while (ascii[lengthProperty]%64 - 56) ascii += '\x00' // More zero padding
 	for (i = 0; i < ascii[lengthProperty]; i++) {
@@ -72,7 +72,7 @@ function sha256(ascii) { // THANK YOU https://geraintluff.github.io/sha256/
 	}
 	words[words[lengthProperty]] = ((asciiBitLength/maxWord)|0);
 	words[words[lengthProperty]] = (asciiBitLength)
-	
+
 	// process each chunk
 	for (j = 0; j < words[lengthProperty];) {
 		var w = words.slice(j, j += 16); // The message is expanded into 64 words as part of the iteration
@@ -80,7 +80,7 @@ function sha256(ascii) { // THANK YOU https://geraintluff.github.io/sha256/
 		// This is now the undefinedworking hash", often labelled as variables a...g
 		// (we have to truncate as well, otherwise extra entries at the end accumulate
 		hash = hash.slice(0, 8);
-		
+
 		for (i = 0; i < 64; i++) {
 			var i2 = i + j;
 			// Expand the message into 64 words
@@ -104,16 +104,16 @@ function sha256(ascii) { // THANK YOU https://geraintluff.github.io/sha256/
 			// This is only used once, so *could* be moved below, but it only saves 4 bytes and makes things unreadble
 			var temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) // S0
 				+ ((a&hash[1])^(a&hash[2])^(hash[1]&hash[2])); // maj
-			
+
 			hash = [(temp1 + temp2)|0].concat(hash); // We don't bother trimming off the extra ones, they're harmless as long as we're truncating when we do the slice()
 			hash[4] = (hash[4] + temp1)|0;
 		}
-		
+
 		for (i = 0; i < 8; i++) {
 			hash[i] = (hash[i] + oldHash[i])|0;
 		}
 	}
-	
+
 	for (i = 0; i < 8; i++) {
 		for (j = 3; j + 1; j--) {
 			var b = (hash[i]>>(j*8))&255;
