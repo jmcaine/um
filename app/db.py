@@ -9,7 +9,6 @@ import re
 import string
 import unittest
 
-from copy import copy
 from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime, date, timedelta
 from enum import Enum
@@ -460,9 +459,9 @@ async def get_tags(dbc, active = True, like = None, get_subscriber_count = False
 async def new_tag(dbc, name, active):
 	return await _insert1(dbc, 'insert into tag (name, active) values (?, ?)', (name, active))
 
-async def duplicate_tag_users(dbc, source_tag_id, new_tag_id):
-	#TODO: hook this up and actually test it!!!
-	return await dbc.execute(f'insert into user_tag (user, tag) select user, ? from user_tag where tag = ?', (new_tag_id, source_tag_id))
+async def clone_tag(dbc, name, active, id):
+	new_id = await new_tag(dbc, name, active)
+	return await dbc.execute(f'insert into user_tag (user, tag) select user, ? from user_tag where tag = ?', (new_id, id))
 
 async def get_tag(dbc, id, fields: str | None = None):
 	if not fields:

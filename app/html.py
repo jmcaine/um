@@ -437,7 +437,7 @@ def _filterbox(parent, filtersearch_checkboxes):
 			'autocomplete': 'off',
 			'oninput': go('this.value'),
 		}).build('filtersearch')) # TODO: does the Input() really need to go in a t.div container?!!!
-		t.button(t.i(cls = 'i i-clear'), title = text.clear, style = 'max-height: 10px', onclick = f'''(function() {{ clear_filtersearch(); {go('""')}; }})()''') # Ξ
+		t.button(t.i(cls = 'i i-clear'), title = text.clear, style = 'max-height: 26px', onclick = f'''(function() {{ clear_filtersearch(); {go('""')}; }})()''') # Ξ
 		if filtersearch_checkboxes:
 			for key, label in filtersearch_checkboxes.items():
 				Input(label, type_ = 'checkbox', attrs = {'onclick': go('$("filtersearch").value')}).build(key)
@@ -523,12 +523,14 @@ def tag_table(tags):
 			t.th('Name', align = 'right')
 			t.th('Active')
 			t.th('Subscriptions')
+			t.th('Clone')
 		for tag in tags:
 			st = _send('admin', 'tag_detail', id = tag['id'])
 			with t.tr():
 				t.td(tag['name'], cls = 'pointered', align = 'right', onclick = st)
 				t.td(_yes_or_no(int(tag['active'])), align = 'center', cls = 'pointered', onclick = st)
 				t.td(tag['num_subscribers'], cls = 'pointered', align = 'center', onclick = _send('admin', 'tag_users', tag_id = tag['id']))
+				t.td(t.button(t.i(cls = 'i i-clone'), title = text.clone, onclick = _send('admin', 'clone_tag', tag_id = tag['id'])))
 	return result
 
 

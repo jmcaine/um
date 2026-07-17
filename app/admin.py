@@ -272,21 +272,31 @@ async def add_tag_to_user(hd):
 	await _remove_or_add_tag_to_user(hd, db.add_user_to_tag, text.added_tag_to_user)
 
 
-
-@ws.handler(auth_func = authorize_admin)
-async def new_tag(hd, reverting = False):
-	if task.just_started(hd, new_tag) or reverting: # 'reverting' check is currently useless, but if sub-dialogs are added here, this is necessary to repaint the whole dialog
+async def _new_clone_tag(hd, fn, reverting):
+	if task.just_started(hd, fn) or reverting: # 'reverting' check is currently useless, but if sub-dialogs are added here, this is necessary to repaint the whole dialog
+		hd.task.state['tag_id'] = hd.payload.get('tag_id', None) # only exists if cloning
 		await ws.send_content(hd, 'dialog', html.dialog2(text.tag, fields.TAG))
 	elif not await task.finished(hd): # e.g., dialog-box could have been "canceled"
 		data = hd.payload
 		if await valid.invalids(hd, data, fields.TAG, handle_invalid, 'detail_banner'):
-			return # if there WERE invalids, bannar was already sent within
+			return # if there WERE invalids, banner was already sent within
 		#else all good, move on!
 		name = data['name']
-		await db.new_tag(hd.dbc, name, html.checkbox_value(data, 'active'))
+		active = html.checkbox_value(data, 'active')
+		if tag_id := int(hd.task.state['tag_id']):
+			await db.clone_tag(hd.dbc, name, active, tag_id)
+		else:
+			await db.new_tag(hd.dbc, name, active)
 		await task.finish(hd)
 		await ws.send_content(hd, 'banner', html.info(text.added_tag_success.format(name = f'"{name}"')))
 
+@ws.handler(auth_func = authorize_admin)
+async def new_tag(hd, reverting = False):
+	await _new_clone_tag(hd, new_tag, reverting)
+
+@ws.handler(auth_func = authorize_admin)
+async def clone_tag(hd, reverting = False):
+	await _new_clone_tag(hd, clone_tag, reverting)
 
 async def _tag_setter(hd, data):
 	name = data['name']

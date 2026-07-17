@@ -3,8 +3,7 @@ function $(id) {
 	return document.getElementById(id);
 };
 
-function setEndOfContenteditable(contentEditableElement)
-{
+function setEndOfContenteditable(contentEditableElement) {
 	// THANK YOU https://stackoverflow.com/users/140293/nico-burns !
 	let range = document.createRange();
 	range.selectNodeContents(contentEditableElement);
